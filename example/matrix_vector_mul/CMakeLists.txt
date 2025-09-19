@@ -1,0 +1,63 @@
+# Licensed under the Apache License, Version 2.0 (the License); you may
+# not use this file except in compliance with the License.
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+
+# SPDX-FileCopyrightText:	Copyright (c) 2025, Advanced Micro Devices, Inc. All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+function(add_aie_matrix_vector_mul_design NUM_COLUMNS M K m)
+
+    set(EXAMPLE "matrix_vector_mul_${M}x${K}_${NUM_COLUMNS}col")
+    set(GOLDEN_VALUES_PATH "${CMAKE_BINARY_DIR}/example/matrix_vector_mul/golden_${EXAMPLE}")
+    
+    add_aie_executable(${EXAMPLE} 
+                       HOST matrix_vector_mul.cpp
+                       HOST_FLAGS 
+                       PYTHON matrix_vector_mul.py
+                       PYTHON_FLAGS --dev ${DEVICE} -M ${M} -K ${K} -m ${m} --cols ${NUM_COLUMNS} --output-file-path ${CMAKE_BINARY_DIR}/aie/${EXAMPLE}.mlir
+                       AIE_CORE_KERNELS mv.o
+                       OUTPUT_HOST MATRIX_VECTOR_MUL_HOST
+                       OUTPUT_XCLBIN MATRIX_VECTOR_MUL_XCLBIN
+                       OUTPUT_INSTS MATRIX_VECTOR_MUL_INSTS)
+    
+    add_golden_reference_generator(${EXAMPLE} 
+        ${CMAKE_CURRENT_SOURCE_DIR}/matrix_vector_mul_golden.py
+        ${GOLDEN_VALUES_PATH}
+        -M ${M}
+        -K ${K}
+    )
+                       
+    add_aie_ci_test(${EXAMPLE}
+                    RUN 
+                        "${MATRIX_VECTOR_MUL_HOST} -k ${EXAMPLE} -x ${MATRIX_VECTOR_MUL_XCLBIN} -i ${MATRIX_VECTOR_MUL_INSTS} -M ${M} -K ${K}"
+                    CHECK
+                        "PASS!"
+                    METRICS 
+                        "Latency" [=[Latency:\s*(?P<metric>\d+) us]=]
+                        "GFLOP/s" [=[Throughput:\s*(?P<metric>[\d\.e\+-]+) GFLOP/s]=]
+                        "Bandwidth" [=[Effective Bandwidth: (?P<metric>[\d\.e\+-]+) GB/s]=])
+endfunction()
+
+add_aie_matrix_vector_mul_design(1 128 128 32)
+add_aie_matrix_vector_mul_design(1 2048 8192 1)
+add_aie_matrix_vector_mul_design(1 8192 2048 4)
+
+add_aie_matrix_vector_mul_design(2 2048 8192 1)
+add_aie_matrix_vector_mul_design(2 8192 2048 4)
+
+add_aie_matrix_vector_mul_design(4 2048 8192 1)
+add_aie_matrix_vector_mul_design(4 8192 2048 4)
+
+
+if(IRONCLAD_AIE_TARGET STREQUAL aie2p)
+    add_aie_matrix_vector_mul_design(8 2048 8192 1)
+    add_aie_matrix_vector_mul_design(8 8192 2048 4)
+endif()

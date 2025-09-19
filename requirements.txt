@@ -1,0 +1,37 @@
+# Licensed under the Apache License, Version 2.0 (the License); you may
+# not use this file except in compliance with the License.
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# SPDX-FileCopyrightText:	Copyright (c) 2025, Advanced Micro Devices, Inc. All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# The MLIR-AIE and LLVM-AIE (Peano) packages are not on the official PyPI, so
+# we add them as additional indices here. Furthermore, we want the CPU-only
+# version of torch (don't need CUDA), so we give this index precedence over the
+# main PyPI. These indices are consulted in order of precedence by pip.
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://github.com/Xilinx/mlir-aie/releases/expanded_assets/latest-wheels-2
+--extra-index-url https://github.com/Xilinx/llvm-aie/releases/expanded_assets/nightly
+--extra-index-url https://pypi.org/simple
+
+mlir_aie
+llvm-aie
+
+black
+reuse
+torch
+cmake>=3.29, <4.0
+
+# MLIR-extras (Python bindings/helpers for MLIR)
+# For installing this, the following environment variables must be set:
+# MLIR_PYTHON_EXTRAS_SET_VERSION="0.0.8.3"
+# HOST_MLIR_PYTHON_PACKAGE_PREFIX="aie"
+git+https://github.com/erwei-xilinx/mlir-python-extras@a801853ac0eef50a0f2779cfbbd7dabc931806ee
+-f https://github.com/llvm/eudsl/releases/expanded_assets/latest

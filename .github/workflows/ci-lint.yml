@@ -1,0 +1,56 @@
+# Licensed under the Apache License, Version 2.0 (the License); you may
+# not use this file except in compliance with the License.
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+
+# SPDX-FileCopyrightText:	Copyright (c) 2025, Advanced Micro Devices, Inc. All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+
+name: CI - Linting
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  Linting:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          apt-get update && apt-get install -y clang-format
+          pip install reuse black
+
+      - name: Check Licenses
+        if: success() || failure()
+        shell: bash
+        run: |
+          reuse lint
+
+      - name: Format Python
+        if: success() || failure()
+        run: |
+          black --diff . 
+          black --check .
+
+      - name: Format C++
+        if: success() || failure()
+        run: |
+          python scripts/clang-format-wrapper.py --diff 
+          python scripts/clang-format-wrapper.py --check
