@@ -1,16 +1,5 @@
 <!--
-Licensed under the Apache License, Version 2.0 (the License); you may
-not use this file except in compliance with the License.
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an AS IS BASIS, WITHOUT
-WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
-SPDX-FileCopyrightText:	Copyright (c) 2025, Advanced Micro Devices, Inc. All rights reserved.
-
+SPDX-FileCopyrightText: Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 SPDX-License-Identifier: Apache-2.0
 -->
 
@@ -109,11 +98,16 @@ If starting from `Ubuntu 24.04` you may need to update the Linux kernel to 6.11+
     build-essential clang clang-14 lld lld-14 cmake ninja-build python3-venv python3-pip
     ```
 
-1. Setup a virtual environment:
+1. Setup a virtual environment and activate it:
    ```bash
    python3 -m venv ironenv
    source ironenv/bin/activate
    python3 -m pip install --upgrade pip
+   ```
+
+1. Source XRT (installed in step 1):
+   ```bash
+   source /opt/xilinx/xrt/setup.sh
    ```
 
 1. Install required Python packages (from requirements.txt):
@@ -121,21 +115,13 @@ If starting from `Ubuntu 24.04` you may need to update the Linux kernel to 6.11+
    MLIR_PYTHON_EXTRAS_SET_VERSION="0.0.8.3" HOST_MLIR_PYTHON_PACKAGE_PREFIX="aie" pip install -r requirements.txt
    ```
 
-### Git Hooks (Optional but Recommended)
+1. To test your installation, you can try to build and run the example below:
+   ```bash
+   cmake -B build
+   cmake --build build --target silu_1_cols_1_channels_2048_tile_2048_run
+   ```
 
-To ensure your code passes CI linting checks before pushing, install the pre-push hook:
-
-```bash
-cp scripts/hooks/pre-push .git/hooks/pre-push
-chmod +x .git/hooks/pre-push
-```
-
-The hook will run the same linting checks as CI:
-- License checks (reuse)
-- Python formatting (black)
-- C++ formatting (clang-format)
-
-To bypass the hook if needed: `git push --no-verify`
+Note: On a fresh install, if you get `CMake Error: Could not find CMAKE_ROOT !!!`, just deactivate and reactivate your python environment.
 
 ### Building & Testing
 
@@ -178,6 +164,22 @@ Additionally a target to build & run is made available under the `<TARGET_NAME>_
 ```shell
 cmake --build build --target silu_4_cols_1_channels_2048_tile_512_run
 ```
+
+### Git Hooks (Optional but Recommended)
+
+To ensure your code passes CI linting checks before pushing, install the pre-push hook:
+
+```bash
+cp scripts/hooks/pre-push .git/hooks/pre-push
+chmod +x .git/hooks/pre-push
+```
+
+The hook will run the same linting checks as CI:
+- License checks (reuse)
+- Python formatting (black)
+- C++ formatting (clang-format)
+
+To bypass the hook if needed: `git push --no-verify`
 
 -----
 
