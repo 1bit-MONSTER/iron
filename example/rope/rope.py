@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+
 from pathlib import Path
 import numpy as np
 import argparse
@@ -14,7 +15,15 @@ from aie.helpers.dialects.ext.scf import _for as range_
 from ml_dtypes import bfloat16
 
 
-def rope(dev, num_elements, num_columns, num_channels, trace_size, tile_size):
+def rope(
+    dev,
+    num_elements,
+    num_columns,
+    num_channels,
+    trace_size,
+    tile_size,
+    method_type=None,
+):
     per_tile_elements = tile_size
     n = per_tile_elements * num_columns
     if num_elements % n != 0:
@@ -35,7 +44,11 @@ def rope(dev, num_elements, num_columns, num_channels, trace_size, tile_size):
     of_out = [ObjectFifo(tile_ty, name=f"out_{i}") for i in range(num_columns)]
 
     # AIE Core Function declaration
-    rope_kernel = Kernel("rope", "rope.o", [tile_ty, tile_ty, tile_ty, np.int32])
+    rope_kernel = Kernel(
+        "rope",
+        f"rope{f"_{method_type}" if method_type is not None else ""}.o",
+        [tile_ty, tile_ty, tile_ty, np.int32],
+    )
 
     # Define a task that will run on a compute tile
     def core_body(of_in, of_lut, of_out, rope_kernel):
@@ -109,89 +122,101 @@ def rope(dev, num_elements, num_columns, num_channels, trace_size, tile_size):
     return Program(dev, rt).resolve_program(SequentialPlacer())
 
 
-p = argparse.ArgumentParser()
-## Parse command line arguments
+if __name__ == "__main__":
 
-## Device name is required to select the AIE device: npu or npu2
-p.add_argument(
-    "-d",
-    "--dev",
-    required=True,
-    dest="device",
-    help="AIE Device",
-    choices=["npu", "npu2"],
-)
-## Transfer size is required to define the size of the data to be transferred
-## It must be a multiple of 1024 and divisible by the number of columns and 2 channels per column
-p.add_argument("-l", "--length", required=True, dest="length", help="Transfer size")
-## Number of columns is required to define the number of columns to be used
-## It must be less than or equal to 4 for npu and 8 for npu2
-p.add_argument("-co", "--columns", required=True, dest="cols", help="Number of columns")
-## Number of channels is required to define the number of channels to be used
-## It must be 1 or 2
-p.add_argument(
-    "-ch", "--channels", required=True, dest="chans", help="Number of channels"
-)
-## Tile size (columns per tile) - defaults to 1024 for backward compatibility
-p.add_argument(
-    "-ts",
-    "--tile-size",
-    required=False,
-    dest="tile_size",
-    default="1024",
-    help="Tile size (columns per tile)",
-)
-## Trace Size
-p.add_argument(
-    "-tr", "--trace-size", required=True, dest="trace_size", help="Trace size"
-)
-p.add_argument(
-    "--output-file-path",
-    "-o",
-    type=str,
-    help="Output file path for the generated MLIR module",
-)
+    def str_to_device(device: str):
+        if device == "npu":
+            return NPU1()
+        elif device == "npu2":
+            return NPU2()
+        else:
+            raise ValueError(f"Device name {device} is unknown.")
 
-opts = p.parse_args(sys.argv[1:])
+    p = argparse.ArgumentParser()
+    # Parse command line arguments
 
-if opts.device == "npu":
-    dev = NPU1()  # Four columns of NPU1, the maximum available
-elif opts.device == "npu2":
-    dev = NPU2()  # Eight columns of NPU2, the maximum available
-else:
-    raise ValueError("[ERROR] Device name {} is unknown".format(opts.device))
-
-length = int(opts.length)
-columns = int(opts.cols)
-if opts.device == "npu":
-    if columns > 4:
-        raise ValueError(
-            "[ERROR] Device {} cannot allocate more than 4 columns".format(opts.device)
-        )
-elif opts.device == "npu2":
-    if columns > 8:
-        raise ValueError(
-            "[ERROR] Device {} cannot allocate more than 8 columns".format(opts.device)
-        )
-channels = int(opts.chans)
-if channels < 1 or channels > 2:
-    raise ValueError("Number of channels must be 1 or 2")
-tile_size = int(opts.tile_size)
-if length % (tile_size * columns) != 0:
-    print(
-        "transfer size ("
-        + str(length)
-        + ") must be a multiple of "
-        + str(tile_size * columns)
-        + " (tile_size * columns)"
+    # Device name is required to select the AIE device: npu or npu2
+    p.add_argument(
+        "-d",
+        "--dev",
+        required=True,
+        dest="device",
+        help="AIE Device",
+        type=str_to_device,
     )
-    raise ValueError
-trace_size = int(opts.trace_size) if opts.trace_size is not None else 0
+    # Transfer size is required to define the size of the data to be transferred
+    # It must be a multiple of 1024 and divisible by the number of columns and 2 channels per column
+    p.add_argument("-l", "--length", required=True, dest="length", help="Transfer size")
+    # Number of columns is required to define the number of columns to be used
+    # It must be less than or equal to 4 for npu and 8 for npu2
+    p.add_argument(
+        "-co", "--columns", required=True, dest="cols", help="Number of columns"
+    )
+    # Number of channels is required to define the number of channels to be used
+    # It must be 1 or 2
+    p.add_argument(
+        "-ch", "--channels", required=True, dest="chans", help="Number of channels"
+    )
+    # Tile size (columns per tile) - defaults to 1024 for backward compatibility
+    p.add_argument(
+        "-ts",
+        "--tile-size",
+        required=False,
+        dest="tile_size",
+        default="1024",
+        help="Tile size (columns per tile)",
+    )
+    # Trace Size
+    p.add_argument(
+        "-tr", "--trace-size", required=True, dest="trace_size", help="Trace size"
+    )
+    # Method type
+    p.add_argument(
+        "-mt",
+        "--method-type",
+        required=True,
+        choices=["0", "1"],
+        dest="method_type",
+        help="Method type",
+    )
+    p.add_argument(
+        "--output-file-path",
+        "-o",
+        type=str,
+        help="Output file path for the generated MLIR module",
+    )
 
-module = rope(dev, length, columns, channels, trace_size, tile_size)
+    opts = p.parse_args(sys.argv[1:])
 
-output_file_path = Path(opts.output_file_path)
+    length = int(opts.length)
+    columns = int(opts.cols)
+    dev = opts.device  # Now this is already a device object!
 
+    # Validate columns based on device type
+    if isinstance(dev, NPU1) and columns > 4:
+        raise ValueError("[ERROR] NPU device cannot allocate more than 4 columns")
+    elif isinstance(dev, NPU2) and columns > 8:
+        raise ValueError("[ERROR] NPU2 device cannot allocate more than 8 columns")
 
-with open(output_file_path, "w") as f:
-    f.write(str(module))
+    channels = int(opts.chans)
+    if channels < 1 or channels > 2:
+        raise ValueError("Number of channels must be 1 or 2")
+    tile_size = int(opts.tile_size)
+    if length % (tile_size * columns) != 0:
+        print(
+            "transfer size ("
+            + str(length)
+            + ") must be a multiple of "
+            + str(tile_size * columns)
+            + " (tile_size * columns)"
+        )
+        raise ValueError
+    trace_size = int(opts.trace_size) if opts.trace_size is not None else 0
+    method_type = int(opts.method_type)
+
+    module = rope(dev, length, columns, channels, trace_size, tile_size, method_type)
+
+    output_file_path = Path(opts.output_file_path)
+
+    with open(output_file_path, "w") as f:
+        f.write(str(module))

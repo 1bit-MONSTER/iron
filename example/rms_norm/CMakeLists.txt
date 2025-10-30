@@ -4,15 +4,13 @@
 function(add_aie_rms_norm_design INPUT_LENGTH NUM_COLUMNS NUM_CHANNELS TILE_SIZE TRACE_SIZE)
     set(EXAMPLE "rms_norm_${NUM_COLUMNS}_cols_${NUM_CHANNELS}_channels_${INPUT_LENGTH}_tile_${TILE_SIZE}")
     set(GOLDEN_VALUES_PATH "${CMAKE_BINARY_DIR}/example/rms_norm/golden_${EXAMPLE}")
-    set(INPUT_DATA_TYPE_PYTHON bf16)
-    set(OUTPUT_DATA_TYPE_PYTHON bf16)
     set(INPUT_DATA_TYPE_CPP bfloat16_t)
     set(OUTPUT_DATA_TYPE_CPP bfloat16_t)
-    
+
     # Calculate matrix dimensions
     math(EXPR ROWS "${INPUT_LENGTH} / ${TILE_SIZE}")
-    
-    add_aie_executable(${EXAMPLE} 
+
+    add_aie_executable(${EXAMPLE}
         HOST rms_norm.cpp
         HOST_FLAGS DTYPE_IN=${INPUT_DATA_TYPE_CPP} DTYPE_OUT=${OUTPUT_DATA_TYPE_CPP}
         PYTHON rms_norm.py
@@ -23,20 +21,19 @@ function(add_aie_rms_norm_design INPUT_LENGTH NUM_COLUMNS NUM_CHANNELS TILE_SIZE
         OUTPUT_INSTS RMS_NORM_INSTS
     )
 
-    add_golden_reference_generator(${EXAMPLE} 
+    add_golden_reference_generator(${EXAMPLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/rms_norm_golden.py
         ${GOLDEN_VALUES_PATH}
         --rows ${ROWS}
         --cols ${TILE_SIZE}
-        --dtype ${INPUT_DATA_TYPE_PYTHON}
     )
 
     add_aie_ci_test(${EXAMPLE}
-        RUN 
-            "${RMS_NORM_HOST} -k ${EXAMPLE} -x ${RMS_NORM_XCLBIN} -i ${RMS_NORM_INSTS} -l ${INPUT_LENGTH} -r ${ROWS} -c ${TILE_SIZE}"
+        RUN
+            "${RMS_NORM_HOST} -k ${EXAMPLE} -x ${RMS_NORM_XCLBIN} -i ${RMS_NORM_INSTS} -l ${INPUT_LENGTH} -r ${ROWS} -c ${TILE_SIZE} --ref ${GOLDEN_VALUES_PATH}/golden_reference.bin"
         CHECK
             "PASS!"
-        METRICS 
+        METRICS
             "Latency" [=[Latency \(us\): (?P<metric>\d+)]=]
             "Bandwidth" [=[Effective Bandwidth: (?P<metric>[\d\.e\+-]+) GB/s]=]
     )
@@ -46,11 +43,9 @@ function(add_aie_weighted_rms_norm_design INPUT_LENGTH NUM_COLUMNS NUM_CHANNELS 
     set(EXAMPLE "weighted_rms_norm_${NUM_COLUMNS}_cols_${NUM_CHANNELS}_channels_${INPUT_LENGTH}_weights_${TILE_SIZE}")
         set(GOLDEN_VALUES_PATH "${CMAKE_BINARY_DIR}/example/rms_norm/golden_${EXAMPLE}")
 
-    set(INPUT_DATA_TYPE_PYTHON bf16)
-    set(OUTPUT_DATA_TYPE_PYTHON bf16)
     set(INPUT_DATA_TYPE_CPP bfloat16_t)
     set(OUTPUT_DATA_TYPE_CPP bfloat16_t)
-    add_aie_executable(${EXAMPLE} 
+    add_aie_executable(${EXAMPLE}
         HOST weighted_rms_norm.cpp
         HOST_FLAGS DTYPE_IN=${INPUT_DATA_TYPE_CPP} DTYPE_OUT=${OUTPUT_DATA_TYPE_CPP} TILE_SIZE=${TILE_SIZE}
         PYTHON weighted_rms_norm.py
@@ -61,20 +56,19 @@ function(add_aie_weighted_rms_norm_design INPUT_LENGTH NUM_COLUMNS NUM_CHANNELS 
         OUTPUT_INSTS WEIGHTED_RMS_NORM_INSTS
     )
 
-    add_golden_reference_generator(${EXAMPLE} 
+    add_golden_reference_generator(${EXAMPLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/weighted_rms_norm_golden.py
         ${GOLDEN_VALUES_PATH}
         --input_length ${INPUT_LENGTH}
         --weight_length ${TILE_SIZE}
-        --dtype ${INPUT_DATA_TYPE_PYTHON}
     )
 
     add_aie_ci_test(${EXAMPLE}
-        RUN 
-            "${WEIGHTED_RMS_NORM_HOST} -k ${EXAMPLE} -x ${WEIGHTED_RMS_NORM_XCLBIN} -i ${WEIGHTED_RMS_NORM_INSTS} -l ${INPUT_LENGTH} -w ${TILE_SIZE}"
+        RUN
+            "${WEIGHTED_RMS_NORM_HOST} -k ${EXAMPLE} -x ${WEIGHTED_RMS_NORM_XCLBIN} -i ${WEIGHTED_RMS_NORM_INSTS} -l ${INPUT_LENGTH} -w ${TILE_SIZE} --ref ${GOLDEN_VALUES_PATH}/golden_reference.bin"
         CHECK
             "PASS!"
-        METRICS 
+        METRICS
             "Latency" [=[Latency \(us\): (?P<metric>\d+)]=]
             "Bandwidth" [=[Effective Bandwidth: (?P<metric>[\d\.e\+-]+) GB/s]=]
     )
@@ -88,13 +82,6 @@ if(EXTENSIVE_TESTING)
     list(APPEND INPUT_LENGTHS 1024)
     list(APPEND INPUT_LENGTHS 4096)
     list(APPEND INPUT_LENGTHS 8192)
-endif()
-
-# Determine max cores based on device
-if(IRONCLAD_AIE_TARGET STREQUAL aie2p)
-    set(MAX_COLUMNS 8) 
-else()
-    set(MAX_COLUMNS 4)
 endif()
 
 foreach(INPUT_LENGTH IN LISTS INPUT_LENGTHS)
@@ -115,7 +102,7 @@ foreach(INPUT_LENGTH IN LISTS INPUT_LENGTHS)
             endif()
         endforeach()
     endforeach()
-    
+
     # Weighted RMS norm: 2 inputs, channels = 2 (fixed)
     foreach(NUM_COLUMNS RANGE 1 ${MAX_COLUMNS})
         # channels = 2 (fixed for weighted RMS norm)

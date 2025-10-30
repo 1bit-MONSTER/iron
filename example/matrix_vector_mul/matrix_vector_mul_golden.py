@@ -10,7 +10,7 @@ import torch
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
-from golden_model_lib import export_to_header, torch_to_numpy
+from golden_model_lib import export, torch_to_numpy
 
 
 def main():
@@ -18,10 +18,16 @@ def main():
         description="Generate PyTorch golden reference for Matrix-Vector multiplication."
     )
     parser.add_argument(
-        "--output",
+        "--output-header",
         type=str,
         default="golden_reference.h",
         help="Output header file path",
+    )
+    parser.add_argument(
+        "--output-bin",
+        type=str,
+        default="golden_reference.bin",
+        help="Output binary file path",
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("-M", type=int, default=42, help="Number of rows of A")
@@ -40,15 +46,14 @@ def main():
     # Generate golden outputs
     C = A @ B
 
-    export_to_header(
+    export(
         tensor_dict={
-            "A": torch_to_numpy(A.float()),
-            "B": torch_to_numpy(B.float()),
-            "C": torch_to_numpy(C.float()),
+            "A": torch_to_numpy(A),
+            "B": torch_to_numpy(B),
+            "C": torch_to_numpy(C),
         },
-        dtype="bf16",
-        header_path=args.output,
-        name="Matrix-Vector Multiplication",
+        header_path=args.output_header,
+        bin_path=args.output_bin,
     )
 
 

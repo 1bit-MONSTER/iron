@@ -4,7 +4,7 @@
 #include <aie_api/aie.hpp>
 #include <stdint.h>
 
-#define SM_VEC_LEN 16   // 32
+#define SM_VEC_LEN 64   // 32
 #define log2e 1.4453125 // 1.44269504089
 
 using namespace aie;
@@ -85,7 +85,8 @@ void partial_softmax_alias_bf16(bfloat16 *restrict input_vector,
                                 bfloat16 *restrict scale_buffer,
                                 const int32_t vector_size,
                                 const int32_t row_idx,
-                                const int32_t num_rows)
+                                const int32_t num_rows,
+                                const bfloat16 scale)
 {
     event0();
     ::aie::set_rounding(aie::rounding_mode::conv_even);
@@ -113,7 +114,7 @@ void partial_softmax_alias_bf16(bfloat16 *restrict input_vector,
 
     exp_val_accum = aie::zeros<accfloat, SM_VEC_LEN>();
 
-    log2e_vec = aie::broadcast<bfloat16, SM_VEC_LEN>((bfloat16)log2e);
+    log2e_vec = aie::broadcast<bfloat16, SM_VEC_LEN>((bfloat16)scale);
 
     // First pass
     for (int i = 0; i < elem_iters; i++) {
@@ -170,9 +171,10 @@ void partial_softmax_bf16(bfloat16 *restrict input,
                           bfloat16 *restrict scale_buffer,
                           const int32_t input_size,
                           const int32_t row_idx,
-                          const int32_t num_rows)
+                          const int32_t num_rows,
+                          const bfloat16 scale)
 {
-    partial_softmax_alias_bf16(input, output, scale_buffer, input_size, row_idx, num_rows);
+    partial_softmax_alias_bf16(input, output, scale_buffer, input_size, row_idx, num_rows, scale);
 }
 
 } // extern "C"

@@ -11,17 +11,7 @@ import numpy as np
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
-from golden_model_lib import export_to_header, torch_to_numpy
-
-
-# Map data types to PyTorch types
-DTYPE_MAP = {
-    "bf16": torch.bfloat16,
-    "f32": torch.float32,
-    "i8": torch.int8,
-    "i16": torch.int16,
-    "i32": torch.int32,
-}
+from golden_model_lib import export, torch_to_numpy, torch_dtype_map
 
 
 def main():
@@ -31,15 +21,21 @@ def main():
     parser.add_argument(
         "--dtype",
         type=str,
-        choices=["bf16", "f32"],
+        choices=torch_dtype_map.keys(),
         default="bf16",
         help="Input data type",
     )
     parser.add_argument(
-        "--output",
+        "--output-header",
         type=str,
         default="golden_reference.h",
         help="Output header file path",
+    )
+    parser.add_argument(
+        "--output-bin",
+        type=str,
+        default="golden_reference.bin",
+        help="Output binary file path",
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
@@ -71,9 +67,11 @@ def main():
 
     val_range = 4
 
-    Q = torch.rand(args.heads, args.S_q, args.d, dtype=torch.float32) * val_range
-    K = torch.rand(num_kv_heads, args.S_kv, args.d, dtype=torch.float32) * val_range
-    V = torch.rand(num_kv_heads, args.S_kv, args.d, dtype=torch.float32) * val_range
+    dtype = torch_dtype_map[args.dtype]
+
+    Q = torch.rand(args.heads, args.S_q, args.d, dtype=dtype) * val_range
+    K = torch.rand(num_kv_heads, args.S_kv, args.d, dtype=dtype) * val_range
+    V = torch.rand(num_kv_heads, args.S_kv, args.d, dtype=dtype) * val_range
 
     K = K.repeat_interleave(number_of_groups, dim=0)
     V = V.repeat_interleave(number_of_groups, dim=0)
@@ -84,11 +82,10 @@ def main():
         Q.to(torch.bfloat16),
         K.to(torch.bfloat16),
         V.to(torch.bfloat16),
-        attn_mask=None,
         dropout_p=0.0,
-        is_causal=False,
+        is_causal=True,
         scale=inv_scale,
-    ).to(torch.float32)
+    )
 
     tensor_dict = {
         "Q": torch_to_numpy(Q),
@@ -97,7 +94,7 @@ def main():
         "O": torch_to_numpy(O),
     }
 
-    export_to_header(tensor_dict, args.dtype, args.output, name="Multi-Head Attention")
+    export(tensor_dict, header_path=args.output_header, bin_path=args.output_bin)
 
 
 if __name__ == "__main__":

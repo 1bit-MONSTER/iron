@@ -10,16 +10,15 @@ import torch
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
-from golden_model_lib import export_to_header, torch_to_numpy
+from golden_model_lib import export, torch_to_numpy
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Generate PyTorch golden reference for SwiGLU"
     )
-    parser.add_argument(
-        "--output", required=True, type=str, help="Output header file path"
-    )
+    parser.add_argument("--output-header", type=str, help="Output header file path")
+    parser.add_argument("--output-bin", type=str, help="Output binary file path")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--dim", type=int, default=256, help="Embedding dimension")
 
@@ -40,24 +39,18 @@ def main():
     right = W2 @ inp  # + bias2
     result = left_swished * right
 
-    export_to_header(
-        tensor_dict={
-            name: torch_to_numpy(vars()[name].float())
-            for name in [
-                "inp",
-                "W1",
-                "bias1",
-                "W2",
-                "bias2",
-                "left",
-                "left_swished",
-                "right",
-                "result",
-            ]
+    export(
+        {
+            "inp": torch_to_numpy(inp),
+            "W1": torch_to_numpy(W1),
+            "W2": torch_to_numpy(W2),
+            "left": torch_to_numpy(left),
+            "left_swished": torch_to_numpy(left_swished),
+            "right": torch_to_numpy(right),
+            "result": torch_to_numpy(result),
         },
-        dtype="bf16",
-        header_path=args.output,
-        name="SwiGLU",
+        header_path=args.output_header,
+        bin_path=args.output_bin,
     )
 
 

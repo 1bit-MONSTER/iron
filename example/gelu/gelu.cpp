@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "cxxopts.hpp"
-#include "golden_reference.h"
+#include "golden_reference_reader.h"
 #include "test_utils.h"
 #include "xrt/xrt_bo.h"
 #include "xrt/xrt_device.h"
@@ -29,7 +29,10 @@ int main(int argc, const char *argv[])
         "instr,i",
         "path of file containing userspace instructions to be sent to the LX6",
         cxxopts::value<std::string>())(
-        "length,l", "the length of the transfer in std::bfloat16_t", cxxopts::value<int>()->default_value("4096"));
+        "length,l", "the length of the transfer in std::bfloat16_t", cxxopts::value<int>()->default_value("4096"))(
+        "ref",
+        "path to golden reference file",
+        cxxopts::value<std::string>()->default_value("golden_gelu/golden_reference.bin"));
 
     try {
         vm = options.parse(argc, argv);
@@ -40,7 +43,7 @@ int main(int argc, const char *argv[])
         }
 
         // Check required options
-        if (!vm.count("xclbin") || !vm.count("kernel") || !vm.count("instr")) {
+        if (!vm.count("xclbin") || !vm.count("kernel") || !vm.count("instr") || !vm.count("ref")) {
             std::cerr << "Error: Required options missing\n\n";
             std::cerr << "Usage:\n" << options.help() << std::endl;
             return 1;
@@ -52,6 +55,9 @@ int main(int argc, const char *argv[])
     }
 
     std::vector<uint32_t> instr_v = test_utils::load_instr_binary(vm["instr"].as<std::string>());
+
+    std::string ref_path = vm["ref"].as<std::string>();
+    GoldenReference ref = GoldenReference::fromFile(ref_path);
 
     int verbosity = vm["verbosity"].as<int>();
     if (verbosity >= 1)
@@ -109,7 +115,7 @@ int main(int argc, const char *argv[])
         std::cout << "Writing data into buffer objects." << std::endl;
 
     std::bfloat16_t *bufInA = bo_inA.map<std::bfloat16_t *>();
-    memcpy(bufInA, golden_reference::A.data(), (golden_reference::A.size() * sizeof(std::bfloat16_t)));
+    memcpy(bufInA, ref.get<std::bfloat16_t>("A")->data(), N * sizeof(std::bfloat16_t));
 
     void *bufInstr = bo_instr.map<void *>();
     memcpy(bufInstr, instr_v.data(), instr_v.size() * sizeof(int));
@@ -142,17 +148,18 @@ int main(int argc, const char *argv[])
     std::bfloat16_t *bufOut = bo_out.map<std::bfloat16_t *>();
 
     int errors = 0;
+    auto ref_B = ref.get<std::bfloat16_t>("B");
 
     for (int i = 0; i < N; i++) {
-        std::bfloat16_t ref = golden_reference::B[i];
+        std::bfloat16_t ref_val = (*ref_B)[i];
         // if (i < 10){
-        //   std::cout << "Index " << i << ": Computed=" << *(bufOut + i) << ", Reference=" << ref << std::endl;
+        //   std::cout << "Index " << i << ": Computed=" << *(bufOut + i) << ", Reference=" << ref_val << std::endl;
         // }
-        if (!test_utils::nearly_equal(*(bufOut + i), ref, 0.04)) {
+        if (!test_utils::nearly_equal(*(bufOut + i), ref_val, 0.04)) {
             errors++;
             // Print the first 100 mismatches
             if (errors <= 100) {
-                std::cout << "Mismatch at index " << i << ": " << "Expected: " << ref << ", "
+                std::cout << "Mismatch at index " << i << ": " << "Expected: " << ref_val << ", "
                           << "Got: " << *(bufOut + i) << std::endl;
             }
         }

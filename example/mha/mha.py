@@ -2,18 +2,29 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import sys
+import math
+import copy
 import argparse
-
 from pathlib import Path
 
 from ml_dtypes import bfloat16
 import numpy as np
 
-from aie.iron import Kernel, ObjectFifo, Program, Runtime, Worker, LocalBuffer
+from aie.iron import (
+    Kernel,
+    ObjectFifo,
+    Program,
+    Runtime,
+    Worker,
+    LocalBuffer,
+    GlobalBuffer,
+    WorkerRuntimeBarrier,
+)
 from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1Col1, NPU2, Tile
 from aie.iron.controlflow import range_
-from aie.helpers.taplib import TensorTiler2D
+from aie.helpers.taplib import TensorTiler2D, TensorAccessSequence, TensorAccessPattern
+from aie.helpers.dialects.ext.scf import if_, else_
 
 base_dir = Path(__file__).parent
 
@@ -53,6 +64,7 @@ def main():
         default=2,
         help="Number of heads for Key-Value pairs",
     )
+    argparser.add_argument("--number-of-pipeline", type=int, default=1)
     argparser.add_argument("--emulate-bf16-mmul-with-bfp16", type=bool, default=False)
     argparser.add_argument("--trace_size", type=int, default=0)
     argparser.add_argument(
@@ -69,16 +81,17 @@ def main():
     args = argparser.parse_args()
 
     maybe_module = batched_matmul_single_core(
-        args.heads,
-        args.S_q,
-        args.S_kv,
-        args.d,
-        args.B_q,
-        args.B_kv,
-        args.num_KV_heads,
-        args.emulate_bf16_mmul_with_bfp16,
-        args.trace_size,
-        args.verbose,
+        heads=args.heads,
+        S_q=args.S_q,
+        S_kv=args.S_kv,
+        d=args.d,
+        B_q=args.B_q,
+        B_kv=args.B_kv,
+        number_of_pipelines=args.number_of_pipeline,
+        num_KV_heads=args.num_KV_heads,
+        emulate_bf16_mmul_with_bfp16=args.emulate_bf16_mmul_with_bfp16,
+        trace_size=args.trace_size,
+        verbose=args.verbose,
     )
 
     output_file_path = Path(args.output_file_path)
@@ -97,20 +110,16 @@ def batched_matmul_single_core(
     d: int,
     B_q: int,
     B_kv: int,
+    number_of_pipelines: int,
     num_KV_heads: int,
     emulate_bf16_mmul_with_bfp16: bool,
     trace_size: int = 0,
     verbose: bool = False,
 ):
-    number_of_pipelines = 8
+
     of_depth = 2
-    number_of_cols = 8
-
-    # When false toogle sclar GEMM (for QK)
     vectorized = True
-
     enable_tracing = True if trace_size > 0 else False
-
     dtype_str = "bf16"
     dev = "npu2"
 
@@ -118,6 +127,10 @@ def batched_matmul_single_core(
         number_of_pipelines_join_distribute = number_of_pipelines // 2
     else:
         number_of_pipelines_join_distribute = number_of_pipelines
+
+    num_q_blocks = S_q // B_q
+    num_kv_blocks = S_kv // B_kv
+    num_q_block_per_pipeline = num_q_blocks // number_of_pipelines
 
     # VJUNG: When the number of KV head is 0 we do a regular MHA, otherwise we do GQA.
     if num_KV_heads == 0:
@@ -128,9 +141,6 @@ def batched_matmul_single_core(
     # r, s, t are the dimensions required by the microkernel MAC instructions.
     mac_dims = microkernel_mac_dim_map[dev][dtype_str]
     r, s, t = mac_dims[emulate_bf16_mmul_with_bfp16]
-
-    num_q_blocks = S_q // B_q
-    num_kv_blocks = S_kv // B_kv
 
     if verbose:
         print(f"Device: {dev}")
@@ -162,7 +172,7 @@ def batched_matmul_single_core(
 
     dtype = dtype_map[dtype_str]
 
-    inv_scale = 1 / np.sqrt(d)
+    inv_scale = (1 / np.sqrt(d)) * 1.4453125
 
     # Tensors living in DRAM
     Q_ty = np.ndarray[
@@ -200,25 +210,41 @@ def batched_matmul_single_core(
     partial_softmax_kernel = Kernel(
         "partial_softmax",
         bin_name,
-        [qk_ty, qk_ty, s_ty, dtype, np.int32, np.int32],
+        [
+            qk_ty,
+            qk_ty,
+            s_ty,
+            np.ndarray[(2,), np.dtype[np.int32]],
+            dtype,
+            np.int32,
+            np.int32,
+        ],
     )
 
     matmul_QK = Kernel(
         f"matmul_bf16_bf16_wrapper{func_type}",
         bin_name,
-        [q_ty, k_ty, qk_ty],
+        [q_ty, k_ty, qk_ty, np.ndarray[(2,), np.dtype[np.int32]]],
     )
 
     matmul_PV = Kernel(
         "matmul_PV",
         bin_name,
-        [qk_ty, k_ty, qk_ty, s_ty, np.int32, np.int32],
+        [
+            qk_ty,
+            k_ty,
+            qk_ty,
+            s_ty,
+            np.int32,
+            np.int32,
+            np.ndarray[(2,), np.dtype[np.int32]],
+        ],
     )
 
     rescale_O = Kernel(
         "rescale_O",
         bin_name,
-        [qk_ty, s_ty, np.int32],
+        [qk_ty, s_ty, np.int32, np.ndarray[(2,), np.dtype[np.int32]]],
     )
 
     # AIE-array data movement with object fifos
@@ -356,21 +382,42 @@ def batched_matmul_single_core(
             placement=Tile(col=7, row=1),
         )
 
-    def batched_matmul_qk(of_q, of_k, of_a_out, zero, matmul_QK):
+    def batched_matmul_qk(
+        of_q, of_k, of_a_out, zero, matmul_QK, q_block_bias, loop_idx_rtp, barrier
+    ):
 
-        elem_in_q = of_q.acquire(1)
+        idx_buffer = LocalBuffer(initial_value=np.zeros(shape=(2,), dtype=np.int32))
 
-        for _ in range_(num_kv_blocks):
-            elem_in_k = of_k.acquire(1)
-            elem_a_out = of_a_out.acquire(1)
+        barrier.wait_for_value(1)
 
-            zero(elem_a_out)
-            matmul_QK(elem_in_q, elem_in_k, elem_a_out)
+        loop_idx_q = loop_idx_rtp[0]
+        loop_idx_kv = loop_idx_rtp[1]
 
-            of_k.release(1)
-            of_a_out.release(1)
+        for _ in range_(sys.maxsize):
 
-        of_q.release(1)
+            idx_buffer[0] = 0
+            idx_buffer[1] = q_block_bias
+
+            for _ in range_(loop_idx_q):
+
+                elem_in_q = of_q.acquire(1)
+
+                for _ in range_(loop_idx_kv):
+
+                    elem_in_k = of_k.acquire(1)
+                    elem_a_out = of_a_out.acquire(1)
+
+                    zero(elem_a_out)
+                    matmul_QK(elem_in_q, elem_in_k, elem_a_out, idx_buffer)
+
+                    of_k.release(1)
+                    of_a_out.release(1)
+
+                    idx_buffer[0] += 1
+                idx_buffer[0] = 0
+                idx_buffer[1] += number_of_pipelines
+
+                of_q.release(1)
 
     def softmax(
         of_in_a,
@@ -379,26 +426,47 @@ def batched_matmul_single_core(
         partial_softmax,
         init_scale_buffer,
         memcopy_kernel_scale,
+        q_block_bias,
+        loop_idx_rtp,
+        barrier,
     ):
 
+        # VJUNG: The index buffer count how many Q and KV block this worker has processed
+        # From this info we can infer the position in A and P
+        idx_buffer = LocalBuffer(initial_value=np.zeros(shape=(2,), dtype=np.int32))
         scale_buffer = LocalBuffer(
             initial_value=np.zeros(shape=(4 * B_q,), dtype=dtype)
         )
 
+        barrier.wait_for_value(1)
+
+        loop_idx_q = loop_idx_rtp[0]
+        loop_idx_kv = loop_idx_rtp[1]
+
         for _ in range_(sys.maxsize):
 
-            for _ in range_(num_q_blocks):
+            # VJUNG: Required otherwise the buffer is maintained when doing warmup!
+            idx_buffer[0] = 0
+            idx_buffer[1] = q_block_bias
+
+            for _ in range_(loop_idx_q):
 
                 init_scale_buffer(scale_buffer, B_q)
 
-                for _ in range_(num_kv_blocks):
+                for _ in range_(loop_idx_kv):
 
                     elt_of_out_p = of_out_p.acquire(1)
                     elt_of_in_a = of_in_a.acquire(1)
                     elt_of_out_scale = of_out_scale.acquire(1)
 
                     partial_softmax(
-                        elt_of_in_a, elt_of_out_p, scale_buffer, inv_scale, B_q, B_q
+                        elt_of_in_a,
+                        elt_of_out_p,
+                        scale_buffer,
+                        idx_buffer,
+                        inv_scale,
+                        B_q,
+                        B_kv,
                     )
                     memcopy_kernel_scale(scale_buffer, elt_of_out_scale, 4 * B_q)
 
@@ -406,63 +474,144 @@ def batched_matmul_single_core(
                     of_out_p.release(1)
                     of_out_scale.release(1)
 
-    def batched_matmul_pv(of_p, of_v, of_scale, of_o_out, zero, matmul_PV, rescale_O):
+                    idx_buffer[0] += 1
+                idx_buffer[0] = 0
+                idx_buffer[1] += number_of_pipelines
 
-        for _ in range_(num_q_blocks):
+    def batched_matmul_pv(
+        of_p,
+        of_v,
+        of_scale,
+        of_o_out,
+        zero,
+        matmul_PV,
+        rescale_O,
+        q_block_bias,
+        loop_idx_rtp,
+        barrier,
+    ):
 
-            elem_o_out = of_o_out.acquire(1)
+        idx_buffer = LocalBuffer(initial_value=np.zeros(shape=(2,), dtype=np.int32))
 
-            zero(elem_o_out)
+        barrier.wait_for_value(1)
 
-            ### First iteration, don't rescale O_{i-1}
-            elem_in_p = of_p.acquire(1)
-            elem_in_v = of_v.acquire(1)
-            elt_of_out_scale = of_scale.acquire(1)
+        loop_idx_q = loop_idx_rtp[0]
+        loop_idx_kv = loop_idx_rtp[1]
 
-            matmul_PV(elem_in_p, elem_in_v, elem_o_out, elt_of_out_scale, B_q, 0)
+        for _ in range_(sys.maxsize):
 
-            of_p.release(1)
-            of_v.release(1)
-            of_scale.release(1)
-            ###
+            # VJUNG: Required otherwise the buffer is maintained when doing warmup!
+            idx_buffer[0] = 0
+            idx_buffer[1] = q_block_bias
 
-            if num_kv_blocks > 2:
-                for _ in range_(num_kv_blocks - 2):
+            for _ in range_(loop_idx_q):
+
+                elem_o_out = of_o_out.acquire(1)
+
+                zero(elem_o_out)
+
+                ### First iteration, don't rescale O_{i-1}
+                elem_in_p = of_p.acquire(1)
+                elem_in_v = of_v.acquire(1)
+                elt_of_out_scale = of_scale.acquire(1)
+
+                matmul_PV(
+                    elem_in_p,
+                    elem_in_v,
+                    elem_o_out,
+                    elt_of_out_scale,
+                    B_q,
+                    0,
+                    idx_buffer,
+                )
+
+                of_p.release(1)
+                of_v.release(1)
+                of_scale.release(1)
+
+                idx_buffer[0] += 1
+                ###
+
+                with if_(loop_idx_kv > 2) as if_op:
+                    for _ in range_(loop_idx_kv - 2):
+                        elem_in_p = of_p.acquire(1)
+                        elem_in_v = of_v.acquire(1)
+                        elt_of_out_scale2 = of_scale.acquire(1)
+
+                        matmul_PV(
+                            elem_in_p,
+                            elem_in_v,
+                            elem_o_out,
+                            elt_of_out_scale2,
+                            B_q,
+                            1,
+                            idx_buffer,
+                        )
+
+                        of_p.release(1)
+                        of_v.release(1)
+                        of_scale.release(1)
+
+                        idx_buffer[0] += 1
+
+                ### Last iteration, final rescaling
+                with if_(loop_idx_kv > 1) as if_op:
                     elem_in_p = of_p.acquire(1)
                     elem_in_v = of_v.acquire(1)
-                    elt_of_out_scale = of_scale.acquire(1)
+                    elt_of_out_scale3 = of_scale.acquire(1)
 
                     matmul_PV(
-                        elem_in_p, elem_in_v, elem_o_out, elt_of_out_scale, B_q, 1
+                        elem_in_p,
+                        elem_in_v,
+                        elem_o_out,
+                        elt_of_out_scale3,
+                        B_q,
+                        1,
+                        idx_buffer,
                     )
+                    rescale_O(elem_o_out, elt_of_out_scale3, B_q, idx_buffer)
 
                     of_p.release(1)
                     of_v.release(1)
                     of_scale.release(1)
 
-            ### Last iteration, final rescaling
-            if num_kv_blocks > 1:
-                elem_in_p = of_p.acquire(1)
-                elem_in_v = of_v.acquire(1)
-                elt_of_out_scale = of_scale.acquire(1)
+                    idx_buffer[0] += 1
+                # else:
+                with else_(if_op):
+                    rescale_O(elem_o_out, elt_of_out_scale, B_q, idx_buffer)
+                    idx_buffer[0] += 1
+                ###
 
-                matmul_PV(elem_in_p, elem_in_v, elem_o_out, elt_of_out_scale, B_q, 1)
-                rescale_O(elem_o_out, elt_of_out_scale, B_q)
+                idx_buffer[0] = 0
+                idx_buffer[1] += number_of_pipelines
 
-                of_p.release(1)
-                of_v.release(1)
-                of_scale.release(1)
-            else:
-                rescale_O(elem_o_out, elt_of_out_scale, B_q)
-            ###
+                of_o_out.release(1)
 
-            of_o_out.release(1)
+    # Runtime parameter for workers loop index
+    # VJUNG: We need one GlobalBuffer per worker since they need to be placed
+    loop_idx_rtp_list = [
+        [
+            GlobalBuffer(
+                np.ndarray[(2,), np.dtype[np.int32]],
+                name=f"loop_idx_rtps_{i}_stage{j}",
+                initial_value=None,
+                use_write_rtp=True,
+            )
+            for i in range(number_of_pipelines)
+        ]
+        for j in range(3)
+    ]
+
+    worker_barrier_list = [
+        [WorkerRuntimeBarrier(initial_value=0) for i in range(number_of_pipelines)]
+        for j in range(3)
+    ]
 
     # Create worker from task
     matmul_workers = []
     softmax_workers = []
     matmul_pv_workers = []
-    for i in range(min(number_of_pipelines, number_of_cols)):
+    for i in range(number_of_pipelines):
         matmul_workers.append(
             Worker(
                 batched_matmul_qk,
@@ -472,9 +621,13 @@ def batched_matmul_single_core(
                     memA[i].prod(),
                     zero_kernel,
                     matmul_QK,
+                    i,
+                    loop_idx_rtp_list[0][i],
+                    worker_barrier_list[0][i],
                 ],
                 stack_size=0xD00,
                 placement=Tile(col=i, row=2),
+                while_true=False,
             )
         )
         softmax_workers.append(
@@ -487,6 +640,9 @@ def batched_matmul_single_core(
                     partial_softmax_kernel,
                     scale_buffer_init_kernel,
                     memcopy_kernel_scale,
+                    i,
+                    loop_idx_rtp_list[1][i],
+                    worker_barrier_list[1][i],
                 ],
                 stack_size=0xD00,
                 placement=Tile(col=i, row=3),
@@ -504,59 +660,15 @@ def batched_matmul_single_core(
                     zero_kernel,
                     matmul_PV,
                     rescale_O,
+                    i,
+                    loop_idx_rtp_list[2][i],
+                    worker_barrier_list[2][i],
                 ],
                 stack_size=0xD00,
                 placement=Tile(col=i, row=4),
+                while_true=False,
             )
         )
-    if number_of_pipelines > number_of_cols:
-        for i in range(number_of_pipelines - number_of_cols):
-            matmul_workers.append(
-                Worker(
-                    batched_matmul_qk,
-                    fn_args=[
-                        memQ[number_of_cols + i].cons(),
-                        memK.cons(),
-                        memA[number_of_cols + i].prod(),
-                        zero_kernel,
-                        matmul_QK,
-                    ],
-                    stack_size=0xD00,
-                    placement=Tile(col=3 * i, row=5),
-                )
-            )
-            softmax_workers.append(
-                Worker(
-                    softmax,
-                    fn_args=[
-                        outA[number_of_cols + i].cons(),
-                        memP[number_of_cols + i].prod(),
-                        scaleOF[number_of_cols + i].prod(),
-                        partial_softmax_kernel,
-                        scale_buffer_init_kernel,
-                        memcopy_kernel_scale,
-                    ],
-                    stack_size=0xD00,
-                    placement=Tile(col=3 * i + 1, row=5),
-                    while_true=False,
-                )
-            )
-            matmul_pv_workers.append(
-                Worker(
-                    batched_matmul_pv,
-                    fn_args=[
-                        outP[number_of_cols + i].cons(),
-                        memV.cons(),
-                        scaleOF[number_of_cols + i].cons(),
-                        outO[number_of_cols + i].prod(),
-                        zero_kernel,
-                        matmul_PV,
-                        rescale_O,
-                    ],
-                    stack_size=0xD00,
-                    placement=Tile(col=3 * i + 2, row=5),
-                )
-            )
 
     # Define tensor access patterns for inputs/outputs
     # A and B are tiled across M and N respectively, while C is tiled across M and N
@@ -579,36 +691,59 @@ def batched_matmul_single_core(
             print(f"  Sizes: {tap.sizes}")
             print(f"  Strides: {tap.strides}")
 
-    def fixup_tiles(tile_list):
-        for tile in tile_list:
-            # tile._sizes = [1, 1, 512, 128] # [1, 1, 1024, 64]
-            # tile._strides = [0, 0, 128, 1] # [0, 0, 64, 1]
-            tile._sizes = [1, 1, 512, 256]  # [1, 1, 2048, 64]
-            tile._strides = [0, 0, 256, 1]  # [0, 0, 64, 1]
-            # tile._sizes = [1, 1, 512, 512] # [1, 1, 4096, 64]
-            # tile._strides = [0, 0, 512, 1] # [0, 0, 64, 1]
-            # tile._sizes = [1, 2, 512, 512] # [1, 1, 8192, 64]
-            # tile._strides = [0, 512*512, 512, 1] # [0, 0, 64, 1]
-            # tile._sizes = [1, 4, 512, 512] # [1, 1, 16384, 64]
-            # tile._strides = [0, 512*512, 512, 1] # [0, 0, 64, 1]
+    def legalize_tap(tap: TensorAccessPattern, max_dim_size: int):
 
-    # Need to use this when one head is larger than 1024x1024, should be done by the compiler
-    if S_kv >= 1024:
-        fixup_tiles(K_tiles)
-        fixup_tiles(V_tiles)
+        sizes = copy.deepcopy(tap._sizes)
+        strides = copy.deepcopy(tap._strides)
+
+        # Skip is no need to legalize
+        if all(size <= max_dim_size for size in sizes):
+            return tap
+
+        # Check that the transfer is continuous
+        for idx, stride in enumerate(tap._strides[:-1]):
+            if stride != 0 and stride != tap._sizes[idx + 1]:
+                raise ValueError(f"Cannot legalize DMA non-contiguous DMA transfer")
+        assert tap._strides[-1] == 1, f"Cannot legalize DMA non-contiguous DMA transfer"
+
+        tap._sizes = [1, 1, 1, math.prod(sizes)]
+        tap._strides = [0, 0, 0, 1]
+
+        return tap
+
+    def legalize_tas(tas: TensorAccessSequence):
+
+        max_dim_size = 1023  # Max DMA dimension size for memTile DMA on NPU2
+
+        for tap in tas:
+            tap = legalize_tap(tap, max_dim_size)
+
+    legalize_tas(K_tiles)
+    legalize_tas(V_tiles)
 
     if verbose:
         print(f"DMA Transfer Configuration: DRAM <-> Mem tile")
-        print_tap_seq_info(Q_tiles, "Q")
+        # print_tap_seq_info(Q_tiles, "Q")
         print_tap_seq_info(K_tiles, "K")
         print_tap_seq_info(V_tiles, "V")
-        print_tap_seq_info(O_tiles, "O")
-
-    # import IPython; IPython.embed();
+        # print_tap_seq_info(O_tiles, "O")
 
     # Runtime operations to move data to/from the AIE-array
     rt = Runtime()
     with rt.sequence(Q_ty, KV_ty, KV_ty, Q_ty) as (Q, K, V, O):
+
+        def set_loop_idx_rtp():
+            for j in range(3):
+                for i in range(number_of_pipelines):
+                    loop_idx_rtp_list[j][i][0] = num_q_block_per_pipeline
+                    loop_idx_rtp_list[j][i][1] = num_kv_blocks
+
+        rt.inline_ops(set_loop_idx_rtp, ())
+
+        for j in range(3):
+            for i in range(number_of_pipelines):
+                rt.set_barrier(worker_barrier_list[j][i], 1)
+
         for i in range(number_of_pipelines):
             rt.start(matmul_workers[i])
             rt.start(softmax_workers[i])
@@ -616,19 +751,32 @@ def batched_matmul_single_core(
 
         for head_idx in range(heads):
 
-            for q_block_idx in range(num_q_blocks // number_of_pipelines):
+            for q_block_idx in range(num_q_block_per_pipeline):
 
-                rt.fill(
-                    inQ.prod(),
-                    Q,
-                    tap=Q_tiles[head_idx * num_q_blocks + q_block_idx * 2],
-                    placement=Tile(col=4, row=0),
-                )
                 if number_of_pipelines > 6:
+                    rt.fill(
+                        inQ.prod(),
+                        Q,
+                        tap=Q_tiles[
+                            2 * head_idx * num_q_block_per_pipeline + q_block_idx * 2
+                        ],
+                        placement=Tile(col=4, row=0),
+                    )
                     rt.fill(
                         inQ2.prod(),
                         Q,
-                        tap=Q_tiles[head_idx * num_q_blocks + q_block_idx * 2 + 1],
+                        tap=Q_tiles[
+                            2 * head_idx * num_q_block_per_pipeline
+                            + q_block_idx * 2
+                            + 1
+                        ],
+                        placement=Tile(col=4, row=0),
+                    )
+                else:
+                    rt.fill(
+                        inQ.prod(),
+                        Q,
+                        tap=Q_tiles[head_idx * num_q_block_per_pipeline + q_block_idx],
                         placement=Tile(col=4, row=0),
                     )
 
@@ -640,18 +788,32 @@ def batched_matmul_single_core(
                     inV.prod(), V, tap=V_tiles[head_idx], placement=Tile(col=6, row=0)
                 )
 
-                rt.drain(
-                    memO.cons(),
-                    O,
-                    tap=O_tiles[head_idx * num_q_blocks + q_block_idx * 2],
-                    wait=True,
-                    placement=Tile(col=7, row=0),
-                )
                 if number_of_pipelines > 6:
+                    rt.drain(
+                        memO.cons(),
+                        O,
+                        tap=O_tiles[
+                            2 * head_idx * num_q_block_per_pipeline + q_block_idx * 2
+                        ],
+                        wait=True,
+                        placement=Tile(col=7, row=0),
+                    )
                     rt.drain(
                         memO2.cons(),
                         O,
-                        tap=O_tiles[head_idx * num_q_blocks + q_block_idx * 2 + 1],
+                        tap=O_tiles[
+                            2 * head_idx * num_q_block_per_pipeline
+                            + q_block_idx * 2
+                            + 1
+                        ],
+                        wait=True,
+                        placement=Tile(col=7, row=0),
+                    )
+                else:
+                    rt.drain(
+                        memO.cons(),
+                        O,
+                        tap=O_tiles[head_idx * num_q_block_per_pipeline + q_block_idx],
                         wait=True,
                         placement=Tile(col=7, row=0),
                     )

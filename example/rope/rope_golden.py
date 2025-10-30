@@ -10,13 +10,14 @@ import torch
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
-from golden_model_lib import export_to_header, torch_to_numpy
+from golden_model_lib import export, torch_to_numpy, torch_dtype_map
 
 
 def compute_rope_params(
     head_dim,
     theta_base=10_000,
     context_length=4096,
+    method_type=0,
     freq_config=None,
     dtype=torch.float32,
 ):
@@ -63,9 +64,9 @@ def compute_rope_params(
     positions = torch.arange(context_length, dtype=dtype)
 
     # Compute the angles
-    angles = (
-        positions[:, None] * inv_freq[None, :]
-    )  # Shape: (context_length, head_dim // 2)
+    angles = positions.unsqueeze(1) * inv_freq.unsqueeze(
+        0
+    )  # Shape: (context_length, head_dim / 2)
 
     # Precompute sine and cosine
     cos = torch.cos(angles)
@@ -74,30 +75,49 @@ def compute_rope_params(
     return cos, sin
 
 
-def apply_rope(x, cos, sin):
-    # x: (seq_len, head_dim)
-    seq_len, head_dim = x.shape
-    assert head_dim % 2 == 0, "Head dimension must be even"
+def apply_rope(x, cos, sin, method_type=0):
+    if method_type == 0:  # For the two-halves method used in HF transformers
+        # x: (seq_len, head_dim)
+        seq_len, head_dim = x.shape
+        assert head_dim % 2 == 0, "Head dimension must be even"
 
-    # Split x into even and odd columns
-    x_even = x[..., ::2]  # Even columns
-    x_odd = x[..., 1::2]  # Odd columns
+        # Split x into first half and second half
+        x1 = x[..., : head_dim // 2]  # First half
+        x2 = x[..., head_dim // 2 :]  # Second half
 
-    # Adjust sin and cos shapes
-    cos = cos[:seq_len, :].unsqueeze(0).unsqueeze(0)  # Shape: (seq_len, head_dim // 2)
-    sin = sin[:seq_len, :].unsqueeze(0).unsqueeze(0)
+        # Adjust sin and cos shapes
+        cos = cos[:seq_len, :]  # Shape: (seq_len, head_dim / 2)
+        sin = sin[:seq_len, :]
 
-    # Apply the rotary transformation
-    x_rotated_even = (x_even * cos) - (x_odd * sin)
-    x_rotated_odd = (x_even * sin) + (x_odd * cos)
+        # Apply the rotary transformation
+        x_rotated = torch.empty_like(x)
+        x_rotated[..., : head_dim // 2] = (x1 * cos) + (-x2 * sin)
+        x_rotated[..., head_dim // 2 :] = (x2 * cos) + (x1 * sin)
 
-    # Interleave the even and odd outputs
-    x_rotated = torch.empty_like(x)
-    x_rotated[..., ::2] = x_rotated_even
-    x_rotated[..., 1::2] = x_rotated_odd
+        # It's ok to use lower-precision after applying cos and sin rotation
+        return x_rotated.to(dtype=x.dtype)
+    elif method_type == 1:  # For the interleaved method used in the Llama paper
+        # x: (seq_len, head_dim)
+        seq_len, head_dim = x.shape
+        assert head_dim % 2 == 0, "Head dimension must be even"
 
-    # It's ok to use lower-precision after applying cos and sin rotation
-    return x_rotated.to(dtype=x.dtype)
+        # Split x into even and odd columns
+        x_even = x[..., ::2]  # Even columns
+        x_odd = x[..., 1::2]  # Odd columns
+
+        # Adjust sin and cos shapes
+        cos = cos[:seq_len, :]  # Shape: (seq_len, head_dim / 2)
+        sin = sin[:seq_len, :]
+
+        # Apply the rotary transformation and interleave the even and odd outputs
+        x_rotated = torch.empty_like(x)
+        x_rotated[..., ::2] = (x_even * cos) - (x_odd * sin)
+        x_rotated[..., 1::2] = (x_even * sin) + (x_odd * cos)
+
+        # It's ok to use lower-precision after applying cos and sin rotation
+        return x_rotated.to(dtype=x.dtype)
+    else:
+        raise ValueError("Invalid method_type. Must be 0 or 1.")
 
 
 def main():
@@ -107,15 +127,21 @@ def main():
     parser.add_argument(
         "--dtype",
         type=str,
-        choices=["bf16", "f32"],
+        choices=torch_dtype_map.keys(),
         default="bf16",
         help="IO data type",
     )
     parser.add_argument(
-        "--output",
+        "--output-header",
         type=str,
         default="golden_reference.h",
         help="Output header file path",
+    )
+    parser.add_argument(
+        "--output-bin",
+        type=str,
+        default="golden_reference.bin",
+        help="Output binary file path",
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
@@ -126,6 +152,13 @@ def main():
     parser.add_argument("--cols", type=int, default=64, help="Tile size: Head dim")
     parser.add_argument(
         "--context_len", type=int, default=131072, help="Context length"
+    )
+    parser.add_argument(
+        "--method_type",
+        type=int,
+        default=0,
+        choices=[0, 1],
+        help="Method type: two-halves (0), interleaved (1)",
     )
     parser.add_argument(
         "--rope_theta_base", type=float, default=500000.0, help="RoPE theta base"
@@ -166,10 +199,11 @@ def main():
         head_dim=args.cols,
         theta_base=args.rope_theta_base,
         context_length=args.context_len,
+        method_type=args.method_type,
         freq_config=freq_config,
     )
     val_range = 4
-    A = torch.rand(args.rows, args.cols, dtype=torch.float32) * val_range
+    A = torch.rand(args.rows, args.cols, dtype=torch_dtype_map[args.dtype]) * val_range
 
     # Create the lut by interleaving cos and sin
     B = torch.empty_like(A)
@@ -177,17 +211,16 @@ def main():
     B[:, 1::2] = sin[: args.rows, : args.cols // 2]
 
     # Generate golden outputs
-    C = apply_rope(A, cos, sin)
+    C = apply_rope(A, cos, sin, args.method_type)
 
-    export_to_header(
+    export(
         tensor_dict={
             "A": torch_to_numpy(A),
             "B": torch_to_numpy(B),
             "C": torch_to_numpy(C),
         },
-        dtype=args.dtype,
-        header_path=args.output,
-        name="RoPE",
+        header_path=args.output_header,
+        bin_path=args.output_bin,
     )
 
 

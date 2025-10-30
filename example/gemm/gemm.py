@@ -9,6 +9,8 @@ from aie.extras.context import mlir_mod_ctx
 
 from aie.dialects.aie import *
 from aie.dialects.aiex import *
+from aie.dialects.scf import FlatSymbolRefAttr
+import aie.dialects.index as index_dialect
 from aie.helpers.dialects.ext.scf import _for as range_
 from aie.helpers.taplib import TensorAccessPattern, TensorAccessSequence
 
@@ -34,7 +36,7 @@ def main():
         prog="AIE Matrix Multiplication MLIR Design (Whole Array)",
         description="Emits MLIR code for a matrix multiplication design of the given input size",
     )
-    argparser.add_argument("--dev", type=str, choices=["npu2"], default="npu2")
+    argparser.add_argument("--dev", type=str, choices=["npu", "npu2"], default="npu2")
     argparser.add_argument("-M", type=int, default=512)
     argparser.add_argument("-K", type=int, default=512)
     argparser.add_argument("-N", type=int, default=512)
@@ -44,6 +46,8 @@ def main():
     argparser.add_argument("--n-aie-cols", type=int, choices=[1, 2, 4, 8], default=4)
     argparser.add_argument("--b-col-maj", type=int, choices=[0, 1], default=0)
     argparser.add_argument("--c-col-maj", type=int, choices=[0, 1], default=0)
+    # Whether to use the scalar kernel; this is low, but can be useful for debugging smaller sizes
+    argparser.add_argument("--scalar", type=bool, choices=[0, 1], default=0)
     argparser.add_argument(
         "--emulate-bf16-mmul-with-bfp16", action="store_true", default=False
     )
@@ -84,6 +88,7 @@ def main():
             args.dtype_out,
             args.b_col_maj,
             args.c_col_maj,
+            args.scalar,
             args.emulate_bf16_mmul_with_bfp16,
             args.prio_accuracy,
             args.trace_size,
@@ -116,6 +121,7 @@ def my_matmul(
     dtype_out_str,
     b_col_maj,
     c_col_maj,
+    use_scalar,
     emulate_bf16_mmul_with_bfp16,
     prio_accuracy,
     trace_size,
@@ -182,9 +188,11 @@ def my_matmul(
         N % (n * n_aie_cols) == 0
     ), """B must be tileable into (k, n * n_aie_cols)-sized blocks"""
 
-    assert m % r == 0
-    assert k % s == 0
-    assert n % t == 0
+    # r, s, t are the dimensions required by the microkernel MAC instructions.
+    if not use_scalar:
+        assert m % r == 0
+        assert k % s == 0
+        assert n % t == 0
 
     # If you get errors during CDO generation due to running out of program
     # memory, it may be because too much code is generated due to ObjectFIFO
@@ -236,12 +244,13 @@ def my_matmul(
         C_l1_ty_transfer = np.ndarray[(m, n), np.dtype[dtype_out_transfer]]
 
         # AIE Core Function declarations
+        scalar_suffix = "_scalar" if use_scalar else ""
         zero = external_func(
-            f"zero_{'f32' if use_larger_internal_buffer else dtype_out_str}",
+            f"zero{scalar_suffix}_{'f32' if use_larger_internal_buffer else dtype_out_str}",
             inputs=[C_l1_ty_internal],
         )
         matmul = external_func(
-            f"matmul_{dtype_in_str}_{'f32' if use_larger_internal_buffer else dtype_out_str}",
+            f"matmul{scalar_suffix}_{dtype_in_str}_{'f32' if use_larger_internal_buffer else dtype_out_str}",
             inputs=[A_l1_ty, B_l1_ty, C_l1_ty_internal],
         )
         if use_larger_internal_buffer:
@@ -269,6 +278,22 @@ def my_matmul(
         C_l1l2_fifos = [[None] * n_aie_cols for _ in range(n_aie_rows)]
         C_l2l3_fifos = [None] * n_aie_cols
 
+        # Run-time parameters
+        rtp_locks = [[None] * n_aie_cols for _ in range(4)]
+        rtp_bufs = [[None] * n_aie_cols for _ in range(4)]
+        for col in range(n_aie_cols):
+            for row in range(n_aie_rows):
+                # RTP index 0: K // k
+                # RTP index 1: num tiles == M * N // (m * n * n_aie_cores)
+                rtp_bufs[row][col] = buffer(
+                    core_tiles[row][col],
+                    datatype=T.memref(3, T.i32()),
+                    name=f"rtp_{row}_{col}",
+                )
+                rtp_locks[row][col] = lock(
+                    core_tiles[row][col], sym_name=f"rtp_lock_{row}_{col}", init=0
+                )
+
         # Input A
         # L3 -> L2 data movement
         for i in range(n_shim_mem_A):
@@ -294,12 +319,16 @@ def my_matmul(
                 core_tiles[row][0:n_aie_cols],  # broadcast along one row
                 fifo_depth,
                 A_l1_ty,
-                [
-                    (m // r, r * k),
-                    (k // s, s),
-                    (r, k),
-                    (s, 1),
-                ],
+                (
+                    [
+                        (m // r, r * k),
+                        (k // s, s),
+                        (r, k),
+                        (s, 1),
+                    ]
+                    if not use_scalar
+                    else []
+                ),
             )
 
         # A_l3_l2 and A_l2_l1 object FIFO linking
@@ -356,6 +385,8 @@ def my_matmul(
                             (s, 1),
                         ]
                     )
+                    if not use_scalar
+                    else []
                 ),
             )
             # B_l3_l2 and B_l2_l1 object FIFO linking
@@ -394,14 +425,18 @@ def my_matmul(
                 fifo_depth,
                 C_l2_ty,
                 (
-                    [
-                        (m // r, r * n),
-                        (r, t),
-                        (n // t, r * t),
-                        (t, 1),
-                    ]
-                    if not c_col_maj
-                    else [(n // t, t * m), (t, r), (m // r, r * t), (r, 1)]
+                    (
+                        [
+                            (m // r, r * n),
+                            (r, t),
+                            (n // t, r * t),
+                            (t, 1),
+                        ]
+                        if not c_col_maj
+                        else [(n // t, t * m), (t, r), (m // r, r * t), (r, 1)]
+                    )
+                    if not use_scalar
+                    else []
                 ),
             )
             if n_aie_rows > 1:
@@ -418,6 +453,7 @@ def my_matmul(
         # Set up compute tiles
         for row in range(n_aie_rows):
             for col in range(n_aie_cols):
+
                 # The stack size choice is a workaround explained here:
                 # https://github.com/Xilinx/mlir-aie/pull/2391#issuecomment-2967432485
                 # In summary, the Peano compiler uses a stack size greater than the default one used by this kernel
@@ -427,21 +463,19 @@ def my_matmul(
                 # https://github.com/Xilinx/llvm-aie/issues/487#issuecomment-2969438585
                 @core(
                     core_tiles[row][col],
-                    (
-                        f"gemm_{m}x{k}x{n}_archive" + ".a"
-                        if dtype_out_str == "bf16" and prio_accuracy
-                        else ".o"
-                    ),
+                    f"gemm_{m}x{k}x{n}_archive.a",
                     stack_size=0xD00,
                 )
                 def core_body():
+                    use_lock(rtp_locks[row][col], action=LockAction.Acquire, value=1)
+                    rtp_K_div_k_i32 = rtp_bufs[row][col][0]
+                    rtp_K_div_k = index_dialect.castu(T.index(), rtp_K_div_k_i32)
+                    rtp_n_tiles_per_core_i32 = rtp_bufs[row][col][1]
+                    rtp_n_tiles_per_core = index_dialect.castu(
+                        T.index(), rtp_n_tiles_per_core_i32
+                    )
                     for _ in range_(0xFFFFFFFF):
-                        loop = (
-                            range_(n_tiles_per_core)
-                            if n_tiles_per_core > 1
-                            else range(1)
-                        )  # Workaround for issue #1547
-                        for _ in loop:
+                        for _ in range_(rtp_n_tiles_per_core):
                             if use_larger_internal_buffer:
                                 elem_out_internal = C_l1_fifos[row][col].acquire(
                                     ObjectFifoPort.Produce, 1
@@ -452,7 +486,7 @@ def my_matmul(
                                 )
                             zero(elem_out_internal)
 
-                            for _ in range_(K // k):
+                            for _ in range_(rtp_K_div_k):
                                 elem_in_a = A_l2l1_fifos[row].acquire(
                                     ObjectFifoPort.Consume, 1
                                 )
@@ -481,6 +515,7 @@ def my_matmul(
                                 C_l1l2_fifos[row][col].release(
                                     ObjectFifoPort.Produce, 1
                                 )
+                    use_lock(rtp_locks[row][col], action=LockAction.Release, value=0)
 
         # To/from AIE-array data movement
         @runtime_sequence(
@@ -489,6 +524,15 @@ def my_matmul(
             np.ndarray[(M * N,), np.dtype[dtype_out_transfer]],
         )
         def sequence(A, B, C):
+            # Set runtime parameters
+            for col in range(n_aie_cols):
+                for row in range(n_aie_rows):
+                    sym_ref = FlatSymbolRefAttr.get(rtp_bufs[row][col].get_name())
+                    set_lock_value(rtp_locks[row][col], value=0)
+                    npu_rtp_write(sym_ref, 0, K // k)
+                    npu_rtp_write(sym_ref, 1, n_tiles_per_core)
+                    set_lock_value(rtp_locks[row][col], value=1)
+
             # We are limited in the number of BDs. After synchronizing, we can reuse BDs.
             # We only transfer 4 rows of tiles at once before starting a new transfer block.
             # tb = transfer block; block of transfers before sync call

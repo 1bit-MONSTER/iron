@@ -5,8 +5,6 @@ function(add_aie_softmax_design INPUT_LENGTH TILE_SIZE NUM_COLUMNS NUM_CHANNELS 
 
     set(EXAMPLE "softmax_${NUM_COLUMNS}_cols_${NUM_CHANNELS}_channels_${INPUT_LENGTH}_tile_${TILE_SIZE}")
     set(GOLDEN_VALUES_PATH "${CMAKE_BINARY_DIR}/example/softmax/golden_${EXAMPLE}")
-    set(INPUT_DATA_TYPE_PYTHON bf16)
-    set(OUTPUT_DATA_TYPE_PYTHON bf16)
     set(INPUT_DATA_TYPE_CPP bfloat16_t)
     set(OUTPUT_DATA_TYPE_CPP bfloat16_t)
     
@@ -28,12 +26,11 @@ function(add_aie_softmax_design INPUT_LENGTH TILE_SIZE NUM_COLUMNS NUM_CHANNELS 
         ${GOLDEN_VALUES_PATH}
         --rows ${ROWS}
         --cols ${TILE_SIZE}
-        --dtype ${INPUT_DATA_TYPE_PYTHON}
     )
 
     add_aie_ci_test(${EXAMPLE}
                     RUN 
-                        "${SOFTMAX_HOST} -k ${EXAMPLE} -x ${SOFTMAX_XCLBIN} -i ${SOFTMAX_INSTS} -l ${INPUT_LENGTH} -r ${ROWS} -c ${TILE_SIZE} --dev ${DEVICE}"
+                        "${SOFTMAX_HOST} -k ${EXAMPLE} -x ${SOFTMAX_XCLBIN} -i ${SOFTMAX_INSTS} -l ${INPUT_LENGTH} -r ${ROWS} -c ${TILE_SIZE} --dev ${DEVICE} --ref ${GOLDEN_VALUES_PATH}/golden_reference.bin"
                     CHECK
                         "PASS!"
                     METRICS 

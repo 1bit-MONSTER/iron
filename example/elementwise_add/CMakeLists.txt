@@ -8,29 +8,29 @@ function(add_aie_eltwise_add_design INPUT_LENGTH NUM_COLUMNS NUM_CHANNELS TILE_S
     set(OUTPUT_DATA_TYPE_PYTHON bf16)
     set(INPUT_DATA_TYPE_CPP bfloat16_t)
     set(OUTPUT_DATA_TYPE_CPP bfloat16_t)
-    add_aie_executable(${EXAMPLE} 
+    add_aie_executable(${EXAMPLE}
                            HOST eltwise_add.cpp
                            HOST_FLAGS DTYPE_IN=${INPUT_DATA_TYPE_CPP} DTYPE_OUT=${OUTPUT_DATA_TYPE_CPP} TILE_SIZE=${TILE_SIZE}
                            PYTHON eltwise_add.py
                            PYTHON_FLAGS -d ${DEVICE} -l ${INPUT_LENGTH} -co ${NUM_COLUMNS} -ch ${NUM_CHANNELS} -ts ${TILE_SIZE} -t ${TRACE_SIZE} --output-file-path ${CMAKE_BINARY_DIR}/aie/${EXAMPLE}.mlir
-                           AIE_CORE_KERNELS "add_aie2.o"
+                           AIE_CORE_KERNELS "add.o"
                            OUTPUT_HOST ELTWISE_ADD_HOST
                            OUTPUT_XCLBIN ELTWISE_ADD_XCLBIN
                            OUTPUT_INSTS ELTWISE_ADD_INSTS)
 
-    add_golden_reference_generator(${EXAMPLE} 
+    add_golden_reference_generator(${EXAMPLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/eltwise_add_golden.py
         ${GOLDEN_VALUES_PATH}
         --input_length ${INPUT_LENGTH}
         --dtype ${INPUT_DATA_TYPE_PYTHON}
     )
-    
+
     add_aie_ci_test(${EXAMPLE}
-                    RUN 
-                        "${ELTWISE_ADD_HOST} -k ${EXAMPLE} -x ${ELTWISE_ADD_XCLBIN} -i ${ELTWISE_ADD_INSTS} -l ${INPUT_LENGTH}"
+                    RUN
+                        "${ELTWISE_ADD_HOST} -k ${EXAMPLE} -x ${ELTWISE_ADD_XCLBIN} -i ${ELTWISE_ADD_INSTS} -l ${INPUT_LENGTH} --ref ${GOLDEN_VALUES_PATH}/golden_reference.bin"
                     CHECK
                         "PASS!"
-                    METRICS 
+                    METRICS
                         "Latency" [=[Latency \(us\): (?P<metric>\d+)]=]
                         "Bandwidth" [=[Effective Bandwidth: (?P<metric>[\d\.e\+-]+) GB/s]=]
     )
@@ -43,13 +43,6 @@ if(EXTENSIVE_TESTING)
     list(APPEND INPUT_LENGTHS 1024)
     list(APPEND INPUT_LENGTHS 4096)
     list(APPEND INPUT_LENGTHS 8192)
-endif()
-
-# Determine max cores based on device
-if(IRONCLAD_AIE_TARGET STREQUAL aie2p)
-    set(MAX_COLUMNS 8) 
-else()
-    set(MAX_COLUMNS 4)
 endif()
 
 foreach(INPUT_LENGTH IN LISTS INPUT_LENGTHS)

@@ -39,7 +39,7 @@ void matvec_vectorized(uint32_t m,
     bfloat16 *c_end = c + m;
     const bfloat16 *b_end = b + k;
     for (; c < c_end; c++) {
-        aie::accum acc = aie::accum<accfloat, r>();
+        aie::accum acc = aie::zeros<accfloat, r>();
         // The following two pragmas enable pipelining the zero-overhead loop, but they do assume that k is at least
         // two. This assumption should hold for any useful use of this function; if k were one, this would be a simple
         // scalar multiplication of a vector.

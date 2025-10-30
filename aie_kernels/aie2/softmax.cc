@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "lut_based_ops.h"
+
 #include <aie_api/aie.hpp>
-#include <lut_based_ops.h>
 #include <stdint.h>
 
 using namespace aie;

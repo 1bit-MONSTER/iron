@@ -13,19 +13,16 @@ void silu_tanh_approx_bf16(bfloat16 *restrict input_vector, bfloat16 *restrict o
 {
     event0();
 
-    int num_elems = vector_size;
     auto it_in = aie::begin_restrict_vector<16>((bfloat16 *)input_vector);
     auto it_out = aie::begin_restrict_vector<16>((bfloat16 *)output_vector);
 
-    aie::vector<bfloat16, 16> input;
-    aie::vector<bfloat16, 16> output;
     aie::vector<bfloat16, 16> register_0_5 = aie::broadcast<bfloat16, 16>(0.5f);
     aie::vector<bfloat16, 16> register_1 = aie::broadcast<bfloat16, 16>(1.0f);
     AIE_PREPARE_FOR_PIPELINING
     AIE_LOOP_MIN_ITERATION_COUNT(64)
-    for (int i = 0; i < num_elems; i += 16) {
+    for (int i = 0; i < vector_size; i += 16) {
         // Load input vector
-        input = *it_in++;
+        aie::vector<bfloat16, 16> input = *it_in++;
 
         // Compute tanh approximation
         aie::vector<bfloat16, 16> half_x = aie::mul(input, register_0_5);
@@ -46,9 +43,8 @@ void silu_tanh_approx_bf16(bfloat16 *restrict input_vector, bfloat16 *restrict o
 
 extern "C" {
 
-void silu_bf16(bfloat16 *restrict input, bfloat16 *restrict output)
+void silu_bf16(bfloat16 *restrict input, bfloat16 *restrict output, int input_size)
 {
-    int32_t input_size = 1024; // Assuming input size is a multiple of 16
     silu_tanh_approx_bf16(input, output, input_size);
 }
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "cxxopts.hpp"
-#include "golden_reference.h"
+#include "golden_reference_reader.h"
 #include "test_utils.h"
 #include "xrt/xrt_bo.h"
 #include "xrt/xrt_device.h"
@@ -54,7 +54,10 @@ int main(int argc, const char *argv[])
         "length,l", "the length of the transfer in std::bfloat16_t", cxxopts::value<int>()->default_value("4096"))(
         "rows,r", "the number of rows", cxxopts::value<int>()->default_value("4"))(
         "cols,c", "the number of columns", cxxopts::value<int>()->default_value("1024"))(
-        "dev", "Select NPU", cxxopts::value<std::string>()->default_value("npu2"));
+        "dev", "Select NPU", cxxopts::value<std::string>()->default_value("npu2"))(
+        "ref",
+        "path to golden reference file",
+        cxxopts::value<std::string>()->default_value("golden_softmax/golden_reference.bin"));
 
     try {
         vm = options.parse(argc, argv);
@@ -65,7 +68,7 @@ int main(int argc, const char *argv[])
         }
 
         // Check required options
-        if (!vm.count("xclbin") || !vm.count("kernel") || !vm.count("instr")) {
+        if (!vm.count("xclbin") || !vm.count("kernel") || !vm.count("instr") || !vm.count("ref")) {
             std::cerr << "Error: Required options missing\n\n";
             std::cerr << "Usage:\n" << options.help() << std::endl;
             return 1;
@@ -77,6 +80,9 @@ int main(int argc, const char *argv[])
     }
 
     std::vector<uint32_t> instr_v = test_utils::load_instr_binary(vm["instr"].as<std::string>());
+
+    // Load golden reference data
+    GoldenReference ref = GoldenReference::fromFile(vm["ref"].as<std::string>());
 
     int verbosity = vm["verbosity"].as<int>();
     if (verbosity >= 1)
@@ -137,13 +143,15 @@ int main(int argc, const char *argv[])
 
     auto bo_instr = xrt::bo(device, instr_v.size() * sizeof(int), XCL_BO_FLAGS_CACHEABLE, kernel.group_id(1));
     auto bo_inA = xrt::bo(device, N * sizeof(std::bfloat16_t), XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(3));
-    auto bo_out = xrt::bo(device, N * sizeof(std::bfloat16_t), XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(4));
+    auto bo_dummy = xrt::bo(device, N * sizeof(std::bfloat16_t), XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(4));
+    auto bo_out = xrt::bo(device, N * sizeof(std::bfloat16_t), XRT_BO_FLAGS_HOST_ONLY, kernel.group_id(5));
 
     if (verbosity >= 1)
         std::cout << "Writing data into buffer objects." << std::endl;
 
     std::bfloat16_t *bufInA = bo_inA.map<std::bfloat16_t *>();
-    memcpy(bufInA, golden_reference::A.data(), (golden_reference::A.size() * sizeof(std::bfloat16_t)));
+    auto ref_A = ref.get<std::bfloat16_t>("A");
+    memcpy(bufInA, ref_A->data(), (ref_A->size() * sizeof(std::bfloat16_t)));
 
     void *bufInstr = bo_instr.map<void *>();
     memcpy(bufInstr, instr_v.data(), instr_v.size() * sizeof(int));
@@ -155,11 +163,11 @@ int main(int argc, const char *argv[])
         std::cout << "Running Kernel." << std::endl;
     unsigned int opcode = 3;
     // Setup run to configure
-    auto cfg_run = kernel(opcode, bo_instr, instr_v.size(), bo_inA, bo_out);
+    auto cfg_run = kernel(opcode, bo_instr, instr_v.size(), bo_inA, bo_dummy, bo_out);
     cfg_run.wait();
     auto start = std::chrono::high_resolution_clock::now();
     // Test run
-    auto run = kernel(opcode, bo_instr, instr_v.size(), bo_inA, bo_out);
+    auto run = kernel(opcode, bo_instr, instr_v.size(), bo_inA, bo_dummy, bo_out);
     ert_cmd_state r = run.wait();
     auto stop = std::chrono::high_resolution_clock::now();
     if (r != ERT_CMD_STATE_COMPLETED) {
@@ -181,14 +189,15 @@ int main(int argc, const char *argv[])
 
     // Compare with golden reference
     int errors = 0;
+    auto ref_B = ref.get<std::bfloat16_t>("B");
 
     for (int i = 0; i < N; i++) {
-        std::bfloat16_t ref = golden_reference::B[i];
-        if (!test_utils::nearly_equal(*(bufOut + i), ref, 0.04, 0.001)) {
+        std::bfloat16_t expected = (*ref_B)[i];
+        if (!test_utils::nearly_equal(*(bufOut + i), expected, 0.04, 0.001)) {
             errors++;
             // Print the first 100 mismatches
             if (errors <= 100) {
-                std::cout << "Mismatch at index " << i << ": " << "Expected: " << ref << ", "
+                std::cout << "Mismatch at index " << i << ": " << "Expected: " << expected << ", "
                           << "Got: " << *(bufOut + i) << std::endl;
             }
         }

@@ -10,29 +10,29 @@ function(add_aie_mem_copy_design INPUT_LENGTH NUM_COLUMNS NUM_CHANNELS TILE_SIZE
     set(INPUT_DATA_TYPE_CPP bfloat16_t)
     set(OUTPUT_DATA_TYPE_CPP bfloat16_t)
 
-    add_aie_executable(${EXAMPLE} 
+    add_aie_executable(${EXAMPLE}
         HOST mem_copy.cpp
         HOST_FLAGS DTYPE_IN=${INPUT_DATA_TYPE_CPP} DTYPE_OUT=${OUTPUT_DATA_TYPE_CPP}
         PYTHON mem_copy.py
         PYTHON_FLAGS --dev ${DEVICE} -l ${INPUT_LENGTH} --co ${NUM_COLUMNS} --chan ${NUM_CHANNELS} --tile-size ${TILE_SIZE} --trace-size ${TRACE_SIZE} --output-file-path ${CMAKE_BINARY_DIR}/aie/${EXAMPLE}.mlir
-        AIE_CORE_KERNELS mem_copy_generic.o
+        AIE_CORE_KERNELS mem_copy.o
         OUTPUT_HOST MEM_COPY_HOST
         OUTPUT_XCLBIN MEM_COPY_XCLBIN
         OUTPUT_INSTS MEM_COPY_INSTS)
 
-    add_golden_reference_generator(${EXAMPLE} 
+    add_golden_reference_generator(${EXAMPLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/mem_copy_golden.py
         ${GOLDEN_VALUES_PATH}
         --input_length ${INPUT_LENGTH}
         --dtype ${INPUT_DATA_TYPE_PYTHON}
     )
-    
+
     add_aie_ci_test(${EXAMPLE}
-                    RUN 
-                        "${MEM_COPY_HOST} -k ${EXAMPLE} -x ${MEM_COPY_XCLBIN} -i ${MEM_COPY_INSTS} -l ${INPUT_LENGTH}"
+                    RUN
+                        "${MEM_COPY_HOST} -k ${EXAMPLE} -x ${MEM_COPY_XCLBIN} -i ${MEM_COPY_INSTS} -l ${INPUT_LENGTH} --ref ${GOLDEN_VALUES_PATH}/golden_reference.bin"
                     CHECK
                         "PASS!"
-                    METRICS 
+                    METRICS
                         "Latency" [=[Latency \(us\): (?P<metric>\d+)]=]
                         "Bandwidth" [=[Effective Bandwidth: (?P<metric>[\d\.e\+-]+) GB/s]=]
     )
@@ -44,13 +44,6 @@ if(EXTENSIVE_TESTING)
     list(APPEND INPUT_LENGTHS 1024)
     list(APPEND INPUT_LENGTHS 4096)
     list(APPEND INPUT_LENGTHS 8192)
-endif()
-
-# Determine max cores based on device
-if(IRONCLAD_AIE_TARGET STREQUAL aie2p)
-    set(MAX_COLUMNS 8) 
-else()
-    set(MAX_COLUMNS 4)
 endif()
 
 foreach(INPUT_LENGTH IN LISTS INPUT_LENGTHS)

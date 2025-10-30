@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "cxxopts.hpp"
-#include "golden_reference.h"
+#include "golden_reference_reader.h"
 #include "test_utils.h"
 
 #include <algorithm>
@@ -89,7 +89,10 @@ int main(int argc, const char *argv[])
         "abs_th",
         "absolute threshold for floating point comparison (difference between results must either be less than this "
         "value or less than relative threshold)",
-        cxxopts::value<float>()->default_value("0.1"));
+        cxxopts::value<float>()->default_value("0.1"))(
+        "ref",
+        "path to golden reference file",
+        cxxopts::value<std::string>()->default_value("golden_matrix_vector_mul/golden_reference.bin"));
 
     try {
         vm = options.parse(argc, argv);
@@ -98,7 +101,8 @@ int main(int argc, const char *argv[])
             return 1;
         }
         // Check required options
-        if (!vm.count("xclbin") || !vm.count("kernel") || !vm.count("instr") || !vm.count("M") || !vm.count("K")) {
+        if (!vm.count("xclbin") || !vm.count("kernel") || !vm.count("instr") || !vm.count("M") || !vm.count("K") ||
+            !vm.count("ref")) {
             std::cerr << "Error: Required options missing\n\n";
             std::cerr << "Usage:\n" << options.help() << std::endl;
             return 1;
@@ -111,6 +115,9 @@ int main(int argc, const char *argv[])
 
     epsilon = vm["epsilon"].as<float>();
     abs_th = vm["abs_th"].as<float>();
+
+    std::string ref_path = vm["ref"].as<std::string>();
+    GoldenReference ref = GoldenReference::fromFile(ref_path);
 
     std::string xclbin_path = vm["xclbin"].as<std::string>();
     std::string insts_path = vm["instr"].as<std::string>();
@@ -144,8 +151,8 @@ int main(int argc, const char *argv[])
     std::bfloat16_t *buf_c = bo_c.map<std::bfloat16_t *>();
 
     // Prepare input data (initialize random matrices) and sync to NPU
-    memcpy(buf_a, golden_reference::A.data(), (golden_reference::A.size() * sizeof(golden_reference::A[0])));
-    memcpy(buf_b, golden_reference::B.data(), (golden_reference::B.size() * sizeof(golden_reference::B[0])));
+    memcpy(buf_a, ref.get<std::bfloat16_t>("A")->data(), size_a * sizeof(std::bfloat16_t));
+    memcpy(buf_b, ref.get<std::bfloat16_t>("B")->data(), size_b * sizeof(std::bfloat16_t));
 
     bo_insts.sync(XCL_BO_SYNC_BO_TO_DEVICE);
     bo_a.sync(XCL_BO_SYNC_BO_TO_DEVICE);
@@ -175,7 +182,8 @@ int main(int argc, const char *argv[])
               << "Throughput: " << throughput << " GFLOP/s" << std::endl;
 
     // Validate correctness of output
-    struct vector reference = {M, golden_reference::C.data()};
+    auto ref_C = ref.get<std::bfloat16_t>("C");
+    struct vector reference = {M, ref_C->data()};
     unsigned n_errors = vectors_nearly_equal(reference, {M, buf_c});
 
     if (n_errors == 0) {

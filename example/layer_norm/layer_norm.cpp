@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "cxxopts.hpp"
-#include "golden_reference.h"
+#include "golden_reference_reader.h"
 #include "test_utils.h"
 #include "xrt/xrt_bo.h"
 #include "xrt/xrt_device.h"
@@ -33,7 +33,10 @@ int main(int argc, const char *argv[])
         cxxopts::value<std::string>())(
         "length,l", "the length of the transfer in std::bfloat16_t", cxxopts::value<int>()->default_value("4096"))(
         "rows,r", "the number of rows", cxxopts::value<int>()->default_value("4"))(
-        "cols,c", "the number of columns", cxxopts::value<int>()->default_value("1024"));
+        "cols,c", "the number of columns", cxxopts::value<int>()->default_value("1024"))(
+        "ref",
+        "path to golden reference file",
+        cxxopts::value<std::string>()->default_value("golden_layer_norm/golden_reference.bin"));
 
     try {
         vm = options.parse(argc, argv);
@@ -44,7 +47,7 @@ int main(int argc, const char *argv[])
         }
 
         // Check required options
-        if (!vm.count("xclbin") || !vm.count("kernel") || !vm.count("instr")) {
+        if (!vm.count("xclbin") || !vm.count("kernel") || !vm.count("instr") || !vm.count("ref")) {
             std::cerr << "Error: Required options missing\n\n";
             std::cerr << "Usage:\n" << options.help() << std::endl;
             return 1;
@@ -56,6 +59,9 @@ int main(int argc, const char *argv[])
     }
 
     std::vector<uint32_t> instr_v = test_utils::load_instr_binary(vm["instr"].as<std::string>());
+
+    std::string ref_path = vm["ref"].as<std::string>();
+    GoldenReference ref = GoldenReference::fromFile(ref_path);
 
     int verbosity = vm["verbosity"].as<int>();
     if (verbosity >= 1)
@@ -122,7 +128,7 @@ int main(int argc, const char *argv[])
 
     std::bfloat16_t *bufInA = bo_inA.map<std::bfloat16_t *>();
 
-    memcpy(bufInA, golden_reference::A.data(), (golden_reference::A.size() * sizeof(std::bfloat16_t)));
+    memcpy(bufInA, ref.get<std::bfloat16_t>("A")->data(), N * sizeof(std::bfloat16_t));
 
     void *bufInstr = bo_instr.map<void *>();
     memcpy(bufInstr, instr_v.data(), instr_v.size() * sizeof(int));
@@ -155,25 +161,26 @@ int main(int argc, const char *argv[])
     std::bfloat16_t *bufOut = bo_out.map<std::bfloat16_t *>();
 
     int errors = 0;
+    auto ref_B = ref.get<std::bfloat16_t>("B");
     std::bfloat16_t max_diff = std::bfloat16_t(0.0); // Variable to store the maximum difference
     std::pair<int, std::pair<std::bfloat16_t, std::bfloat16_t>>
         mismatch_values; // To store index and values of mismatches
 
     for (int i = 0; i < N; i++) {
-        std::bfloat16_t ref = golden_reference::B[i];
-        std::bfloat16_t diff = std::abs(*(bufOut + i) - ref); // Calculate the difference
-        if (!test_utils::nearly_equal(*(bufOut + i), ref, 0.1, 0.1)) {
+        std::bfloat16_t ref_val = (*ref_B)[i];
+        std::bfloat16_t diff = std::abs(*(bufOut + i) - ref_val); // Calculate the difference
+        if (!test_utils::nearly_equal(*(bufOut + i), ref_val, 0.1, 0.1)) {
             errors++;
             // Update max_diff if the current difference is larger
             if (diff > max_diff) {
                 max_diff = diff;
                 // Store the index and values of the mismatch
-                mismatch_values =
-                    std::pair<int, std::pair<std::bfloat16_t, std::bfloat16_t>>(i, std::make_pair(ref, *(bufOut + i)));
+                mismatch_values = std::pair<int, std::pair<std::bfloat16_t, std::bfloat16_t>>(
+                    i, std::make_pair(ref_val, *(bufOut + i)));
             }
             // Print the first 100 mismatches
             if (errors <= 100) {
-                std::cout << "Mismatch at index " << i << ": " << "Expected: " << ref << ", "
+                std::cout << "Mismatch at index " << i << ": " << "Expected: " << ref_val << ", "
                           << "Got: " << *(bufOut + i) << std::endl;
             }
         }

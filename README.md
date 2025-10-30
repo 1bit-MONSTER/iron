@@ -47,10 +47,10 @@ The IRON Python API for Ryzen™ AI NPUs is described in the following paper:
 | [Softmax](./aie_kernels/aie2p/softmax.cc) | Softmax kernel | bfloat16 | 🟢 | [example/softmax/](./example/softmax/) |
 | [Weighted RMSNorm](./aie_kernels/aie2p/rms_norm.cc) | Weighted RMSNorm kernel | bfloat16 | 🟢 | [example/rms_norm/](./example/rms_norm/) |
 | [Copy](./aie_kernels/generic/passThrough.cc) | Copy | bfloat16 | 🟢 | [example/copy/](./example/copy/) |
-| [Transpose]() | Transpose | bfloat16 | 🟡 |  |
-| [AXPY]() | AXPY | bfloat16 | 🟡 |  |
+| [Transpose](./aie_kernels/aie2p/transpose.cc) | Transpose | bfloat16 | 🟢 | [example/transpose/](./example/transpose/) |
+| [AXPY](./aie_kernels/aie2p/axpy.cc) | AXPY | bfloat16 | 🟢 | [example/axpy/](./example/axpy/) |
 | [Reduction]() | Reduction | bfloat16 | 🟡 |  |
-| [Dequant]() | Dequant Q4NX from [AWQ](https://github.com/mit-han-lab/llm-awq) to bfloat16 | bfloat16 | 🟡 |  |
+| [Dequant](./aie_kernels/aie2/expand.cc) | Dequant Q4NX from [AWQ](https://github.com/mit-han-lab/llm-awq) to bfloat16 | bfloat16 | 🟢 | [example/dequant/](./example/dequant/) |
 | [RELU](./aie_kernels/aie2p/relu.cc) | RELU | bfloat16 | 🟢 | [example/relu/](./example/relu/) |
 | [Leaky RELU]() | Leaky RELU | bfloat16 | ⚪ |  |
 | [GELU](./aie_kernels/aie2p/gelu.cc) | GELU | bfloat16 | 🟢 | [example/gelu/](./example/gelu/) |

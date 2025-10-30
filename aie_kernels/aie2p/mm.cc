@@ -13,29 +13,30 @@
 
 #include <aie_api/aie.hpp>
 
-#ifdef B_COL_MAJ
-constexpr bool is_b_row_maj = false;
-#else
-constexpr bool is_b_row_maj = true;
-#endif
-
-#define ROUNDING_MODE aie::rounding_mode::conv_even
-
-template <typename T_in, typename T_out, int M, int K, int N, bool b_row_maj>
+template <typename T_in, typename T_out, int rowA, int colA, int colB, bool b_row_maj = true, bool c_row_maj = true>
 static inline void matmul_scalar(T_in *a, T_in *b, T_out *c)
 {
     event0();
-    for (int m = 0; m < M; m++) {
-        for (int n = 0; n < N; n++) {
+    for (int row = 0; row < rowA; row++) {
+        for (int col = 0; col < colB; col++) {
             T_out running_sum = 0;
-            for (int k = 0; k < K; k++) {
-                if (b_row_maj) {
-                    running_sum += a[m * K + k] * b[k * N + n];
+            for (int i = 0; i < colA; i++) {
+                T_in a_val = a[row * colA + i];
+                T_in b_val;
+                if constexpr (b_row_maj) {
+                    b_val = b[i * colB + col];
                 } else {
-                    running_sum += a[m * K + k] * b[n * N + k];
+                    b_val = b[i + col * colA];
                 }
+                running_sum += a_val * b_val;
             }
-            c[m * N + n] += running_sum;
+            T_out *c_ptr;
+            if constexpr (c_row_maj) {
+                c_ptr = &c[row * colB + col];
+            } else {
+                c_ptr = &c[row + col * rowA];
+            }
+            *c_ptr += running_sum;
         }
     }
     event1();
@@ -77,7 +78,8 @@ template <typename T_in,
           unsigned r,
           unsigned s,
           unsigned t,
-          bool b_row_maj = true>
+          bool b_row_maj = true,
+          bool c_row_maj = true>
 static inline void
 matmul_vectorized_2x2_mmul(const T_in *__restrict pA, const T_in *__restrict pB, T_out *__restrict pC)
 {
@@ -89,14 +91,24 @@ matmul_vectorized_2x2_mmul(const T_in *__restrict pA, const T_in *__restrict pB,
     for (unsigned z = 0; z < rowA; z += 2)
         chess_prepare_for_pipelining chess_loop_range(4, )
         {
-            T_out *__restrict pC1 = pC + (z * colB) * MMUL::size_C;
-            T_out *__restrict pC2 = pC + ((z + 1) * colB) * MMUL::size_C;
+
+            T_out *__restrict pC1;
+            T_out *__restrict pC2;
+            if constexpr (c_row_maj) {
+                pC1 = pC + (z * colB) * MMUL::size_C;
+                pC2 = pC + ((z + 1) * colB) * MMUL::size_C;
+            }
 
             for (unsigned j = 0; j < colB; j += 2)
 #ifdef OPT_PERF_ENABLED
                 chess_flatten_loop
 #endif
                 {
+
+                    if constexpr (!c_row_maj) {
+                        pC1 = pC + j * rowA * MMUL::size_C + z * MMUL::size_C;
+                        pC2 = pC + (j + 1) * rowA * MMUL::size_C + z * MMUL::size_C;
+                    }
                     const T_in *__restrict pA1 = pA + (z * colA) * MMUL::size_A;
                     const T_in *__restrict pA2 = pA + ((z + 1) * colA) * MMUL::size_A;
                     const T_in *__restrict pB1;
@@ -116,10 +128,21 @@ matmul_vectorized_2x2_mmul(const T_in *__restrict pA, const T_in *__restrict pB,
                     // Load partial results from C buffer for accumulation in-place. The
                     // zero.cc function handles the zeroing of data when a new
                     // accumulation is needed (after the 'K' reduction dimension)
-                    aie::vector<T_out, MMUL::size_C> acc_C00 = aie::load_v<MMUL::size_C>(pC1);
-                    aie::vector<T_out, MMUL::size_C> acc_C01 = aie::load_v<MMUL::size_C>(pC1 + MMUL::size_C);
-                    aie::vector<T_out, MMUL::size_C> acc_C10 = aie::load_v<MMUL::size_C>(pC2);
-                    aie::vector<T_out, MMUL::size_C> acc_C11 = aie::load_v<MMUL::size_C>(pC2 + MMUL::size_C);
+                    aie::vector<T_out, MMUL::size_C> acc_C00;
+                    aie::vector<T_out, MMUL::size_C> acc_C01;
+                    aie::vector<T_out, MMUL::size_C> acc_C10;
+                    aie::vector<T_out, MMUL::size_C> acc_C11;
+                    if constexpr (c_row_maj) {
+                        acc_C00 = aie::load_v<MMUL::size_C>(pC1);
+                        acc_C01 = aie::load_v<MMUL::size_C>(pC1 + MMUL::size_C);
+                        acc_C10 = aie::load_v<MMUL::size_C>(pC2);
+                        acc_C11 = aie::load_v<MMUL::size_C>(pC2 + MMUL::size_C);
+                    } else {
+                        acc_C00 = aie::transpose(aie::load_v<MMUL::size_C>(pC1), t, r);
+                        acc_C01 = aie::transpose(aie::load_v<MMUL::size_C>(pC2), t, r);
+                        acc_C10 = aie::transpose(aie::load_v<MMUL::size_C>(pC1 + MMUL::size_C), t, r);
+                        acc_C11 = aie::transpose(aie::load_v<MMUL::size_C>(pC2 + MMUL::size_C), t, r);
+                    }
 
                     MMUL C00(acc_C00);
                     MMUL C01(acc_C01);
@@ -158,19 +181,50 @@ matmul_vectorized_2x2_mmul(const T_in *__restrict pA, const T_in *__restrict pB,
                     // example below shows how to shift right 10 bits
                     // #define SHIFT 10
                     // aie::store_v(pC1, C00.template to_vector<T_out>(SHIFT));
-                    aie::store_v(pC1, C00.template to_vector<T_out>());
-                    pC1 += MMUL::size_C;
-                    aie::store_v(pC1, C01.template to_vector<T_out>());
-                    pC1 += MMUL::size_C;
-                    aie::store_v(pC2, C10.template to_vector<T_out>());
-                    pC2 += MMUL::size_C;
-                    aie::store_v(pC2, C11.template to_vector<T_out>());
-                    pC2 += MMUL::size_C;
+
+                    if constexpr (c_row_maj) {
+                        aie::store_v(pC1, C00.template to_vector<T_out>());
+                        pC1 += MMUL::size_C;
+                        aie::store_v(pC1, C01.template to_vector<T_out>());
+                        pC1 += MMUL::size_C;
+                        aie::store_v(pC2, C10.template to_vector<T_out>());
+                        pC2 += MMUL::size_C;
+                        aie::store_v(pC2, C11.template to_vector<T_out>());
+                        pC2 += MMUL::size_C;
+                    } else {
+                        aie::store_v(pC1, aie::transpose(C00.template to_vector<T_out>(), r, t));
+                        pC1 += MMUL::size_C;
+                        aie::store_v(pC2, aie::transpose(C01.template to_vector<T_out>(), r, t));
+                        pC2 += MMUL::size_C;
+                        aie::store_v(pC1, aie::transpose(C10.template to_vector<T_out>(), r, t));
+                        pC1 += MMUL::size_C;
+                        aie::store_v(pC2, aie::transpose(C11.template to_vector<T_out>(), r, t));
+                        pC2 += MMUL::size_C;
+                    }
                 }
         }
 
     event1();
 }
+
+#ifdef B_COL_MAJ
+constexpr bool is_b_row_maj = false;
+#else
+constexpr bool is_b_row_maj = true;
+#endif
+
+#ifdef C_COL_MAJ
+constexpr bool is_c_row_maj = false;
+#else
+constexpr bool is_c_row_maj = true;
+#endif
+
+// The rounding mode can be set for bfloat16 mmul to improve accuracy
+#ifdef ROUND_CONV_EVEN
+constexpr aie::rounding_mode round_mode = aie::rounding_mode::conv_even;
+#else
+constexpr aie::rounding_mode round_mode = aie::rounding_mode::floor; // default
+#endif
 
 // The following kernel definitions use mmul shapes that have been found to be
 // optimal for AIE2P in combination with the 2x2 mmul expanded kernel.
@@ -197,7 +251,8 @@ matmul_vectorized_4x4x8_i16_i16(const int16 *__restrict pA, const int16 *__restr
     static_assert(k % s == 0);
     static_assert(n % (2 * t) == 0);
 
-    return matmul_vectorized_2x2_mmul<int16, int16, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj>(pA, pB, pC);
+    return matmul_vectorized_2x2_mmul<int16, int16, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj, is_c_row_maj>(
+        pA, pB, pC);
 }
 
 template <unsigned m, unsigned k, unsigned n>
@@ -212,7 +267,8 @@ matmul_vectorized_4x4x8_i16_i32(const int16 *__restrict pA, const int16 *__restr
     static_assert(k % s == 0);
     static_assert(n % (2 * t) == 0);
 
-    return matmul_vectorized_2x2_mmul<int16, int32, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj>(pA, pB, pC);
+    return matmul_vectorized_2x2_mmul<int16, int32, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj, is_c_row_maj>(
+        pA, pB, pC);
 }
 
 template <unsigned m, unsigned k, unsigned n>
@@ -227,9 +283,18 @@ matmul_vectorized_4x8x8_bf16_bf16(const bfloat16 *__restrict pA, const bfloat16 
     static_assert(k % s == 0);
     static_assert(n % (2 * t) == 0);
 
-    ::aie::set_rounding(ROUNDING_MODE);
+    ::aie::set_rounding(round_mode);
 
-    return matmul_vectorized_2x2_mmul<bfloat16, bfloat16, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj>(pA, pB, pC);
+    return matmul_vectorized_2x2_mmul<bfloat16,
+                                      bfloat16,
+                                      (m / r),
+                                      (k / s),
+                                      (n / t),
+                                      r,
+                                      s,
+                                      t,
+                                      is_b_row_maj,
+                                      is_c_row_maj>(pA, pB, pC);
 }
 
 // Note that this shape is only possible for bf16 when using bfp16 emulation
@@ -246,9 +311,18 @@ matmul_vectorized_8x8x8_bf16_bf16(const bfloat16 *__restrict pA, const bfloat16 
     static_assert(k % s == 0);
     static_assert(n % (2 * t) == 0);
 
-    ::aie::set_rounding(ROUNDING_MODE);
+    ::aie::set_rounding(round_mode);
 
-    return matmul_vectorized_2x2_mmul<bfloat16, bfloat16, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj>(pA, pB, pC);
+    return matmul_vectorized_2x2_mmul<bfloat16,
+                                      bfloat16,
+                                      (m / r),
+                                      (k / s),
+                                      (n / t),
+                                      r,
+                                      s,
+                                      t,
+                                      is_b_row_maj,
+                                      is_c_row_maj>(pA, pB, pC);
 }
 
 template <unsigned m, unsigned k, unsigned n>
@@ -263,9 +337,10 @@ matmul_vectorized_4x8x8_bf16_f32(const bfloat16 *__restrict pA, const bfloat16 *
     static_assert(k % s == 0);
     static_assert(n % (2 * t) == 0);
 
-    ::aie::set_rounding(ROUNDING_MODE);
+    ::aie::set_rounding(round_mode);
 
-    return matmul_vectorized_2x2_mmul<bfloat16, float, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj>(pA, pB, pC);
+    return matmul_vectorized_2x2_mmul<bfloat16, float, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj, is_c_row_maj>(
+        pA, pB, pC);
 }
 
 template <unsigned m, unsigned k, unsigned n>
@@ -280,9 +355,10 @@ matmul_vectorized_8x8x8_bf16_f32(const bfloat16 *__restrict pA, const bfloat16 *
     static_assert(k % s == 0);
     static_assert(n % (2 * t) == 0);
 
-    ::aie::set_rounding(ROUNDING_MODE);
+    ::aie::set_rounding(round_mode);
 
-    return matmul_vectorized_2x2_mmul<bfloat16, float, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj>(pA, pB, pC);
+    return matmul_vectorized_2x2_mmul<bfloat16, float, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj, is_c_row_maj>(
+        pA, pB, pC);
 }
 
 template <unsigned m, unsigned k, unsigned n>
@@ -297,7 +373,8 @@ matmul_vectorized_8x8x8_i8_i8(const int8 *__restrict pA, const int8 *__restrict 
     static_assert(k % s == 0);
     static_assert(n % (2 * t) == 0);
 
-    return matmul_vectorized_2x2_mmul<int8, int8, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj>(pA, pB, pC);
+    return matmul_vectorized_2x2_mmul<int8, int8, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj, is_c_row_maj>(
+        pA, pB, pC);
 }
 
 template <unsigned m, unsigned k, unsigned n>
@@ -312,7 +389,8 @@ matmul_vectorized_8x8x8_i8_i16(const int8 *__restrict pA, const int8 *__restrict
     static_assert(k % s == 0);
     static_assert(n % (2 * t) == 0);
 
-    return matmul_vectorized_2x2_mmul<int8, int16, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj>(pA, pB, pC);
+    return matmul_vectorized_2x2_mmul<int8, int16, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj, is_c_row_maj>(
+        pA, pB, pC);
 }
 
 template <unsigned m, unsigned k, unsigned n>
@@ -327,7 +405,8 @@ matmul_vectorized_8x8x8_i8_i32(const int8 *__restrict pA, const int8 *__restrict
     static_assert(k % s == 0);
     static_assert(n % (2 * t) == 0);
 
-    return matmul_vectorized_2x2_mmul<int8, int32, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj>(pA, pB, pC);
+    return matmul_vectorized_2x2_mmul<int8, int32, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj, is_c_row_maj>(
+        pA, pB, pC);
 }
 
 extern "C" {
@@ -413,7 +492,7 @@ extern "C" {
 #define matmul_scalar_c_func(ctype_in, mlir_type_in, ctype_out, mlir_type_out, r, s, t)                                \
     void matmul_scalar_##mlir_type_in##_##mlir_type_out(ctype_in *a_in, ctype_in *b_in, ctype_out *c_out)              \
     {                                                                                                                  \
-        matmul_scalar<ctype_in, ctype_out, DIM_M, DIM_K, DIM_N, is_b_row_maj>(a_in, b_in, c_out);                      \
+        matmul_scalar<ctype_in, ctype_out, DIM_M, DIM_K, DIM_N, is_b_row_maj, is_c_row_maj>(a_in, b_in, c_out);        \
     }
 
 #define zero_vectorized_c_func(ctype_in, mlir_type_in, ctype_out, mlir_type_out, r, s, t)                              \

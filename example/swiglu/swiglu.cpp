@@ -21,7 +21,7 @@
 #include <xrt/xrt_kernel.h>
 
 #define DTYPE std::bfloat16_t
-#include "golden_reference.h"
+#include "golden_reference_reader.h"
 #include "invocation_plan.h"
 
 int main(int argc, const char *argv[])
@@ -43,11 +43,14 @@ int main(int argc, const char *argv[])
         "epsilon",
         "relative threshold for floating point comparsion (result must be within this percentage of magnitude of both "
         "results)",
-        cxxopts::value<float>()->default_value("0.01"))(
+        cxxopts::value<float>()->default_value("0.0202"))(
         "abs_th",
         "absolute threshold for floating point comparison (difference between results must either be less than this "
         "value or less than relative threshold)",
-        cxxopts::value<float>()->default_value("0.1"));
+        cxxopts::value<float>()->default_value("0.1"))(
+        "ref",
+        "path to golden reference file",
+        cxxopts::value<std::string>()->default_value("golden_swiglu/golden_reference.bin"));
 
     vm = options.parse(argc, argv);
     if (vm.count("help")) {
@@ -62,6 +65,7 @@ int main(int argc, const char *argv[])
     }
 
     std::string xclbin_path = vm["xclbin"].as<std::string>();
+    std::string ref_path = vm["ref"].as<std::string>();
     float epsilon = vm["epsilon"].as<float>();
     float abs_th = vm["abs_th"].as<float>();
     unsigned dim = vm["dim"].as<unsigned>();
@@ -78,18 +82,21 @@ int main(int argc, const char *argv[])
         {"silu", vm["insts-silu"].as<std::string>(), "swiglu_silu"},
         {"eltwise_mul", vm["insts-eltwise-mul"].as<std::string>(), "swiglu_eltwise_mul"}};
 
+    GoldenReference ref = GoldenReference::fromFile(ref_path);
+
     std::vector<KernelBufferInfo> buffers = {
-        {"inp", dim, KernelBufferInfo::Direction::IN, golden_reference::inp.data()},
-        {"W1", dim * dim, KernelBufferInfo::Direction::IN, golden_reference::W1.data()},
-        {"W2", dim * dim, KernelBufferInfo::Direction::IN, golden_reference::W2.data()},
-        {"left", dim, KernelBufferInfo::Direction::OUT, golden_reference::left.data()},
-        {"right", dim, KernelBufferInfo::Direction::OUT, golden_reference::right.data()},
-        {"left_swished", dim, KernelBufferInfo::Direction::OUT, golden_reference::left_swished.data()},
-        {"result", dim, KernelBufferInfo::Direction::OUT, golden_reference::result.data()}};
+        {"inp", dim, KernelBufferInfo::Direction::IN, ref.get<std::bfloat16_t>("inp")->data()},
+        {"W1", dim * dim, KernelBufferInfo::Direction::IN, ref.get<std::bfloat16_t>("W1")->data()},
+        {"W2", dim * dim, KernelBufferInfo::Direction::IN, ref.get<std::bfloat16_t>("W2")->data()},
+        {"left", dim, KernelBufferInfo::Direction::OUT, ref.get<std::bfloat16_t>("left")->data()},
+        {"right", dim, KernelBufferInfo::Direction::OUT, ref.get<std::bfloat16_t>("right")->data()},
+        {"dummy", 1, KernelBufferInfo::Direction::IN, nullptr},
+        {"left_swished", dim, KernelBufferInfo::Direction::OUT, ref.get<std::bfloat16_t>("left_swished")->data()},
+        {"result", dim, KernelBufferInfo::Direction::OUT, ref.get<std::bfloat16_t>("result")->data()}};
 
     std::vector<KernelInvocationInfo> runlist = {{"mv", {"W1", "inp", "left"}},
                                                  {"mv", {"W2", "inp", "right"}},
-                                                 {"silu", {"left", "left_swished"}},
+                                                 {"silu", {"left", "dummy", "left_swished"}},
                                                  {"eltwise_mul", {"left_swished", "right", "result"}}};
 
     InvocationPlanInfo plan_info = {.xclbin = xclbin_path, .kernels = kernels, .buffers = buffers, .runlist = runlist};

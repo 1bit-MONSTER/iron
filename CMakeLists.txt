@@ -13,10 +13,17 @@ project(
 
 # Options
 set(IRONCLAD_AIE_TARGET "aie2p" CACHE STRING "AIE architecture, select either aie2 or aie2p")
-if(IRONCLAD_AIE_TARGET STREQUAL aie2)
+set_property(CACHE IRONCLAD_AIE_TARGET PROPERTY STRINGS "aie2" "aie2p")
+if (IRONCLAD_AIE_TARGET STREQUAL "aie2")
     set(DEVICE npu)
-else()
+    set(MAX_COLUMNS 4)
+    set(AIE_COLS_LIST 1 2 4)
+elseif (IRONCLAD_AIE_TARGET STREQUAL "aie2p")
     set(DEVICE npu2)
+    set(MAX_COLUMNS 8)
+    set(AIE_COLS_LIST 1 2 4 8)
+else ()
+    message(FATAL_ERROR "Unknown AIE target ${IRONCLAD_AIE_TARGET}")
 endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

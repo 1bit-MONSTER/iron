@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "cxxopts.hpp"
+#include "golden_reference_reader.h"
 #include "golden_reference_verification.h"
 #include "xrt/xrt_bo.h"
 #include "xrt/xrt_device.h"
@@ -39,12 +40,18 @@ int main(int argc, const char *argv[])
     cxxopts::Options options("MHA Test Harness");
     cxxopts::ParseResult vm;
     matmul_common::add_default_options(options);
+    options.add_options()("ref",
+                          "path to golden reference file",
+                          cxxopts::value<std::string>()->default_value("golden_mem_copy/golden_reference.bin"));
 
     matmul_common::parse_options(argc, argv, options, vm);
     int verbosity = vm["verbosity"].as<int>();
     int n_iterations = vm["iters"].as<int>();
     uint n_warmup_iterations = vm["warmup"].as<int>();
     int trace_size = vm["trace_sz"].as<int>();
+    std::string ref_path = vm["ref"].as<std::string>();
+
+    GoldenReference ref = GoldenReference::fromFile(ref_path);
 
     // Fix the seed to ensure reproducibility in CI.
     srand(1726250518); // srand(time(NULL));
@@ -115,7 +122,7 @@ int main(int argc, const char *argv[])
     std::vector<DTYPE_ACT> VVec(K_VOLUME);
 
     // Load input data from golden reference for consistency
-    golden_reference_verification::load_golden_inputs(QVec, KVec, VVec);
+    golden_reference_verification::load_golden_inputs(ref, QVec, KVec, VVec);
     if (verbosity >= 1) {
         std::cout << "Loaded golden reference inputs:" << std::endl;
         std::cout << "  Q[0] = " << (int)QVec[0] << ", Q[1] = " << (int)QVec[1] << std::endl;
@@ -196,7 +203,8 @@ int main(int argc, const char *argv[])
         auto vstart = std::chrono::system_clock::now();
 
         errors =
-            golden_reference_verification::verify_against_golden<DTYPE_ACT, DTYPE_ACT, DTYPE_ACT>(OVec,
+            golden_reference_verification::verify_against_golden<DTYPE_ACT, DTYPE_ACT, DTYPE_ACT>(ref,
+                                                                                                  OVec,
                                                                                                   verbosity,
                                                                                                   abs_tol,
                                                                                                   rel_tol,

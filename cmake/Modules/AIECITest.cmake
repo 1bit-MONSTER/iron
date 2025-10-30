@@ -88,7 +88,8 @@ function(add_golden_reference_generator TARGET_NAME PYTHON_SCRIPT_PATH GOLDEN_VA
         OUTPUT ${GOLDEN_VALUES_PATH}/golden_reference.h
         COMMAND ${Python3_EXECUTABLE} ${PYTHON_SCRIPT_PATH}
                 ${PYTHON_ARGS}
-                --output ${GOLDEN_VALUES_PATH}/golden_reference.h
+                --output-header ${GOLDEN_VALUES_PATH}/golden_reference.h
+                --output-bin ${GOLDEN_VALUES_PATH}/golden_reference.bin
         DEPENDS ${PYTHON_SCRIPT_PATH}
         COMMENT "Generating golden reference file: ${GOLDEN_VALUES_PATH}/golden_reference.h"
     )

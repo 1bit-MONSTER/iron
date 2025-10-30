@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "cxxopts.hpp"
-#include "golden_reference.h"
+#include "golden_reference_reader.h"
 #include "test_utils.h"
 #include "xrt/xrt_bo.h"
 #include "xrt/xrt_device.h"
@@ -32,7 +32,10 @@ int main(int argc, const char *argv[])
         "trace_sz,t", "trace size", cxxopts::value<int>()->default_value("0"))(
         "trace_file", "where to store trace output", cxxopts::value<std::string>()->default_value("trace.txt"))(
         "b_col_maj", "Is B matrix in colum-major format?", cxxopts::value<int>()->default_value("0"))(
-        "c_col_maj", "Is C matrix in colum-major format?", cxxopts::value<int>()->default_value("0"));
+        "c_col_maj", "Is C matrix in colum-major format?", cxxopts::value<int>()->default_value("0"))(
+        "ref",
+        "path to golden reference file",
+        cxxopts::value<std::string>()->default_value("golden_gemm/golden_reference.bin"));
 
     try {
         vm = options.parse(argc, argv);
@@ -43,7 +46,7 @@ int main(int argc, const char *argv[])
         }
 
         // Check required options
-        if (!vm.count("xclbin") || !vm.count("kernel") || !vm.count("instr")) {
+        if (!vm.count("xclbin") || !vm.count("kernel") || !vm.count("instr") || !vm.count("ref")) {
             std::cerr << "Error: Required options missing\n\n";
             std::cerr << "Usage:\n" << options.help() << std::endl;
             return 1;
@@ -55,6 +58,9 @@ int main(int argc, const char *argv[])
     }
 
     std::vector<uint32_t> instr_v = test_utils::load_instr_binary(vm["instr"].as<std::string>());
+
+    std::string ref_path = vm["ref"].as<std::string>();
+    GoldenReference ref = GoldenReference::fromFile(ref_path);
 
     int verbosity = vm["verbosity"].as<int>();
     if (verbosity >= 1)
@@ -88,16 +94,7 @@ int main(int argc, const char *argv[])
 
     if (verbosity >= 1)
         std::cout << "Kernel opcode: " << vm["kernel"].as<std::string>() << std::endl;
-    std::string Node = vm["kernel"].as<std::string>();
-
-    // Get the kernel from the xclbin
-    auto xkernels = xclbin.get_kernels();
-    auto xkernel = *std::find_if(xkernels.begin(), xkernels.end(), [Node](xrt::xclbin::kernel &k) {
-        auto name = k.get_name();
-        std::cout << "Name: " << name << std::endl;
-        return name.rfind(Node, 0) == 0;
-    });
-    auto kernelName = xkernel.get_name();
+    std::string kernelName = vm["kernel"].as<std::string>();
 
     if (verbosity >= 1)
         std::cout << "Registering xclbin: " << vm["xclbin"].as<std::string>() << "\n";
@@ -123,10 +120,10 @@ int main(int argc, const char *argv[])
         std::cout << "Writing data into buffer objects." << std::endl;
 
     std::bfloat16_t *bufA = bo_a.map<std::bfloat16_t *>();
-    memcpy(bufA, golden_reference::A.data(), (golden_reference::A.size() * sizeof(std::bfloat16_t)));
+    memcpy(bufA, ref.get<std::bfloat16_t>("A")->data(), A_VOLUME * sizeof(std::bfloat16_t));
 
     std::bfloat16_t *bufB = bo_b.map<std::bfloat16_t *>();
-    memcpy(bufB, golden_reference::B.data(), (golden_reference::B.size() * sizeof(std::bfloat16_t)));
+    memcpy(bufB, ref.get<std::bfloat16_t>("B")->data(), B_VOLUME * sizeof(std::bfloat16_t));
 
     // Instruction buffer for DMA configuration
     void *bufInstr = bo_instr.map<void *>();
@@ -166,26 +163,27 @@ int main(int argc, const char *argv[])
     std::bfloat16_t *bufOut1 = bo_out.map<std::bfloat16_t *>();
 
     // Compare with golden reference
+    auto ref_C = ref.get<std::bfloat16_t>("C");
     int errors = 0;
     std::bfloat16_t max_diff = std::bfloat16_t(0.0); // Variable to store the maximum difference
     std::pair<int, std::pair<std::bfloat16_t, std::bfloat16_t>>
         mismatch_values; // To store index and values of mismatches
 
     for (int i = 0; i < M * N; i++) {
-        std::bfloat16_t ref = golden_reference::C[i];
-        std::bfloat16_t diff = std::abs(*(bufOut1 + i) - ref); // Calculate the difference
-        if (!test_utils::nearly_equal(*(bufOut1 + i), ref, 0.005, 0.005)) {
+        std::bfloat16_t ref_val = (*ref_C)[i];
+        std::bfloat16_t diff = std::abs(*(bufOut1 + i) - ref_val); // Calculate the difference
+        if (!test_utils::nearly_equal(*(bufOut1 + i), ref_val, 0.005, 0.005)) {
             errors++;
             // Update max_diff if the current difference is larger
             if (diff > max_diff) {
                 max_diff = diff;
                 // Store the index and values of the mismatch
-                mismatch_values =
-                    std::pair<int, std::pair<std::bfloat16_t, std::bfloat16_t>>(i, std::make_pair(ref, *(bufOut1 + i)));
+                mismatch_values = std::pair<int, std::pair<std::bfloat16_t, std::bfloat16_t>>(
+                    i, std::make_pair(ref_val, *(bufOut1 + i)));
             }
             // Print the first 100 mismatches
             if (errors <= 100) {
-                std::cout << "Mismatch at index " << i << ": " << "Expected: " << ref << ", "
+                std::cout << "Mismatch at index " << i << ": " << "Expected: " << ref_val << ", "
                           << "Got: " << *(bufOut1 + i) << std::endl;
             }
         }

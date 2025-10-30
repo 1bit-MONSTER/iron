@@ -3,6 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//===---  exp_lut.h - get exponential values from loopup tables ---===//
+//
+// This file is licensed under the Apache License v2.0 with LLVM Exceptions
+// See https://llvm.org/LICENSE.txt for license information.
+
+//
+// (c) Copyright 2023 Xilinx Inc.
+//
+//
 //===----------------------------------------------------------------------===//
 // This is the implementation of getting exponential values for a bfloat16
 // vector from exponential lookup tables.

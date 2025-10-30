@@ -10,7 +10,7 @@ function(add_aie_gelu_design INPUT_LENGTH NUM_COLUMNS NUM_CHANNELS TILE_SIZE TRA
     set(INPUT_DATA_TYPE_CPP bfloat16_t)
     set(OUTPUT_DATA_TYPE_CPP bfloat16_t)
 
-    add_aie_executable(${EXAMPLE} 
+    add_aie_executable(${EXAMPLE}
         HOST gelu.cpp
         HOST_FLAGS DTYPE_IN=${INPUT_DATA_TYPE_CPP} DTYPE_OUT=${OUTPUT_DATA_TYPE_CPP}
         PYTHON gelu.py
@@ -20,19 +20,19 @@ function(add_aie_gelu_design INPUT_LENGTH NUM_COLUMNS NUM_CHANNELS TILE_SIZE TRA
         OUTPUT_XCLBIN GELU_XCLBIN
         OUTPUT_INSTS GELU_INSTS)
 
-    add_golden_reference_generator(${EXAMPLE} 
+    add_golden_reference_generator(${EXAMPLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/gelu_golden.py
         ${GOLDEN_VALUES_PATH}
         --input_length ${INPUT_LENGTH}
         --dtype ${INPUT_DATA_TYPE_PYTHON}
     )
-    
+
     add_aie_ci_test(${EXAMPLE}
-                    RUN 
-                        "${GELU_HOST} -k ${EXAMPLE} -x ${GELU_XCLBIN} -i ${GELU_INSTS} -l ${INPUT_LENGTH}"
+                    RUN
+                        "${GELU_HOST} -k ${EXAMPLE} -x ${GELU_XCLBIN} -i ${GELU_INSTS} -l ${INPUT_LENGTH} --ref ${GOLDEN_VALUES_PATH}/golden_reference.bin"
                     CHECK
                         "PASS!"
-                    METRICS 
+                    METRICS
                         "Latency" [=[Latency \(us\): (?P<metric>\d+)]=]
                         "Bandwidth" [=[Effective Bandwidth: (?P<metric>[\d\.e\+-]+) GB/s]=]
     )
@@ -44,13 +44,6 @@ if(EXTENSIVE_TESTING)
     list(APPEND INPUT_LENGTHS 1024)
     list(APPEND INPUT_LENGTHS 4096)
     list(APPEND INPUT_LENGTHS 8192)
-endif()
-
-# Determine max cores based on device
-if(IRONCLAD_AIE_TARGET STREQUAL aie2p)
-    set(MAX_COLUMNS 8) 
-else()
-    set(MAX_COLUMNS 4)
 endif()
 
 foreach(INPUT_LENGTH IN LISTS INPUT_LENGTHS)

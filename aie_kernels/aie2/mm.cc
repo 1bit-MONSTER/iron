@@ -695,6 +695,13 @@ constexpr bool is_c_row_maj = false;
 constexpr bool is_c_row_maj = true;
 #endif
 
+// The rounding mode can be set for bfloat16 mmul to improve accuracy
+#ifdef ROUND_CONV_EVEN
+constexpr aie::rounding_mode round_mode = aie::rounding_mode::conv_even;
+#else
+constexpr aie::rounding_mode round_mode = aie::rounding_mode::floor; // default
+#endif
+
 // The following kernel definitions use mmul shapes and kernel expansions that
 // have been found to be optimal for AIE2.
 //
@@ -752,6 +759,8 @@ matmul_vectorized_4x8x4_bf16_bf16(const bfloat16 *__restrict pA, const bfloat16 
     static_assert(k % s == 0);
     static_assert(n % (4 * t) == 0);
 
+    ::aie::set_rounding(round_mode);
+
     return matmul_vectorized_4x4<bfloat16, bfloat16, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj, is_c_row_maj>(
         pA, pB, pC);
 }
@@ -767,6 +776,8 @@ matmul_vectorized_4x8x4_bf16_f32(const bfloat16 *__restrict pA, const bfloat16 *
     static_assert(m % (4 * r) == 0);
     static_assert(k % s == 0);
     static_assert(n % (4 * t) == 0);
+
+    ::aie::set_rounding(round_mode);
 
     return matmul_vectorized_4x4<bfloat16, float, (m / r), (k / s), (n / t), r, s, t, is_b_row_maj, is_c_row_maj>(
         pA, pB, pC);

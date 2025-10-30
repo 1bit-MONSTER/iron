@@ -17,7 +17,7 @@ add_aie_design(swiglu_mv
 
 add_aie_design(swiglu_silu
     PYTHON ../silu/silu.py
-    PYTHON_FLAGS --dev ${DEVICE} -l 2048 --co 8 --chan 1 --tile-size 256 --trace-size 0 -o ${CMAKE_BINARY_DIR}/aie/swiglu_silu.mlir
+    PYTHON_FLAGS --dev ${DEVICE} -l 2048 --co ${MAX_COLUMNS} --chan 1 --tile-size 256 --trace-size 0 -o ${CMAKE_BINARY_DIR}/aie/swiglu_silu.mlir
     AIE_CORE_KERNELS silu.o
     EXTRA_AIECC_FLAGS --xclbin-input=${SWIGLU_MV_XCLBIN} --xclbin-instance-name=swiglu_silu_inst --xclbin-kernel-id=0x902
     OUTPUT_XCLBIN SWIGLU_SILU_XCLBIN
@@ -27,8 +27,8 @@ add_dependencies(swiglu_silu_insts swiglu_mv_xclbin)
 
 add_aie_design(swiglu_eltwise_mul
     PYTHON ../elementwise_mul/eltwise_mul.py
-    PYTHON_FLAGS -d ${DEVICE} -l 2048 -co 8 -ch 2 -ts 256 -t 0 -o ${CMAKE_BINARY_DIR}/aie/swiglu_eltwise_mul.mlir
-    AIE_CORE_KERNELS mul_aie2.o
+    PYTHON_FLAGS -d ${DEVICE} -l 2048 -co ${MAX_COLUMNS} -ch 2 -ts 256 -t 0 -o ${CMAKE_BINARY_DIR}/aie/swiglu_eltwise_mul.mlir
+    AIE_CORE_KERNELS mul.o
     EXTRA_AIECC_FLAGS --xclbin-input=${SWIGLU_SILU_XCLBIN} --xclbin-instance-name=swiglu_eltwise_mul_inst --xclbin-kernel-id=0x903
     OUTPUT_XCLBIN SWIGLU_ELTWISE_MUL_XCLBIN
     OUTPUT_INSTS SWIGLU_ELTWISE_MUL_INSTS)
@@ -41,13 +41,15 @@ set(SWIGLU_COMBINED_XCLBIN ${SWIGLU_ELTWISE_MUL_XCLBIN})
 
 add_aie_host(${EXAMPLE} HOST swiglu.cpp OUTPUT_HOST SWIGLU_HOST)
 add_dependencies(
-    ${EXAMPLE} 
+    ${EXAMPLE}
     swiglu_eltwise_mul_xclbin # ${SWIGLU_ELTWISE_MUL_XCLBIN}
     swiglu_eltwise_mul_insts # ${SWIGLU_ELTWISE_MUL_INSTS}
 )
 
+set(GOLDEN_VALUES_PATH "${CMAKE_BINARY_DIR}/example/swiglu/golden_${EXAMPLE}")
+
 add_aie_ci_test(${EXAMPLE}
-                RUN 
+                RUN
                     "${SWIGLU_HOST} \
                         --dim 2048 \
                         -x ${SWIGLU_COMBINED_XCLBIN} \
@@ -55,13 +57,13 @@ add_aie_ci_test(${EXAMPLE}
                         --insts-silu ${SWIGLU_SILU_INSTS} \
                         --insts-eltwise-mul ${SWIGLU_ELTWISE_MUL_INSTS} \
                         --epsilon 0.07 \
-                        --abs_th 0.7"
+                        --abs_th 0.7 \
+                        --ref ${GOLDEN_VALUES_PATH}/golden_reference.bin"
                 CHECK
                     "PASS!"
-                METRICS 
+                METRICS
                     "Latency" [=[Elapsed time \(μs\): (?P<metric>\d+)]=])
 
-set(GOLDEN_VALUES_PATH "${CMAKE_BINARY_DIR}/example/swiglu/golden_${EXAMPLE}")
 add_golden_reference_generator(${EXAMPLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/swiglu_golden.py
     ${GOLDEN_VALUES_PATH}
