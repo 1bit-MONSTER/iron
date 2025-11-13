@@ -1,0 +1,118 @@
+# SPDX-FileCopyrightText: Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: "Commit Test Results to a Branch"
+
+inputs:
+  pretty_flags:
+    required: false
+    default: "--metric='Latency (mean)' --metric='Bandwidth (mean)' --metric='GFLOP/s (mean)' -o pretty.md"
+  input_csv:
+    required: false
+    default: "tests_latest.csv"
+  branch:
+    required: false
+    default: "ci"
+  dir:
+    required: true
+
+outputs:
+  results_dir:
+    description: "Absolute path to the directory containing generated test results"
+    value: ${{ steps.merge_results.outputs.results_dir }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Format results and receive previous results from branch
+      id: merge_results
+      env:
+        HOME: /workspace
+      shell: bash
+      run: |
+        export DATE=$(printf '%(%Y_%m_%d_%H_%M_%S)T')
+        export COMMIT_SHA=$(git rev-parse --short HEAD)
+
+        ./ci/scripts/pretty.py --date=${DATE} --commit=${COMMIT_SHA} ${{ inputs.pretty_flags }} ${{ inputs.input_csv }}
+
+        git fetch origin ${{ inputs.branch }}:${{ inputs.branch }}
+        git worktree add ../results ${{ inputs.branch }}
+
+        mkdir -p ../results/${{ inputs.dir }}
+        cp ${{ inputs.input_csv }} ../results/${{ inputs.dir }}/latest.csv
+        cp pretty.md ../results/${{ inputs.dir }}/readme.md
+        touch ../results/${{ inputs.dir }}/all.csv
+
+        RESULTS_DIR=$(realpath ../results/${{ inputs.dir }})
+
+        ./ci/scripts/merge_all.py --all ${RESULTS_DIR}/all.csv --latest ${RESULTS_DIR}/latest.csv
+        ./ci/scripts/pretty_trends.py ${RESULTS_DIR}/all.csv -o ${RESULTS_DIR}/trends.md
+
+        echo "commit_sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+        echo "date=${DATE}" >> $GITHUB_OUTPUT
+        echo "results_dir=${RESULTS_DIR}" >> $GITHUB_OUTPUT
+
+    - name: Comment results on PR
+      if: ${{ startsWith(github.event_name, 'pull_request') }}
+      continue-on-error: true  # This step will fail for PRs from forks because of permission issues; ignore
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ github.token }}
+        script: |
+          const fs = require('fs');
+          const commitSha = '${{ steps.merge_results.outputs.commit_sha }}';
+          const date = '${{ steps.merge_results.outputs.date }}';
+          const server = '${{ github.server_url }}';
+          const repo = '${{ github.repository }}';
+          
+          let prettyContent = '';
+          try {
+            prettyContent = fs.readFileSync(`${{ steps.merge_results.outputs.results_dir }}/readme.md`, 'utf8');
+          } catch (error) {
+            prettyContent = 'Pretty output not available.';
+          }
+          
+          // Read the trends.md content
+          let trendsContent = '';
+          try {
+            trendsContent = fs.readFileSync(`${{ steps.merge_results.outputs.results_dir }}/trends.md`, 'utf8');
+          } catch (error) {
+            trendsContent = 'Trends not available.';
+          }
+          
+          const body = `<details>
+          <summary>📊 Test Results for ${process.env.GITHUB_WORKFLOW}</summary>
+
+          [${commitSha}](${server}/${repo}/commit/${commitSha}) (${date})
+          
+          ${prettyContent}
+          
+          </details>
+          
+          <details>
+          <summary>📈 Trends (vs main branch) for ${process.env.GITHUB_WORKFLOW}</summary>
+
+          [${commitSha}](${server}/${repo}/commit/${commitSha}) (${date})
+
+          ${trendsContent}
+          
+          </details>`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+
+    - name: Push new test results to branch
+      if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devel') }}
+      continue-on-error: true  # This step will fail for PRs from forks because of permission issues; ignore
+      shell: bash
+      run: |
+        cd ../results
+        git add ${{ inputs.dir }}/all.csv ${{ inputs.dir }}/latest.csv ${{ inputs.dir }}/readme.md ${{ inputs.dir }}/trends.md
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git commit -m "Add test results testing commit \`${{ steps.merge_results.outputs.commit_sha }}\` at ${{ steps.merge_results.outputs.date }}" || echo "No changes to commit"
+        git push origin ${{ inputs.branch }}
