@@ -1,7 +1,7 @@
 
 # IRONCLAD
 
-Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
+Tested on `2025_11_18_23_31_35` at commit `611b7cf`.
 
 <table>
     <thead>
@@ -21,61 +21,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                157.80
-            </td>
-            <td>
-                0.08
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_2_cols_2_channels_2048_tile_1024_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                152.40
-            </td>
-            <td>
-                0.08
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_4_cols_2_channels_2048_tile_512_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                186.20
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_8_cols_2_channels_2048_tile_256_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                160.20
+                160.40
             </td>
             <td>
                 0.07
@@ -86,151 +32,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
         </tr>
         <tr>
             <td>
-                dequant_1_cols_1_channels_2048_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                141.00
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_1_cols_2_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                170.00
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_2_cols_1_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                177.00
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_2_cols_2_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                180.00
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_4_cols_1_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                187.20
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_4_cols_2_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                262.80
-            </td>
-            <td>
-                0.02
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_8_cols_1_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                210.40
-            </td>
-            <td>
-                0.02
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_8_cols_2_channels_2048_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                241.00
-            </td>
-            <td>
-                0.02
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_1_cols_2_channels_2048_tile_2048
+                axpy_2_cols_2_channels_2048_tile_1024_3.0
             </td>
             <td>
                 ✅
@@ -248,17 +50,17 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
         </tr>
         <tr>
             <td>
-                eltwise_add_2_cols_2_channels_2048_tile_1024
+                axpy_4_cols_2_channels_2048_tile_512_3.0
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                149.80
+                164.40
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -266,17 +68,17 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
         </tr>
         <tr>
             <td>
-                eltwise_add_4_cols_2_channels_2048_tile_512
+                axpy_8_cols_2_channels_2048_tile_256_3.0
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                150.00
+                202.20
             </td>
             <td>
-                0.08
+                0.06
             </td>
             <td>
                 n/a
@@ -284,17 +86,17 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
         </tr>
         <tr>
             <td>
-                eltwise_add_8_cols_2_channels_2048_tile_256
+                dequant_1_cols_1_channels_2048_tile_2048
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                211.80
+                131.80
             </td>
             <td>
-                0.05
+                0.04
             </td>
             <td>
                 n/a
@@ -302,7 +104,133 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
         </tr>
         <tr>
             <td>
-                eltwise_mul_1_cols_2_channels_2048_tile_2048
+                dequant_1_cols_2_channels_2048_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                152.40
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_2_cols_1_channels_2048_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                149.20
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_2_cols_2_channels_2048_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                183.20
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_4_cols_1_channels_2048_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                189.80
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_4_cols_2_channels_2048_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                182.00
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_8_cols_1_channels_2048_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                177.20
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_8_cols_2_channels_2048_tile_128
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                252.60
+            </td>
+            <td>
+                0.02
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_1_cols_2_channels_2048_tile_2048
             </td>
             <td>
                 ✅
@@ -320,6 +248,78 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
         </tr>
         <tr>
             <td>
+                eltwise_add_2_cols_2_channels_2048_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                137.80
+            </td>
+            <td>
+                0.08
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_4_cols_2_channels_2048_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                142.80
+            </td>
+            <td>
+                0.08
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_8_cols_2_channels_2048_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                178.20
+            </td>
+            <td>
+                0.07
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_1_cols_2_channels_2048_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                173.40
+            </td>
+            <td>
+                0.07
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
                 eltwise_mul_2_cols_2_channels_2048_tile_1024
             </td>
             <td>
@@ -327,7 +327,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                151.80
+                141.80
             </td>
             <td>
                 0.08
@@ -345,7 +345,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                149.40
+                151.20
             </td>
             <td>
                 0.08
@@ -363,10 +363,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                191.20
+                173.20
             </td>
             <td>
-                0.06
+                0.07
             </td>
             <td>
                 n/a
@@ -381,10 +381,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                209.80
+                176.40
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -399,7 +399,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                166.00
+                153.80
             </td>
             <td>
                 0.05
@@ -417,10 +417,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                199.40
+                149.40
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -435,7 +435,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                143.20
+                151.80
             </td>
             <td>
                 0.06
@@ -453,10 +453,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                144.60
+                158.00
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -471,7 +471,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                152.00
+                187.00
             </td>
             <td>
                 0.05
@@ -489,10 +489,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                141.00
+                181.60
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -507,7 +507,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                152.40
+                186.60
             </td>
             <td>
                 0.05
@@ -525,10 +525,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                6591.40
+                6699.00
             </td>
             <td>
-                3.56
+                3.51
             </td>
             <td>
                 n/a
@@ -543,10 +543,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                144.00
+                181.20
             </td>
             <td>
-                0.09
+                0.07
             </td>
             <td>
                 n/a
@@ -561,7 +561,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                152.60
+                158.00
             </td>
             <td>
                 0.08
@@ -579,7 +579,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                152.00
+                167.00
             </td>
             <td>
                 0.08
@@ -597,7 +597,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                138.40
+                146.60
             </td>
             <td>
                 0.09
@@ -615,10 +615,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                179.80
+                199.80
             </td>
             <td>
-                0.08
+                0.06
             </td>
             <td>
                 n/a
@@ -633,7 +633,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                173.80
+                202.20
             </td>
             <td>
                 0.07
@@ -651,10 +651,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                235.20
+                177.40
             </td>
             <td>
-                0.06
+                0.07
             </td>
             <td>
                 n/a
@@ -669,10 +669,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                164.20
+                206.80
             </td>
             <td>
-                0.08
+                0.06
             </td>
             <td>
                 n/a
@@ -687,7 +687,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                648.00
+                710.80
             </td>
             <td>
                 0.05
@@ -705,13 +705,13 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                3095.20
+                3085.20
             </td>
             <td>
-                10.85
+                10.89
             </td>
             <td>
-                10.84
+                10.88
             </td>
         </tr>
         <tr>
@@ -723,13 +723,13 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                2015.60
+                2038.00
             </td>
             <td>
-                16.68
+                16.49
             </td>
             <td>
-                16.67
+                16.48
             </td>
         </tr>
         <tr>
@@ -741,13 +741,13 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                1642.60
+                1630.20
             </td>
             <td>
-                20.54
+                20.71
             </td>
             <td>
-                20.53
+                20.70
             </td>
         </tr>
         <tr>
@@ -759,13 +759,13 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                2126.40
+                1956.80
             </td>
             <td>
-                16.21
+                17.25
             </td>
             <td>
-                16.20
+                17.24
             </td>
         </tr>
         <tr>
@@ -777,13 +777,13 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                3032.60
+                3069.40
             </td>
             <td>
-                11.07
+                10.94
             </td>
             <td>
-                11.07
+                10.93
             </td>
         </tr>
         <tr>
@@ -795,13 +795,13 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                1976.40
+                1966.40
             </td>
             <td>
-                17.02
+                17.08
             </td>
             <td>
-                17.01
+                17.07
             </td>
         </tr>
         <tr>
@@ -813,13 +813,13 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                1733.20
+                1655.00
             </td>
             <td>
-                19.63
+                20.31
             </td>
             <td>
-                19.62
+                20.30
             </td>
         </tr>
         <tr>
@@ -831,13 +831,13 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                2095.20
+                2043.40
             </td>
             <td>
-                16.16
+                16.50
             </td>
             <td>
-                16.15
+                16.49
             </td>
         </tr>
         <tr>
@@ -849,7 +849,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                184.40
+                231.20
             </td>
             <td>
                 0.04
@@ -867,7 +867,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                141.80
+                158.60
             </td>
             <td>
                 0.05
@@ -885,10 +885,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                173.40
+                159.40
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -903,7 +903,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                144.40
+                168.20
             </td>
             <td>
                 0.05
@@ -921,7 +921,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                162.20
+                159.40
             </td>
             <td>
                 0.05
@@ -939,10 +939,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                130.60
+                160.80
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -957,10 +957,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                134.00
+                149.00
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -975,10 +975,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                142.40
+                182.20
             </td>
             <td>
-                0.05
+                0.04
             </td>
             <td>
                 n/a
@@ -999,7 +999,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 0.09
             </td>
             <td>
-                63.81
+                63.69
             </td>
         </tr>
         <tr>
@@ -1011,7 +1011,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                150.60
+                155.60
             </td>
             <td>
                 0.05
@@ -1029,10 +1029,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                136.20
+                170.80
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -1047,10 +1047,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                139.00
+                149.20
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -1083,7 +1083,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                163.80
+                153.20
             </td>
             <td>
                 0.08
@@ -1101,7 +1101,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                141.40
+                144.00
             </td>
             <td>
                 0.08
@@ -1119,7 +1119,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                135.80
+                130.60
             </td>
             <td>
                 0.09
@@ -1137,10 +1137,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                149.40
+                161.00
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -1155,10 +1155,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                183.40
+                199.80
             </td>
             <td>
-                0.06
+                0.07
             </td>
             <td>
                 n/a
@@ -1173,10 +1173,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                162.20
+                153.60
             </td>
             <td>
-                0.07
+                0.08
             </td>
             <td>
                 n/a
@@ -1191,7 +1191,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                179.80
+                157.60
             </td>
             <td>
                 0.07
@@ -1209,10 +1209,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                198.60
+                236.40
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -1227,10 +1227,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                173.20
+                150.80
             </td>
             <td>
-                0.13
+                0.15
             </td>
             <td>
                 n/a
@@ -1245,10 +1245,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                163.40
+                140.20
             </td>
             <td>
-                0.14
+                0.17
             </td>
             <td>
                 n/a
@@ -1263,10 +1263,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                170.80
+                150.60
             </td>
             <td>
-                0.14
+                0.15
             </td>
             <td>
                 n/a
@@ -1281,10 +1281,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                214.80
+                172.80
             </td>
             <td>
-                0.11
+                0.14
             </td>
             <td>
                 n/a
@@ -1299,7 +1299,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                167.80
+                143.20
             </td>
             <td>
                 0.05
@@ -1317,7 +1317,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                151.00
+                147.40
             </td>
             <td>
                 0.05
@@ -1335,10 +1335,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                168.80
+                132.60
             </td>
             <td>
-                0.05
+                0.06
             </td>
             <td>
                 n/a
@@ -1353,7 +1353,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                167.40
+                165.00
             </td>
             <td>
                 0.05
@@ -1371,10 +1371,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                153.40
+                139.60
             </td>
             <td>
-                0.15
+                0.17
             </td>
             <td>
                 n/a
@@ -1389,10 +1389,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                173.20
+                147.00
             </td>
             <td>
-                0.14
+                0.16
             </td>
             <td>
                 n/a
@@ -1407,10 +1407,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                188.60
+                154.00
             </td>
             <td>
-                0.12
+                0.15
             </td>
             <td>
                 n/a
@@ -1443,10 +1443,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                184.20
+                175.00
             </td>
             <td>
-                2.66
+                2.79
             </td>
             <td>
                 n/a
@@ -1461,10 +1461,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                167.00
+                153.40
             </td>
             <td>
-                2.95
+                3.20
             </td>
             <td>
                 n/a
@@ -1479,10 +1479,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                143.20
+                178.80
             </td>
             <td>
-                0.08
+                0.06
             </td>
             <td>
                 n/a
@@ -1497,7 +1497,7 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                153.00
+                151.40
             </td>
             <td>
                 0.08
@@ -1515,10 +1515,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                154.80
+                154.20
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -1533,10 +1533,10 @@ Tested on `2025_11_18_18_30_49` at commit `aec88fd`.
                 5/5
             </td>
             <td>
-                184.80
+                172.20
             </td>
             <td>
-                0.06
+                0.07
             </td>
             <td>
                 n/a
