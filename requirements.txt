@@ -18,9 +18,5 @@ reuse
 torch
 cmake>=3.29, <4.0
 
-# MLIR-extras (Python bindings/helpers for MLIR)
-# For installing this, the following environment variables must be set:
-# MLIR_PYTHON_EXTRAS_SET_VERSION="0.0.8.3"
-# HOST_MLIR_PYTHON_PACKAGE_PREFIX="aie"
-git+https://github.com/erwei-xilinx/mlir-python-extras@46a55a3bc9138e29a9b90c5d2caa4bc3659bae35
+git+https://github.com/erwei-xilinx/mlir-python-extras@813dce4ec933c4b6517de4137dcba13d7304dcdf
 -f https://github.com/llvm/eudsl/releases/expanded_assets/latest
