@@ -1,7 +1,7 @@
 
 # IRONCLAD
 
-Tested on `2025_11_20_15_19_16` at commit `deb54da`.
+Tested on `2025_11_20_22_02_54` at commit `898630c`.
 
 <table>
     <thead>
@@ -21,10 +21,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                181.20
+                139.00
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -39,7 +39,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                139.60
+                141.00
             </td>
             <td>
                 0.04
@@ -57,10 +57,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                170.00
+                153.00
             </td>
             <td>
-                0.07
+                0.08
             </td>
             <td>
                 n/a
@@ -75,10 +75,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                164.00
+                128.00
             </td>
             <td>
-                0.07
+                0.09
             </td>
             <td>
                 n/a
@@ -93,10 +93,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                154.20
+                156.60
             </td>
             <td>
-                0.16
+                0.15
             </td>
             <td>
                 n/a
@@ -111,10 +111,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                150.60
+                199.80
             </td>
             <td>
-                0.15
+                0.12
             </td>
             <td>
                 n/a
@@ -129,10 +129,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                174.00
+                143.60
             </td>
             <td>
-                0.27
+                0.32
             </td>
             <td>
                 n/a
@@ -147,10 +147,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                168.00
+                167.80
             </td>
             <td>
-                0.28
+                0.27
             </td>
             <td>
                 n/a
@@ -165,10 +165,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                178.20
+                165.80
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -183,10 +183,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                138.40
+                196.40
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -201,7 +201,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                139.20
+                154.40
             </td>
             <td>
                 0.08
@@ -219,10 +219,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                165.80
+                125.40
             </td>
             <td>
-                0.07
+                0.09
             </td>
             <td>
                 n/a
@@ -237,10 +237,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                157.60
+                175.80
             </td>
             <td>
-                0.15
+                0.14
             </td>
             <td>
                 n/a
@@ -255,10 +255,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                143.20
+                175.20
             </td>
             <td>
-                0.16
+                0.13
             </td>
             <td>
                 n/a
@@ -273,10 +273,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                149.80
+                163.80
             </td>
             <td>
-                0.31
+                0.28
             </td>
             <td>
                 n/a
@@ -291,7 +291,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                155.20
+                157.00
             </td>
             <td>
                 0.30
@@ -309,10 +309,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                169.00
+                138.60
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -327,7 +327,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                139.00
+                145.20
             </td>
             <td>
                 0.04
@@ -345,7 +345,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                151.40
+                139.80
             </td>
             <td>
                 0.08
@@ -363,10 +363,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                192.80
+                138.40
             </td>
             <td>
-                0.06
+                0.08
             </td>
             <td>
                 n/a
@@ -381,7 +381,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                181.60
+                183.20
             </td>
             <td>
                 0.13
@@ -399,7 +399,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                174.40
+                175.00
             </td>
             <td>
                 0.13
@@ -417,10 +417,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                142.80
+                133.00
             </td>
             <td>
-                0.32
+                0.35
             </td>
             <td>
                 n/a
@@ -435,10 +435,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                140.40
+                156.80
             </td>
             <td>
-                0.33
+                0.30
             </td>
             <td>
                 n/a
@@ -453,10 +453,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                203.20
+                163.40
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -471,10 +471,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                173.60
+                164.20
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -489,10 +489,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                207.20
+                152.40
             </td>
             <td>
-                0.06
+                0.08
             </td>
             <td>
                 n/a
@@ -507,7 +507,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                184.20
+                204.00
             </td>
             <td>
                 0.06
@@ -525,10 +525,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                161.40
+                157.40
             </td>
             <td>
-                0.14
+                0.15
             </td>
             <td>
                 n/a
@@ -543,10 +543,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                178.20
+                178.40
             </td>
             <td>
-                0.13
+                0.14
             </td>
             <td>
                 n/a
@@ -561,10 +561,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                162.80
+                163.60
             </td>
             <td>
-                0.28
+                0.29
             </td>
             <td>
                 n/a
@@ -579,10 +579,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                137.00
+                179.40
             </td>
             <td>
-                0.34
+                0.27
             </td>
             <td>
                 n/a
@@ -597,7 +597,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                137.60
+                149.80
             </td>
             <td>
                 0.02
@@ -615,7 +615,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                205.60
+                173.80
             </td>
             <td>
                 0.03
@@ -633,7 +633,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                145.40
+                137.00
             </td>
             <td>
                 0.07
@@ -651,10 +651,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                152.40
+                136.80
             </td>
             <td>
-                0.13
+                0.14
             </td>
             <td>
                 n/a
@@ -669,7 +669,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                158.60
+                153.80
             </td>
             <td>
                 0.02
@@ -687,7 +687,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                190.20
+                159.00
             </td>
             <td>
                 0.03
@@ -705,10 +705,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                128.40
+                158.40
             </td>
             <td>
-                0.08
+                0.06
             </td>
             <td>
                 n/a
@@ -723,10 +723,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                152.80
+                173.00
             </td>
             <td>
-                0.13
+                0.12
             </td>
             <td>
                 n/a
@@ -741,7 +741,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                179.20
+                158.00
             </td>
             <td>
                 0.02
@@ -759,10 +759,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                150.00
+                115.80
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -777,10 +777,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                148.40
+                154.20
             </td>
             <td>
-                0.07
+                0.06
             </td>
             <td>
                 n/a
@@ -795,10 +795,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                134.00
+                155.20
             </td>
             <td>
-                0.15
+                0.13
             </td>
             <td>
                 n/a
@@ -813,7 +813,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                147.40
+                161.80
             </td>
             <td>
                 0.02
@@ -831,7 +831,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                169.40
+                148.60
             </td>
             <td>
                 0.03
@@ -849,10 +849,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                148.40
+                163.40
             </td>
             <td>
-                0.07
+                0.06
             </td>
             <td>
                 n/a
@@ -867,10 +867,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                189.20
+                140.00
             </td>
             <td>
-                0.11
+                0.14
             </td>
             <td>
                 n/a
@@ -885,7 +885,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                169.00
+                178.60
             </td>
             <td>
                 0.01
@@ -903,7 +903,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                151.40
+                160.20
             </td>
             <td>
                 0.03
@@ -921,7 +921,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                131.60
+                150.40
             </td>
             <td>
                 0.07
@@ -939,10 +939,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                145.60
+                119.80
             </td>
             <td>
-                0.14
+                0.17
             </td>
             <td>
                 n/a
@@ -957,7 +957,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                189.60
+                166.00
             </td>
             <td>
                 0.01
@@ -975,7 +975,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                170.80
+                148.60
             </td>
             <td>
                 0.03
@@ -993,7 +993,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                163.60
+                158.60
             </td>
             <td>
                 0.06
@@ -1011,7 +1011,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                170.40
+                176.20
             </td>
             <td>
                 0.12
@@ -1029,10 +1029,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                191.80
+                153.80
             </td>
             <td>
-                0.01
+                0.02
             </td>
             <td>
                 n/a
@@ -1047,7 +1047,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                151.60
+                153.80
             </td>
             <td>
                 0.03
@@ -1065,7 +1065,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                173.60
+                172.20
             </td>
             <td>
                 0.06
@@ -1083,10 +1083,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                183.00
+                142.20
             </td>
             <td>
-                0.11
+                0.14
             </td>
             <td>
                 n/a
@@ -1101,7 +1101,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                229.40
+                205.00
             </td>
             <td>
                 0.01
@@ -1119,7 +1119,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                156.80
+                169.80
             </td>
             <td>
                 0.03
@@ -1137,7 +1137,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                201.80
+                184.40
             </td>
             <td>
                 0.05
@@ -1155,10 +1155,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                199.20
+                167.60
             </td>
             <td>
-                0.10
+                0.12
             </td>
             <td>
                 n/a
@@ -1173,7 +1173,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                135.80
+                149.60
             </td>
             <td>
                 0.04
@@ -1191,10 +1191,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                139.40
+                185.20
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -1209,7 +1209,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                152.80
+                151.20
             </td>
             <td>
                 0.15
@@ -1227,10 +1227,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                185.60
+                167.00
             </td>
             <td>
-                0.25
+                0.28
             </td>
             <td>
                 n/a
@@ -1245,7 +1245,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                158.00
+                152.00
             </td>
             <td>
                 0.04
@@ -1263,7 +1263,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                145.40
+                152.40
             </td>
             <td>
                 0.08
@@ -1281,10 +1281,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                188.60
+                170.60
             </td>
             <td>
-                0.13
+                0.14
             </td>
             <td>
                 n/a
@@ -1299,10 +1299,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                170.40
+                167.60
             </td>
             <td>
-                0.28
+                0.29
             </td>
             <td>
                 n/a
@@ -1317,7 +1317,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                151.40
+                147.20
             </td>
             <td>
                 0.04
@@ -1335,7 +1335,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                141.60
+                151.60
             </td>
             <td>
                 0.08
@@ -1353,10 +1353,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                159.80
+                168.20
             </td>
             <td>
-                0.16
+                0.14
             </td>
             <td>
                 n/a
@@ -1365,204 +1365,6 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
         <tr>
             <td>
                 eltwise_add_4_cols_2_channels_8192_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                162.60
-            </td>
-            <td>
-                0.28
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_8_cols_2_channels_1024_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                168.00
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_8_cols_2_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                171.20
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_8_cols_2_channels_4096_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                212.40
-            </td>
-            <td>
-                0.11
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_8_cols_2_channels_8192_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                171.00
-            </td>
-            <td>
-                0.27
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_1_cols_2_channels_1024_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                167.40
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_1_cols_2_channels_2048_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                158.40
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_1_cols_2_channels_4096_tile_4096
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                128.20
-            </td>
-            <td>
-                0.18
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_2_cols_2_channels_1024_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                144.80
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_2_cols_2_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                147.40
-            </td>
-            <td>
-                0.08
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_2_cols_2_channels_4096_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                150.60
-            </td>
-            <td>
-                0.16
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_2_cols_2_channels_8192_tile_4096
             </td>
             <td>
                 ✅
@@ -1580,6 +1382,204 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
         </tr>
         <tr>
             <td>
+                eltwise_add_8_cols_2_channels_1024_tile_128
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                170.80
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_8_cols_2_channels_2048_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                184.80
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_8_cols_2_channels_4096_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                172.80
+            </td>
+            <td>
+                0.13
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_8_cols_2_channels_8192_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                191.20
+            </td>
+            <td>
+                0.24
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_1_cols_2_channels_1024_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                151.80
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_1_cols_2_channels_2048_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                132.60
+            </td>
+            <td>
+                0.09
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_1_cols_2_channels_4096_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                207.80
+            </td>
+            <td>
+                0.13
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_2_cols_2_channels_1024_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                144.60
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_2_cols_2_channels_2048_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                139.80
+            </td>
+            <td>
+                0.08
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_2_cols_2_channels_4096_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                169.00
+            </td>
+            <td>
+                0.14
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_2_cols_2_channels_8192_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                160.60
+            </td>
+            <td>
+                0.29
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
                 eltwise_mul_4_cols_2_channels_1024_tile_256
             </td>
             <td>
@@ -1587,7 +1587,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                144.00
+                144.80
             </td>
             <td>
                 0.04
@@ -1605,7 +1605,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                135.20
+                137.00
             </td>
             <td>
                 0.09
@@ -1623,10 +1623,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                132.60
+                163.00
             </td>
             <td>
-                0.17
+                0.15
             </td>
             <td>
                 n/a
@@ -1641,10 +1641,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                194.80
+                175.00
             </td>
             <td>
-                0.26
+                0.27
             </td>
             <td>
                 n/a
@@ -1659,10 +1659,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                166.20
+                210.80
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -1677,7 +1677,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                267.20
+                223.00
             </td>
             <td>
                 0.05
@@ -1695,10 +1695,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                179.60
+                164.60
             </td>
             <td>
-                0.13
+                0.14
             </td>
             <td>
                 n/a
@@ -1713,10 +1713,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                152.00
+                191.40
             </td>
             <td>
-                0.31
+                0.24
             </td>
             <td>
                 n/a
@@ -1731,7 +1731,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                135.20
+                150.20
             </td>
             <td>
                 0.03
@@ -1749,7 +1749,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                165.20
+                155.00
             </td>
             <td>
                 0.05
@@ -1767,10 +1767,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                136.00
+                162.80
             </td>
             <td>
-                0.12
+                0.10
             </td>
             <td>
                 n/a
@@ -1785,10 +1785,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                170.80
+                195.40
             </td>
             <td>
-                0.19
+                0.17
             </td>
             <td>
                 n/a
@@ -1803,7 +1803,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                134.00
+                122.00
             </td>
             <td>
                 0.03
@@ -1821,7 +1821,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                168.40
+                173.40
             </td>
             <td>
                 0.05
@@ -1839,10 +1839,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                145.00
+                171.40
             </td>
             <td>
-                0.12
+                0.10
             </td>
             <td>
                 n/a
@@ -1857,7 +1857,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                155.80
+                158.40
             </td>
             <td>
                 0.21
@@ -1875,7 +1875,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                147.20
+                152.40
             </td>
             <td>
                 0.03
@@ -1893,7 +1893,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                159.60
+                181.60
             </td>
             <td>
                 0.05
@@ -1911,10 +1911,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                150.20
+                171.20
             </td>
             <td>
-                0.11
+                0.10
             </td>
             <td>
                 n/a
@@ -1929,10 +1929,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                151.60
+                179.60
             </td>
             <td>
-                0.22
+                0.19
             </td>
             <td>
                 n/a
@@ -1947,10 +1947,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                169.60
+                144.40
             </td>
             <td>
-                0.02
+                0.03
             </td>
             <td>
                 n/a
@@ -1965,7 +1965,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                160.80
+                170.80
             </td>
             <td>
                 0.05
@@ -1983,10 +1983,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                158.40
+                141.00
             </td>
             <td>
-                0.11
+                0.12
             </td>
             <td>
                 n/a
@@ -2001,10 +2001,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                162.40
+                142.20
             </td>
             <td>
-                0.21
+                0.23
             </td>
             <td>
                 n/a
@@ -2019,7 +2019,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                159.40
+                154.80
             </td>
             <td>
                 0.03
@@ -2037,7 +2037,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                173.00
+                155.80
             </td>
             <td>
                 0.05
@@ -2055,10 +2055,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                166.00
+                174.40
             </td>
             <td>
-                0.11
+                0.10
             </td>
             <td>
                 n/a
@@ -2073,10 +2073,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                166.80
+                165.40
             </td>
             <td>
-                0.20
+                0.21
             </td>
             <td>
                 n/a
@@ -2091,10 +2091,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                158.60
+                182.40
             </td>
             <td>
-                0.03
+                0.02
             </td>
             <td>
                 n/a
@@ -2109,10 +2109,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                151.20
+                140.40
             </td>
             <td>
-                0.05
+                0.06
             </td>
             <td>
                 n/a
@@ -2127,10 +2127,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                158.40
+                210.40
             </td>
             <td>
-                0.11
+                0.09
             </td>
             <td>
                 n/a
@@ -2145,10 +2145,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                217.40
+                159.00
             </td>
             <td>
-                0.16
+                0.21
             </td>
             <td>
                 n/a
@@ -2163,7 +2163,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                174.00
+                209.20
             </td>
             <td>
                 0.02
@@ -2181,7 +2181,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                163.00
+                157.20
             </td>
             <td>
                 0.05
@@ -2199,10 +2199,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                126.60
+                181.60
             </td>
             <td>
-                0.13
+                0.09
             </td>
             <td>
                 n/a
@@ -2217,10 +2217,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                184.60
+                130.60
             </td>
             <td>
-                0.18
+                0.25
             </td>
             <td>
                 n/a
@@ -2235,7 +2235,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                201.20
+                189.80
             </td>
             <td>
                 0.02
@@ -2253,10 +2253,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                221.60
+                184.60
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -2271,10 +2271,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                179.20
+                238.80
             </td>
             <td>
-                0.09
+                0.07
             </td>
             <td>
                 n/a
@@ -2289,10 +2289,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                206.80
+                178.60
             </td>
             <td>
-                0.16
+                0.18
             </td>
             <td>
                 n/a
@@ -2307,13 +2307,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                6562.00
+                6634.40
             </td>
             <td>
-                3.58
+                3.54
             </td>
             <td>
-                2622.26
+                2596.50
             </td>
         </tr>
         <tr>
@@ -2325,13 +2325,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                24694.40
+                24667.60
             </td>
             <td>
                 2.85
             </td>
             <td>
-                2782.80
+                2785.96
             </td>
         </tr>
         <tr>
@@ -2343,13 +2343,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                514.80
+                519.20
             </td>
             <td>
-                16.55
+                16.51
             </td>
             <td>
-                1070.64
+                1067.97
             </td>
         </tr>
         <tr>
@@ -2361,13 +2361,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                1320.60
+                1394.20
             </td>
             <td>
-                24.68
+                23.96
             </td>
             <td>
-                1632.18
+                1584.51
             </td>
         </tr>
         <tr>
@@ -2379,13 +2379,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                24553.00
+                24556.60
             </td>
             <td>
                 2.86
             </td>
             <td>
-                2798.84
+                2798.42
             </td>
         </tr>
         <tr>
@@ -2397,10 +2397,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                181.40
+                137.20
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -2415,7 +2415,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                164.60
+                162.60
             </td>
             <td>
                 0.08
@@ -2433,10 +2433,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                164.80
+                211.00
             </td>
             <td>
-                0.15
+                0.12
             </td>
             <td>
                 n/a
@@ -2451,10 +2451,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                166.00
+                156.80
             </td>
             <td>
-                0.31
+                0.32
             </td>
             <td>
                 n/a
@@ -2469,7 +2469,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                174.80
+                171.00
             </td>
             <td>
                 0.04
@@ -2487,10 +2487,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                167.00
+                149.80
             </td>
             <td>
-                0.07
+                0.08
             </td>
             <td>
                 n/a
@@ -2505,10 +2505,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                186.80
+                143.80
             </td>
             <td>
-                0.13
+                0.17
             </td>
             <td>
                 n/a
@@ -2523,10 +2523,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                127.00
+                140.20
             </td>
             <td>
-                0.39
+                0.36
             </td>
             <td>
                 n/a
@@ -2541,10 +2541,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                182.60
+                169.40
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -2559,7 +2559,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                158.80
+                167.20
             </td>
             <td>
                 0.08
@@ -2577,10 +2577,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                188.60
+                193.80
             </td>
             <td>
-                0.14
+                0.13
             </td>
             <td>
                 n/a
@@ -2595,10 +2595,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                133.00
+                187.00
             </td>
             <td>
-                0.37
+                0.27
             </td>
             <td>
                 n/a
@@ -2613,7 +2613,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                152.60
+                158.40
             </td>
             <td>
                 0.04
@@ -2631,10 +2631,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                172.60
+                123.80
             </td>
             <td>
-                0.07
+                0.10
             </td>
             <td>
                 n/a
@@ -2649,10 +2649,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                159.80
+                142.20
             </td>
             <td>
-                0.15
+                0.17
             </td>
             <td>
                 n/a
@@ -2667,10 +2667,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                156.60
+                175.40
             </td>
             <td>
-                0.33
+                0.31
             </td>
             <td>
                 n/a
@@ -2685,7 +2685,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                175.40
+                168.80
             </td>
             <td>
                 0.04
@@ -2703,7 +2703,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                178.20
+                156.20
             </td>
             <td>
                 0.08
@@ -2721,10 +2721,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                186.60
+                123.60
             </td>
             <td>
-                0.14
+                0.20
             </td>
             <td>
                 n/a
@@ -2739,10 +2739,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                207.60
+                162.80
             </td>
             <td>
-                0.27
+                0.30
             </td>
             <td>
                 n/a
@@ -2757,10 +2757,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                214.20
+                165.20
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -2775,7 +2775,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                197.60
+                178.20
             </td>
             <td>
                 0.07
@@ -2793,7 +2793,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                183.20
+                187.00
             </td>
             <td>
                 0.14
@@ -2811,10 +2811,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                142.00
+                146.60
             </td>
             <td>
-                0.36
+                0.34
             </td>
             <td>
                 n/a
@@ -2829,10 +2829,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                134.80
+                160.20
             </td>
             <td>
-                0.05
+                0.04
             </td>
             <td>
                 n/a
@@ -2847,10 +2847,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                169.80
+                181.80
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -2865,10 +2865,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                165.20
+                183.40
             </td>
             <td>
-                0.16
+                0.13
             </td>
             <td>
                 n/a
@@ -2883,10 +2883,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                132.20
+                191.80
             </td>
             <td>
-                0.38
+                0.26
             </td>
             <td>
                 n/a
@@ -2901,7 +2901,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                207.00
+                191.40
             </td>
             <td>
                 0.03
@@ -2919,10 +2919,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                203.00
+                185.40
             </td>
             <td>
-                0.06
+                0.07
             </td>
             <td>
                 n/a
@@ -2937,10 +2937,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                159.60
+                202.20
             </td>
             <td>
-                0.15
+                0.12
             </td>
             <td>
                 n/a
@@ -2955,10 +2955,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                172.80
+                199.40
             </td>
             <td>
-                0.29
+                0.25
             </td>
             <td>
                 n/a
@@ -2973,7 +2973,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                694.20
+                718.40
             </td>
             <td>
                 0.05
@@ -2991,13 +2991,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                2983.20
+                3317.00
             </td>
             <td>
-                11.26
+                10.15
             </td>
             <td>
-                11.25
+                10.14
             </td>
         </tr>
         <tr>
@@ -3009,13 +3009,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                1974.00
+                2296.00
             </td>
             <td>
-                17.03
+                14.77
             </td>
             <td>
-                17.02
+                14.77
             </td>
         </tr>
         <tr>
@@ -3027,13 +3027,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                1598.20
+                1789.00
             </td>
             <td>
-                21.10
+                18.80
             </td>
             <td>
-                21.08
+                18.79
             </td>
         </tr>
         <tr>
@@ -3045,13 +3045,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                1897.00
+                2062.20
             </td>
             <td>
-                17.83
+                16.36
             </td>
             <td>
-                17.82
+                16.35
             </td>
         </tr>
         <tr>
@@ -3063,13 +3063,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                3114.60
+                3177.40
             </td>
             <td>
-                10.80
+                10.57
             </td>
             <td>
-                10.79
+                10.57
             </td>
         </tr>
         <tr>
@@ -3081,13 +3081,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                1937.00
+                2251.80
             </td>
             <td>
-                17.35
+                15.03
             </td>
             <td>
-                17.34
+                15.02
             </td>
         </tr>
         <tr>
@@ -3099,13 +3099,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                1609.60
+                1830.00
             </td>
             <td>
-                20.92
+                18.35
             </td>
             <td>
-                20.91
+                18.34
             </td>
         </tr>
         <tr>
@@ -3117,13 +3117,13 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                1942.60
+                2137.60
             </td>
             <td>
-                17.41
+                15.75
             </td>
             <td>
-                17.40
+                15.74
             </td>
         </tr>
         <tr>
@@ -3135,7 +3135,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                185.00
+                214.20
             </td>
             <td>
                 0.02
@@ -3153,7 +3153,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                175.00
+                194.40
             </td>
             <td>
                 0.02
@@ -3171,10 +3171,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                214.40
+                249.80
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -3189,7 +3189,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                166.60
+                163.20
             </td>
             <td>
                 0.05
@@ -3207,10 +3207,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                206.20
+                162.40
             </td>
             <td>
-                0.08
+                0.09
             </td>
             <td>
                 n/a
@@ -3225,10 +3225,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                170.20
+                144.20
             </td>
             <td>
-                0.09
+                0.11
             </td>
             <td>
                 n/a
@@ -3243,10 +3243,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                206.00
+                190.00
             </td>
             <td>
-                0.15
+                0.16
             </td>
             <td>
                 n/a
@@ -3261,10 +3261,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                201.40
+                168.80
             </td>
             <td>
-                0.15
+                0.19
             </td>
             <td>
                 n/a
@@ -3279,7 +3279,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                135.20
+                139.60
             </td>
             <td>
                 0.03
@@ -3297,7 +3297,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                129.20
+                149.80
             </td>
             <td>
                 0.03
@@ -3315,10 +3315,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                139.40
+                174.40
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -3333,7 +3333,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                149.80
+                158.80
             </td>
             <td>
                 0.05
@@ -3351,10 +3351,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                127.20
+                164.60
             </td>
             <td>
-                0.12
+                0.10
             </td>
             <td>
                 n/a
@@ -3369,10 +3369,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                131.80
+                153.40
             </td>
             <td>
-                0.12
+                0.10
             </td>
             <td>
                 n/a
@@ -3387,10 +3387,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                142.40
+                124.40
             </td>
             <td>
-                0.22
+                0.25
             </td>
             <td>
                 n/a
@@ -3405,10 +3405,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                144.20
+                166.00
             </td>
             <td>
-                0.22
+                0.20
             </td>
             <td>
                 n/a
@@ -3423,7 +3423,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                154.20
+                148.80
             </td>
             <td>
                 0.03
@@ -3441,10 +3441,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                171.00
+                147.60
             </td>
             <td>
-                0.02
+                0.03
             </td>
             <td>
                 n/a
@@ -3459,7 +3459,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                140.60
+                159.40
             </td>
             <td>
                 0.05
@@ -3477,10 +3477,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                119.80
+                153.00
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -3495,10 +3495,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                202.80
+                143.40
             </td>
             <td>
-                0.08
+                0.11
             </td>
             <td>
                 n/a
@@ -3513,10 +3513,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                143.00
+                177.60
             </td>
             <td>
-                0.11
+                0.09
             </td>
             <td>
                 n/a
@@ -3531,10 +3531,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                174.80
+                123.40
             </td>
             <td>
-                0.18
+                0.25
             </td>
             <td>
                 n/a
@@ -3549,10 +3549,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                136.80
+                142.40
             </td>
             <td>
-                0.24
+                0.22
             </td>
             <td>
                 n/a
@@ -3567,7 +3567,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                124.60
+                145.20
             </td>
             <td>
                 0.03
@@ -3585,7 +3585,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                145.80
+                154.60
             </td>
             <td>
                 0.03
@@ -3603,7 +3603,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                154.80
+                141.80
             </td>
             <td>
                 0.05
@@ -3621,7 +3621,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                143.00
+                140.20
             </td>
             <td>
                 0.05
@@ -3639,10 +3639,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                141.20
+                152.80
             </td>
             <td>
-                0.11
+                0.10
             </td>
             <td>
                 n/a
@@ -3657,7 +3657,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                133.20
+                147.40
             </td>
             <td>
                 0.11
@@ -3675,7 +3675,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                129.00
+                131.60
             </td>
             <td>
                 0.24
@@ -3693,10 +3693,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                132.80
+                147.80
             </td>
             <td>
-                0.24
+                0.21
             </td>
             <td>
                 n/a
@@ -3711,10 +3711,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                154.40
+                186.40
             </td>
             <td>
-                0.03
+                0.02
             </td>
             <td>
                 n/a
@@ -3729,10 +3729,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                166.80
+                139.20
             </td>
             <td>
-                0.02
+                0.03
             </td>
             <td>
                 n/a
@@ -3747,7 +3747,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                141.00
+                150.20
             </td>
             <td>
                 0.05
@@ -3765,7 +3765,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                148.40
+                142.00
             </td>
             <td>
                 0.05
@@ -3783,10 +3783,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                164.60
+                130.80
             </td>
             <td>
-                0.10
+                0.12
             </td>
             <td>
                 n/a
@@ -3801,7 +3801,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                137.00
+                145.80
             </td>
             <td>
                 0.11
@@ -3819,10 +3819,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                118.60
+                160.80
             </td>
             <td>
-                0.26
+                0.19
             </td>
             <td>
                 n/a
@@ -3837,10 +3837,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                172.40
+                136.80
             </td>
             <td>
-                0.19
+                0.22
             </td>
             <td>
                 n/a
@@ -3855,10 +3855,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                156.80
+                144.40
             </td>
             <td>
-                0.02
+                0.03
             </td>
             <td>
                 n/a
@@ -3873,7 +3873,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                133.20
+                155.20
             </td>
             <td>
                 0.03
@@ -3891,10 +3891,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                141.80
+                199.20
             </td>
             <td>
-                0.05
+                0.04
             </td>
             <td>
                 n/a
@@ -3909,7 +3909,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                143.40
+                163.80
             </td>
             <td>
                 0.05
@@ -3927,10 +3927,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                140.00
+                168.00
             </td>
             <td>
-                0.11
+                0.10
             </td>
             <td>
                 n/a
@@ -3945,10 +3945,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                118.40
+                153.60
             </td>
             <td>
-                0.13
+                0.10
             </td>
             <td>
                 n/a
@@ -3963,10 +3963,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                128.60
+                143.80
             </td>
             <td>
-                0.24
+                0.22
             </td>
             <td>
                 n/a
@@ -3981,10 +3981,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                140.00
+                151.60
             </td>
             <td>
-                0.22
+                0.20
             </td>
             <td>
                 n/a
@@ -3999,7 +3999,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                195.20
+                169.80
             </td>
             <td>
                 0.02
@@ -4017,10 +4017,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                150.40
+                183.80
             </td>
             <td>
-                0.03
+                0.02
             </td>
             <td>
                 n/a
@@ -4035,7 +4035,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                186.00
+                181.20
             </td>
             <td>
                 0.04
@@ -4053,7 +4053,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                151.60
+                155.40
             </td>
             <td>
                 0.05
@@ -4071,10 +4071,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                141.60
+                176.00
             </td>
             <td>
-                0.11
+                0.09
             </td>
             <td>
                 n/a
@@ -4089,10 +4089,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                151.80
+                195.80
             </td>
             <td>
-                0.10
+                0.08
             </td>
             <td>
                 n/a
@@ -4107,10 +4107,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                147.60
+                185.80
             </td>
             <td>
-                0.21
+                0.17
             </td>
             <td>
                 n/a
@@ -4125,10 +4125,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                148.40
+                156.40
             </td>
             <td>
-                0.21
+                0.20
             </td>
             <td>
                 n/a
@@ -4143,10 +4143,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                138.80
+                169.80
             </td>
             <td>
-                0.03
+                0.02
             </td>
             <td>
                 n/a
@@ -4161,7 +4161,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                204.20
+                178.60
             </td>
             <td>
                 0.02
@@ -4179,7 +4179,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                164.80
+                161.80
             </td>
             <td>
                 0.05
@@ -4197,7 +4197,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                171.40
+                159.60
             </td>
             <td>
                 0.05
@@ -4215,10 +4215,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                274.60
+                146.20
             </td>
             <td>
-                0.06
+                0.10
             </td>
             <td>
                 n/a
@@ -4233,10 +4233,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                181.80
+                152.80
             </td>
             <td>
-                0.09
+                0.10
             </td>
             <td>
                 n/a
@@ -4251,10 +4251,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                198.20
+                212.40
             </td>
             <td>
-                0.18
+                0.16
             </td>
             <td>
                 n/a
@@ -4269,7 +4269,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                172.60
+                173.40
             </td>
             <td>
                 0.18
@@ -4290,10 +4290,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 n/a
             </td>
             <td>
-                0.09
+                1.48
             </td>
             <td>
-                64.85
+                758.01
             </td>
         </tr>
         <tr>
@@ -4305,10 +4305,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                148.40
+                168.80
             </td>
             <td>
-                0.03
+                0.02
             </td>
             <td>
                 n/a
@@ -4323,10 +4323,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                168.40
+                124.80
             </td>
             <td>
-                0.05
+                0.06
             </td>
             <td>
                 n/a
@@ -4341,7 +4341,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                154.40
+                158.20
             </td>
             <td>
                 0.10
@@ -4359,7 +4359,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                165.00
+                155.80
             </td>
             <td>
                 0.02
@@ -4377,10 +4377,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                146.80
+                129.60
             </td>
             <td>
-                0.05
+                0.06
             </td>
             <td>
                 n/a
@@ -4395,7 +4395,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                151.20
+                161.00
             </td>
             <td>
                 0.10
@@ -4413,10 +4413,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                124.40
+                156.00
             </td>
             <td>
-                0.25
+                0.20
             </td>
             <td>
                 n/a
@@ -4431,7 +4431,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                173.20
+                186.20
             </td>
             <td>
                 0.02
@@ -4449,10 +4449,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                162.40
+                139.20
             </td>
             <td>
-                0.05
+                0.06
             </td>
             <td>
                 n/a
@@ -4467,10 +4467,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                146.80
+                192.20
             </td>
             <td>
-                0.11
+                0.09
             </td>
             <td>
                 n/a
@@ -4485,7 +4485,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                137.60
+                142.60
             </td>
             <td>
                 0.22
@@ -4503,7 +4503,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                172.60
+                159.40
             </td>
             <td>
                 0.02
@@ -4521,7 +4521,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                166.60
+                173.00
             </td>
             <td>
                 0.05
@@ -4539,10 +4539,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                220.00
+                170.40
             </td>
             <td>
-                0.08
+                0.09
             </td>
             <td>
                 n/a
@@ -4557,10 +4557,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                157.20
+                165.60
             </td>
             <td>
-                0.20
+                0.19
             </td>
             <td>
                 n/a
@@ -4575,7 +4575,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                135.40
+                131.00
             </td>
             <td>
                 0.04
@@ -4593,7 +4593,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                143.40
+                141.20
             </td>
             <td>
                 0.08
@@ -4611,10 +4611,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                198.00
+                185.40
             </td>
             <td>
-                0.12
+                0.13
             </td>
             <td>
                 n/a
@@ -4629,10 +4629,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                147.40
+                135.20
             </td>
             <td>
-                0.31
+                0.34
             </td>
             <td>
                 n/a
@@ -4647,7 +4647,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                137.20
+                153.40
             </td>
             <td>
                 0.04
@@ -4665,10 +4665,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                146.00
+                156.60
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -4683,10 +4683,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                150.60
+                169.00
             </td>
             <td>
-                0.15
+                0.14
             </td>
             <td>
                 n/a
@@ -4701,10 +4701,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                159.00
+                143.60
             </td>
             <td>
-                0.30
+                0.35
             </td>
             <td>
                 n/a
@@ -4719,7 +4719,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                130.20
+                168.20
             </td>
             <td>
                 0.04
@@ -4737,10 +4737,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                147.00
+                156.00
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -4755,10 +4755,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                137.60
+                166.00
             </td>
             <td>
-                0.17
+                0.14
             </td>
             <td>
                 n/a
@@ -4773,10 +4773,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                198.40
+                162.60
             </td>
             <td>
-                0.24
+                0.29
             </td>
             <td>
                 n/a
@@ -4791,10 +4791,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                132.00
+                164.40
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -4809,10 +4809,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                192.60
+                156.40
             </td>
             <td>
-                0.06
+                0.07
             </td>
             <td>
                 n/a
@@ -4827,10 +4827,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                170.20
+                176.80
             </td>
             <td>
-                0.14
+                0.13
             </td>
             <td>
                 n/a
@@ -4845,10 +4845,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                150.20
+                156.40
             </td>
             <td>
-                0.31
+                0.30
             </td>
             <td>
                 n/a
@@ -4863,10 +4863,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                146.20
+                166.80
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -4881,7 +4881,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                170.60
+                179.80
             </td>
             <td>
                 0.07
@@ -4899,10 +4899,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                115.20
+                169.40
             </td>
             <td>
-                0.20
+                0.14
             </td>
             <td>
                 n/a
@@ -4917,10 +4917,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                140.00
+                180.40
             </td>
             <td>
-                0.33
+                0.27
             </td>
             <td>
                 n/a
@@ -4935,10 +4935,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                152.20
+                168.80
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -4953,7 +4953,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                178.80
+                160.40
             </td>
             <td>
                 0.07
@@ -4971,7 +4971,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                216.20
+                189.20
             </td>
             <td>
                 0.12
@@ -4989,10 +4989,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                161.80
+                218.20
             </td>
             <td>
-                0.29
+                0.23
             </td>
             <td>
                 n/a
@@ -5007,10 +5007,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                167.40
+                183.60
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -5025,7 +5025,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                163.60
+                160.60
             </td>
             <td>
                 0.07
@@ -5043,10 +5043,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                187.20
+                172.00
             </td>
             <td>
-                0.13
+                0.14
             </td>
             <td>
                 n/a
@@ -5061,10 +5061,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                166.60
+                153.60
             </td>
             <td>
-                0.28
+                0.31
             </td>
             <td>
                 n/a
@@ -5079,10 +5079,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                163.80
+                175.60
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -5097,10 +5097,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                217.20
+                179.40
             </td>
             <td>
-                0.05
+                0.07
             </td>
             <td>
                 n/a
@@ -5115,10 +5115,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                182.60
+                330.80
             </td>
             <td>
-                0.13
+                0.07
             </td>
             <td>
                 n/a
@@ -5133,10 +5133,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                170.80
+                196.20
             </td>
             <td>
-                0.27
+                0.23
             </td>
             <td>
                 n/a
@@ -5151,7 +5151,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                151.60
+                156.20
             </td>
             <td>
                 0.04
@@ -5169,10 +5169,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                161.20
+                174.40
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -5187,10 +5187,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                150.80
+                184.20
             </td>
             <td>
-                0.16
+                0.13
             </td>
             <td>
                 n/a
@@ -5205,10 +5205,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                160.40
+                180.00
             </td>
             <td>
-                0.15
+                0.13
             </td>
             <td>
                 n/a
@@ -5217,114 +5217,6 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
         <tr>
             <td>
                 rope_2_cols_2_channels_1024_tile_512_0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                160.00
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                rope_2_cols_2_channels_1024_tile_512_1
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                177.40
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                rope_2_cols_2_channels_4096_tile_2048_0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                137.60
-            </td>
-            <td>
-                0.17
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                rope_2_cols_2_channels_4096_tile_2048_1
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                136.00
-            </td>
-            <td>
-                0.18
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                rope_2_cols_2_channels_8192_tile_4096_0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                127.80
-            </td>
-            <td>
-                0.37
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                rope_2_cols_2_channels_8192_tile_4096_1
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                129.80
-            </td>
-            <td>
-                0.36
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                rope_4_cols_2_channels_1024_tile_256_0
             </td>
             <td>
                 ✅
@@ -5342,6 +5234,114 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
         </tr>
         <tr>
             <td>
+                rope_2_cols_2_channels_1024_tile_512_1
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                159.20
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                rope_2_cols_2_channels_4096_tile_2048_0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                206.40
+            </td>
+            <td>
+                0.11
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                rope_2_cols_2_channels_4096_tile_2048_1
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                170.20
+            </td>
+            <td>
+                0.14
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                rope_2_cols_2_channels_8192_tile_4096_0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                122.20
+            </td>
+            <td>
+                0.38
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                rope_2_cols_2_channels_8192_tile_4096_1
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                174.40
+            </td>
+            <td>
+                0.27
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                rope_4_cols_2_channels_1024_tile_256_0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                144.20
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
                 rope_4_cols_2_channels_1024_tile_256_1
             </td>
             <td>
@@ -5349,7 +5349,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                171.00
+                160.60
             </td>
             <td>
                 0.04
@@ -5367,7 +5367,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                150.00
+                165.20
             </td>
             <td>
                 0.15
@@ -5385,7 +5385,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                190.20
+                199.00
             </td>
             <td>
                 0.12
@@ -5403,10 +5403,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                127.80
+                148.20
             </td>
             <td>
-                0.36
+                0.32
             </td>
             <td>
                 n/a
@@ -5421,10 +5421,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                127.20
+                158.40
             </td>
             <td>
-                0.37
+                0.31
             </td>
             <td>
                 n/a
@@ -5439,10 +5439,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                157.60
+                196.80
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -5457,7 +5457,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                161.20
+                158.80
             </td>
             <td>
                 0.04
@@ -5475,10 +5475,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                152.80
+                168.60
             </td>
             <td>
-                0.15
+                0.14
             </td>
             <td>
                 n/a
@@ -5493,10 +5493,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                146.40
+                154.80
             </td>
             <td>
-                0.16
+                0.15
             </td>
             <td>
                 n/a
@@ -5511,10 +5511,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                155.00
+                150.40
             </td>
             <td>
-                0.30
+                0.32
             </td>
             <td>
                 n/a
@@ -5529,10 +5529,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                147.20
+                179.20
             </td>
             <td>
-                0.32
+                0.26
             </td>
             <td>
                 n/a
@@ -5547,10 +5547,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                132.20
+                184.60
             </td>
             <td>
-                0.03
+                0.02
             </td>
             <td>
                 n/a
@@ -5565,7 +5565,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                155.40
+                146.00
             </td>
             <td>
                 0.05
@@ -5583,10 +5583,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                172.40
+                150.60
             </td>
             <td>
-                0.09
+                0.10
             </td>
             <td>
                 n/a
@@ -5601,7 +5601,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                126.40
+                152.00
             </td>
             <td>
                 0.03
@@ -5619,10 +5619,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                144.00
+                145.40
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -5637,7 +5637,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                166.80
+                176.80
             </td>
             <td>
                 0.09
@@ -5655,7 +5655,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                182.20
+                173.20
             </td>
             <td>
                 0.18
@@ -5673,10 +5673,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                131.80
+                156.20
             </td>
             <td>
-                0.03
+                0.02
             </td>
             <td>
                 n/a
@@ -5691,10 +5691,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                136.40
+                182.00
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -5709,7 +5709,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                156.40
+                151.60
             </td>
             <td>
                 0.10
@@ -5727,10 +5727,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                180.80
+                164.40
             </td>
             <td>
-                0.18
+                0.19
             </td>
             <td>
                 n/a
@@ -5745,7 +5745,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                149.60
+                150.80
             </td>
             <td>
                 0.03
@@ -5763,10 +5763,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                139.00
+                176.60
             </td>
             <td>
-                0.06
+                0.04
             </td>
             <td>
                 n/a
@@ -5781,10 +5781,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                156.40
+                206.00
             </td>
             <td>
-                0.10
+                0.08
             </td>
             <td>
                 n/a
@@ -5799,10 +5799,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                178.60
+                169.80
             </td>
             <td>
-                0.17
+                0.19
             </td>
             <td>
                 n/a
@@ -5817,10 +5817,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                143.20
+                150.80
             </td>
             <td>
-                0.16
+                0.15
             </td>
             <td>
                 n/a
@@ -5835,10 +5835,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                139.00
+                131.20
             </td>
             <td>
-                0.17
+                0.18
             </td>
             <td>
                 n/a
@@ -5853,10 +5853,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                140.80
+                154.00
             </td>
             <td>
-                0.17
+                0.15
             </td>
             <td>
                 n/a
@@ -5889,10 +5889,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                261.80
+                235.80
             </td>
             <td>
-                3.99
+                4.25
             </td>
             <td>
                 n/a
@@ -5907,10 +5907,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                203.40
+                244.80
             </td>
             <td>
-                4.96
+                4.07
             </td>
             <td>
                 n/a
@@ -5925,10 +5925,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                224.60
+                225.60
             </td>
             <td>
-                4.41
+                4.36
             </td>
             <td>
                 n/a
@@ -5943,10 +5943,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                230.00
+                191.60
             </td>
             <td>
-                4.41
+                5.12
             </td>
             <td>
                 n/a
@@ -5961,10 +5961,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                248.40
+                242.40
             </td>
             <td>
-                7.87
+                8.07
             </td>
             <td>
                 n/a
@@ -5979,10 +5979,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                250.60
+                229.60
             </td>
             <td>
-                7.84
+                8.55
             </td>
             <td>
                 n/a
@@ -5997,10 +5997,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                238.40
+                236.40
             </td>
             <td>
-                8.23
+                8.32
             </td>
             <td>
                 n/a
@@ -6015,10 +6015,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                210.20
+                219.80
             </td>
             <td>
-                9.31
+                9.07
             </td>
             <td>
                 n/a
@@ -6033,10 +6033,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                239.00
+                217.00
             </td>
             <td>
-                8.43
+                9.07
             </td>
             <td>
                 n/a
@@ -6051,10 +6051,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                203.60
+                216.00
             </td>
             <td>
-                9.76
+                9.16
             </td>
             <td>
                 n/a
@@ -6069,10 +6069,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                316.60
+                357.60
             </td>
             <td>
-                12.34
+                11.12
             </td>
             <td>
                 n/a
@@ -6087,10 +6087,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                307.20
+                291.40
             </td>
             <td>
-                12.73
+                13.44
             </td>
             <td>
                 n/a
@@ -6105,10 +6105,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                313.20
+                312.80
             </td>
             <td>
-                12.53
+                12.51
             </td>
             <td>
                 n/a
@@ -6123,10 +6123,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                311.00
+                307.80
             </td>
             <td>
-                12.66
+                13.15
             </td>
             <td>
                 n/a
@@ -6141,10 +6141,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                299.80
+                304.80
             </td>
             <td>
-                13.07
+                12.84
             </td>
             <td>
                 n/a
@@ -6159,10 +6159,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                269.60
+                303.40
             </td>
             <td>
-                14.57
+                12.93
             </td>
             <td>
                 n/a
@@ -6177,10 +6177,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                260.80
+                295.00
             </td>
             <td>
-                15.00
+                13.83
             </td>
             <td>
                 n/a
@@ -6195,10 +6195,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                293.80
+                271.40
             </td>
             <td>
-                13.35
+                14.43
             </td>
             <td>
                 n/a
@@ -6213,10 +6213,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                183.20
+                167.80
             </td>
             <td>
-                2.83
+                2.98
             </td>
             <td>
                 n/a
@@ -6231,10 +6231,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                193.20
+                183.80
             </td>
             <td>
-                2.58
+                2.67
             </td>
             <td>
                 n/a
@@ -6249,10 +6249,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                178.80
+                163.20
             </td>
             <td>
-                0.17
+                0.19
             </td>
             <td>
                 n/a
@@ -6267,10 +6267,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                233.60
+                144.20
             </td>
             <td>
-                0.14
+                0.21
             </td>
             <td>
                 n/a
@@ -6285,10 +6285,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                145.40
+                165.20
             </td>
             <td>
-                0.43
+                0.38
             </td>
             <td>
                 n/a
@@ -6303,10 +6303,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                136.00
+                142.80
             </td>
             <td>
-                0.46
+                0.43
             </td>
             <td>
                 n/a
@@ -6321,10 +6321,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                151.60
+                195.80
             </td>
             <td>
-                0.42
+                0.34
             </td>
             <td>
                 n/a
@@ -6339,10 +6339,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                154.80
+                178.80
             </td>
             <td>
-                0.83
+                0.77
             </td>
             <td>
                 n/a
@@ -6357,10 +6357,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                155.60
+                158.20
             </td>
             <td>
-                0.79
+                0.78
             </td>
             <td>
                 n/a
@@ -6375,10 +6375,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                144.80
+                160.00
             </td>
             <td>
-                0.90
+                0.77
             </td>
             <td>
                 n/a
@@ -6393,10 +6393,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                161.60
+                170.20
             </td>
             <td>
-                0.77
+                0.75
             </td>
             <td>
                 n/a
@@ -6411,10 +6411,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                213.40
+                181.20
             </td>
             <td>
-                0.07
+                0.09
             </td>
             <td>
                 n/a
@@ -6429,10 +6429,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                155.60
+                179.00
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -6447,7 +6447,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                150.40
+                146.00
             </td>
             <td>
                 0.08
@@ -6465,7 +6465,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                185.60
+                176.40
             </td>
             <td>
                 0.13
@@ -6483,7 +6483,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                174.60
+                170.20
             </td>
             <td>
                 0.03
@@ -6501,10 +6501,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                162.40
+                131.80
             </td>
             <td>
-                0.07
+                0.09
             </td>
             <td>
                 n/a
@@ -6519,10 +6519,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                153.20
+                167.80
             </td>
             <td>
-                0.15
+                0.14
             </td>
             <td>
                 n/a
@@ -6537,7 +6537,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                156.00
+                151.60
             </td>
             <td>
                 0.30
@@ -6555,7 +6555,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                205.00
+                169.20
             </td>
             <td>
                 0.03
@@ -6573,10 +6573,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                191.40
+                158.00
             </td>
             <td>
-                0.06
+                0.07
             </td>
             <td>
                 n/a
@@ -6591,10 +6591,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                178.20
+                213.00
             </td>
             <td>
-                0.13
+                0.12
             </td>
             <td>
                 n/a
@@ -6609,10 +6609,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                169.20
+                185.80
             </td>
             <td>
-                0.29
+                0.26
             </td>
             <td>
                 n/a
@@ -6627,7 +6627,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                172.60
+                165.60
             </td>
             <td>
                 0.03
@@ -6645,7 +6645,7 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                165.60
+                177.20
             </td>
             <td>
                 0.07
@@ -6663,10 +6663,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                208.00
+                147.20
             </td>
             <td>
-                0.11
+                0.16
             </td>
             <td>
                 n/a
@@ -6681,10 +6681,10 @@ Tested on `2025_11_20_15_19_16` at commit `deb54da`.
                 5/5
             </td>
             <td>
-                167.80
+                172.80
             </td>
             <td>
-                0.28
+                0.27
             </td>
             <td>
                 n/a
