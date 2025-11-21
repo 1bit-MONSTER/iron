@@ -1,7 +1,7 @@
 
 # IRONCLAD
 
-Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
+Tested on `2025_11_21_21_48_08` at commit `d9a64c5`.
 
 <table>
     <thead>
@@ -21,10 +21,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                179.60
+                155.60
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -39,10 +39,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                170.80
+                182.20
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -57,7 +57,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                148.80
+                145.00
             </td>
             <td>
                 0.08
@@ -75,10 +75,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                210.40
+                161.00
             </td>
             <td>
-                0.06
+                0.07
             </td>
             <td>
                 n/a
@@ -93,7 +93,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                149.80
+                148.60
             </td>
             <td>
                 0.16
@@ -111,10 +111,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                126.00
+                148.60
             </td>
             <td>
-                0.18
+                0.17
             </td>
             <td>
                 n/a
@@ -129,10 +129,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                167.80
+                164.40
             </td>
             <td>
-                0.27
+                0.29
             </td>
             <td>
                 n/a
@@ -147,10 +147,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                199.00
+                154.20
             </td>
             <td>
-                0.24
+                0.31
             </td>
             <td>
                 n/a
@@ -165,10 +165,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                172.40
+                158.20
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -183,10 +183,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                145.60
+                193.60
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -201,10 +201,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                163.60
+                154.20
             </td>
             <td>
-                0.07
+                0.08
             </td>
             <td>
                 n/a
@@ -213,2202 +213,6 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
         <tr>
             <td>
                 axpy_2_cols_2_channels_2048_tile_1024_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                164.80
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_2_cols_2_channels_4096_tile_2048_10.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                196.00
-            </td>
-            <td>
-                0.12
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_2_cols_2_channels_4096_tile_2048_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                165.80
-            </td>
-            <td>
-                0.14
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_2_cols_2_channels_8192_tile_4096_10.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                161.60
-            </td>
-            <td>
-                0.30
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_2_cols_2_channels_8192_tile_4096_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                166.40
-            </td>
-            <td>
-                0.28
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_4_cols_2_channels_1024_tile_256_10.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                151.60
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_4_cols_2_channels_1024_tile_256_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                145.20
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_4_cols_2_channels_2048_tile_512_10.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                174.60
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_4_cols_2_channels_2048_tile_512_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                164.20
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_4_cols_2_channels_4096_tile_1024_10.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                167.20
-            </td>
-            <td>
-                0.14
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_4_cols_2_channels_4096_tile_1024_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                191.20
-            </td>
-            <td>
-                0.13
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_4_cols_2_channels_8192_tile_2048_10.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                194.00
-            </td>
-            <td>
-                0.25
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_4_cols_2_channels_8192_tile_2048_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                175.20
-            </td>
-            <td>
-                0.26
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_8_cols_2_channels_1024_tile_128_10.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                201.60
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_8_cols_2_channels_1024_tile_128_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                145.60
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_8_cols_2_channels_2048_tile_256_10.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                136.20
-            </td>
-            <td>
-                0.08
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_8_cols_2_channels_2048_tile_256_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                143.80
-            </td>
-            <td>
-                0.08
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_8_cols_2_channels_4096_tile_512_10.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                211.40
-            </td>
-            <td>
-                0.11
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_8_cols_2_channels_4096_tile_512_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                245.40
-            </td>
-            <td>
-                0.10
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_8_cols_2_channels_8192_tile_1024_10.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                164.60
-            </td>
-            <td>
-                0.28
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                axpy_8_cols_2_channels_8192_tile_1024_3.0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                163.80
-            </td>
-            <td>
-                0.28
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_1_cols_1_channels_1024_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                178.80
-            </td>
-            <td>
-                0.01
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_1_cols_1_channels_2048_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                164.40
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_1_cols_1_channels_4096_tile_4096
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                172.40
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_1_cols_1_channels_8192_tile_8192
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                147.80
-            </td>
-            <td>
-                0.13
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_1_cols_2_channels_1024_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                171.60
-            </td>
-            <td>
-                0.01
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_1_cols_2_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                148.40
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_1_cols_2_channels_4096_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                164.80
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_1_cols_2_channels_8192_tile_4096
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                169.00
-            </td>
-            <td>
-                0.12
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_2_cols_1_channels_1024_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                180.80
-            </td>
-            <td>
-                0.01
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_2_cols_1_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                169.20
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_2_cols_1_channels_4096_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                176.80
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_2_cols_1_channels_8192_tile_4096
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                145.60
-            </td>
-            <td>
-                0.13
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_2_cols_2_channels_1024_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                195.40
-            </td>
-            <td>
-                0.01
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_2_cols_2_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                160.40
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_2_cols_2_channels_4096_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                162.40
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_2_cols_2_channels_8192_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                173.20
-            </td>
-            <td>
-                0.12
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_4_cols_1_channels_1024_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                172.80
-            </td>
-            <td>
-                0.01
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_4_cols_1_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                193.40
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_4_cols_1_channels_4096_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                173.40
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_4_cols_1_channels_8192_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                146.60
-            </td>
-            <td>
-                0.13
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_4_cols_2_channels_1024_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                178.80
-            </td>
-            <td>
-                0.01
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_4_cols_2_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                197.80
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_4_cols_2_channels_4096_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                186.80
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_4_cols_2_channels_8192_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                191.60
-            </td>
-            <td>
-                0.10
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_8_cols_1_channels_1024_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                183.60
-            </td>
-            <td>
-                0.01
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_8_cols_1_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                191.60
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_8_cols_1_channels_4096_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                184.40
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_8_cols_1_channels_8192_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                184.60
-            </td>
-            <td>
-                0.11
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_8_cols_2_channels_1024_tile_64
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                175.80
-            </td>
-            <td>
-                0.01
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_8_cols_2_channels_2048_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                216.40
-            </td>
-            <td>
-                0.02
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_8_cols_2_channels_4096_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                173.20
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_8_cols_2_channels_8192_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                244.40
-            </td>
-            <td>
-                0.09
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_1_cols_2_channels_1024_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                167.00
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_1_cols_2_channels_2048_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                163.80
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_1_cols_2_channels_4096_tile_4096
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                152.60
-            </td>
-            <td>
-                0.16
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_1_cols_2_channels_8192_tile_8192
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                140.20
-            </td>
-            <td>
-                0.33
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_2_cols_2_channels_1024_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                139.00
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_2_cols_2_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                151.00
-            </td>
-            <td>
-                0.08
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_2_cols_2_channels_4096_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                148.80
-            </td>
-            <td>
-                0.16
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_2_cols_2_channels_8192_tile_4096
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                138.60
-            </td>
-            <td>
-                0.33
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_4_cols_2_channels_1024_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                146.20
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_4_cols_2_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                155.40
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_4_cols_2_channels_4096_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                158.20
-            </td>
-            <td>
-                0.15
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_4_cols_2_channels_8192_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                129.80
-            </td>
-            <td>
-                0.35
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_8_cols_2_channels_1024_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                159.40
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_8_cols_2_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                193.00
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_8_cols_2_channels_4096_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                154.60
-            </td>
-            <td>
-                0.15
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_8_cols_2_channels_8192_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                144.00
-            </td>
-            <td>
-                0.34
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_1_cols_2_channels_1024_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                182.80
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_1_cols_2_channels_2048_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                182.60
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_1_cols_2_channels_4096_tile_4096
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                208.80
-            </td>
-            <td>
-                0.11
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_2_cols_2_channels_1024_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                142.80
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_2_cols_2_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                197.40
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_2_cols_2_channels_4096_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                176.20
-            </td>
-            <td>
-                0.14
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_2_cols_2_channels_8192_tile_4096
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                152.00
-            </td>
-            <td>
-                0.30
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_4_cols_2_channels_1024_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                134.80
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_4_cols_2_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                155.40
-            </td>
-            <td>
-                0.08
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_4_cols_2_channels_4096_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                153.00
-            </td>
-            <td>
-                0.15
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_4_cols_2_channels_8192_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                160.20
-            </td>
-            <td>
-                0.29
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_8_cols_2_channels_1024_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                210.20
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_8_cols_2_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                203.60
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_8_cols_2_channels_4096_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                158.40
-            </td>
-            <td>
-                0.15
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_8_cols_2_channels_8192_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                150.80
-            </td>
-            <td>
-                0.31
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_1_cols_1_channels_1024_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                134.40
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_1_cols_1_channels_2048_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                162.40
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_1_cols_1_channels_4096_tile_4096
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                154.60
-            </td>
-            <td>
-                0.11
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_1_cols_1_channels_8192_tile_8192
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                165.20
-            </td>
-            <td>
-                0.20
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_1_cols_2_channels_1024_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                146.00
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_1_cols_2_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                157.80
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_1_cols_2_channels_4096_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                155.40
-            </td>
-            <td>
-                0.11
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_1_cols_2_channels_8192_tile_4096
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                155.00
-            </td>
-            <td>
-                0.22
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_2_cols_1_channels_1024_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                169.60
-            </td>
-            <td>
-                0.02
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_2_cols_1_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                119.60
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_2_cols_1_channels_4096_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                185.60
-            </td>
-            <td>
-                0.09
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_2_cols_1_channels_8192_tile_4096
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                126.00
-            </td>
-            <td>
-                0.26
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_2_cols_2_channels_1024_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                157.20
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_2_cols_2_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                162.60
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_2_cols_2_channels_4096_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                150.40
-            </td>
-            <td>
-                0.11
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_2_cols_2_channels_8192_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                157.00
-            </td>
-            <td>
-                0.21
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_4_cols_1_channels_1024_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                143.00
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_4_cols_1_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                149.40
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_4_cols_1_channels_4096_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                141.40
-            </td>
-            <td>
-                0.12
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_4_cols_1_channels_8192_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                155.20
-            </td>
-            <td>
-                0.21
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_4_cols_2_channels_1024_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                164.20
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_4_cols_2_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                186.00
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_4_cols_2_channels_4096_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                149.00
-            </td>
-            <td>
-                0.11
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_4_cols_2_channels_8192_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                170.20
-            </td>
-            <td>
-                0.19
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_8_cols_1_channels_1024_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                174.20
-            </td>
-            <td>
-                0.02
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_8_cols_1_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                188.20
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_8_cols_1_channels_4096_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                148.60
-            </td>
-            <td>
-                0.11
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_8_cols_1_channels_8192_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                156.00
-            </td>
-            <td>
-                0.21
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_8_cols_2_channels_1024_tile_64
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                174.80
-            </td>
-            <td>
-                0.02
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_8_cols_2_channels_2048_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                225.40
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_8_cols_2_channels_4096_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                216.00
-            </td>
-            <td>
-                0.08
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_8_cols_2_channels_8192_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                186.60
-            </td>
-            <td>
-                0.18
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gemm_2048x2048x2048_64x64x64_8_cols_0_bcolmaj_0_ccolmaj_0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                6621.60
-            </td>
-            <td>
-                3.55
-            </td>
-            <td>
-                2598.85
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gemm_2048x2048x8192_64x64x64_8_cols_0_bcolmaj_0_ccolmaj_0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                24640.20
-            </td>
-            <td>
-                2.85
-            </td>
-            <td>
-                2789.01
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gemm_2048x64x2048_64x64x64_8_cols_0_bcolmaj_0_ccolmaj_0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                529.40
-            </td>
-            <td>
-                15.89
-            </td>
-            <td>
-                1027.50
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gemm_2048x64x8192_64x64x64_8_cols_0_bcolmaj_0_ccolmaj_0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                1593.80
-            </td>
-            <td>
-                20.99
-            </td>
-            <td>
-                1387.93
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gemm_2048x8192x2048_64x64x64_8_cols_0_bcolmaj_0_ccolmaj_0
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                24524.80
-            </td>
-            <td>
-                2.87
-            </td>
-            <td>
-                2802.04
-            </td>
-        </tr>
-        <tr>
-            <td>
-                layer_norm_1_cols_1_channels_1024_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                148.60
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                layer_norm_1_cols_1_channels_2048_tile_2048
             </td>
             <td>
                 ✅
@@ -2426,14 +230,716 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
         </tr>
         <tr>
             <td>
-                layer_norm_1_cols_1_channels_4096_tile_4096
+                axpy_2_cols_2_channels_4096_tile_2048_10.0
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                160.20
+                136.60
+            </td>
+            <td>
+                0.17
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_2_cols_2_channels_4096_tile_2048_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                142.20
+            </td>
+            <td>
+                0.17
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_2_cols_2_channels_8192_tile_4096_10.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                164.00
+            </td>
+            <td>
+                0.28
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_2_cols_2_channels_8192_tile_4096_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                151.00
+            </td>
+            <td>
+                0.30
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_4_cols_2_channels_1024_tile_256_10.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                149.20
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_4_cols_2_channels_1024_tile_256_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                136.00
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_4_cols_2_channels_2048_tile_512_10.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                172.00
+            </td>
+            <td>
+                0.07
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_4_cols_2_channels_2048_tile_512_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                137.60
+            </td>
+            <td>
+                0.08
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_4_cols_2_channels_4096_tile_1024_10.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                137.60
+            </td>
+            <td>
+                0.17
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_4_cols_2_channels_4096_tile_1024_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                163.00
+            </td>
+            <td>
+                0.14
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_4_cols_2_channels_8192_tile_2048_10.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                173.20
+            </td>
+            <td>
+                0.27
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_4_cols_2_channels_8192_tile_2048_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                172.60
+            </td>
+            <td>
+                0.27
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_8_cols_2_channels_1024_tile_128_10.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                156.00
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_8_cols_2_channels_1024_tile_128_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                194.20
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_8_cols_2_channels_2048_tile_256_10.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                202.40
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_8_cols_2_channels_2048_tile_256_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                208.20
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_8_cols_2_channels_4096_tile_512_10.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                165.20
+            </td>
+            <td>
+                0.14
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_8_cols_2_channels_4096_tile_512_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                171.00
+            </td>
+            <td>
+                0.13
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_8_cols_2_channels_8192_tile_1024_10.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                159.60
+            </td>
+            <td>
+                0.29
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                axpy_8_cols_2_channels_8192_tile_1024_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                187.80
+            </td>
+            <td>
+                0.24
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_1_cols_1_channels_1024_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                212.80
+            </td>
+            <td>
+                0.01
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_1_cols_1_channels_2048_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                140.60
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_1_cols_1_channels_4096_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                184.20
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_1_cols_1_channels_8192_tile_8192
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                114.80
+            </td>
+            <td>
+                0.17
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_1_cols_2_channels_1024_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                150.00
+            </td>
+            <td>
+                0.02
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_1_cols_2_channels_2048_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                183.80
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_1_cols_2_channels_4096_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                153.40
+            </td>
+            <td>
+                0.07
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_1_cols_2_channels_8192_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                190.00
+            </td>
+            <td>
+                0.10
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_2_cols_1_channels_1024_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                115.20
+            </td>
+            <td>
+                0.02
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_2_cols_1_channels_2048_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                141.40
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_2_cols_1_channels_4096_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                176.60
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_2_cols_1_channels_8192_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                144.00
+            </td>
+            <td>
+                0.14
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_2_cols_2_channels_1024_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                151.20
+            </td>
+            <td>
+                0.02
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_2_cols_2_channels_2048_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                170.60
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_2_cols_2_channels_4096_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                123.00
+            </td>
+            <td>
+                0.08
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_2_cols_2_channels_8192_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                143.80
+            </td>
+            <td>
+                0.14
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_4_cols_1_channels_1024_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                160.60
+            </td>
+            <td>
+                0.02
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_4_cols_1_channels_2048_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                149.20
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_4_cols_1_channels_4096_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                127.00
+            </td>
+            <td>
+                0.08
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_4_cols_1_channels_8192_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                136.00
             </td>
             <td>
                 0.15
@@ -2444,14 +950,356 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
         </tr>
         <tr>
             <td>
-                layer_norm_1_cols_1_channels_8192_tile_8192
+                dequant_4_cols_2_channels_1024_tile_128
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                172.60
+                142.80
+            </td>
+            <td>
+                0.02
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_4_cols_2_channels_2048_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                174.40
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_4_cols_2_channels_4096_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                168.80
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_4_cols_2_channels_8192_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                161.80
+            </td>
+            <td>
+                0.13
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_8_cols_1_channels_1024_tile_128
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                183.00
+            </td>
+            <td>
+                0.01
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_8_cols_1_channels_2048_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                149.80
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_8_cols_1_channels_4096_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                174.80
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_8_cols_1_channels_8192_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                185.60
+            </td>
+            <td>
+                0.11
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_8_cols_2_channels_1024_tile_64
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                171.00
+            </td>
+            <td>
+                0.01
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_8_cols_2_channels_2048_tile_128
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                246.00
+            </td>
+            <td>
+                0.02
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_8_cols_2_channels_4096_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                165.00
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                dequant_8_cols_2_channels_8192_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                225.60
+            </td>
+            <td>
+                0.09
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_1_cols_2_channels_1024_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                147.60
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_1_cols_2_channels_2048_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                141.80
+            </td>
+            <td>
+                0.08
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_1_cols_2_channels_4096_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                131.20
+            </td>
+            <td>
+                0.18
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_1_cols_2_channels_8192_tile_8192
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                168.00
+            </td>
+            <td>
+                0.32
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_2_cols_2_channels_1024_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                164.00
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_2_cols_2_channels_2048_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                179.00
+            </td>
+            <td>
+                0.07
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_2_cols_2_channels_4096_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                140.40
+            </td>
+            <td>
+                0.17
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_2_cols_2_channels_8192_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                154.60
             </td>
             <td>
                 0.31
@@ -2462,14 +1310,104 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
         </tr>
         <tr>
             <td>
-                layer_norm_1_cols_2_channels_1024_tile_512
+                eltwise_add_4_cols_2_channels_1024_tile_256
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                141.60
+                176.00
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_4_cols_2_channels_2048_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                220.60
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_4_cols_2_channels_4096_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                171.60
+            </td>
+            <td>
+                0.13
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_4_cols_2_channels_8192_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                162.60
+            </td>
+            <td>
+                0.31
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_8_cols_2_channels_1024_tile_128
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                213.80
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_8_cols_2_channels_2048_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                263.60
             </td>
             <td>
                 0.05
@@ -2480,7 +1418,61 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
         </tr>
         <tr>
             <td>
-                layer_norm_1_cols_2_channels_2048_tile_1024
+                eltwise_add_8_cols_2_channels_4096_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                164.20
+            </td>
+            <td>
+                0.14
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_add_8_cols_2_channels_8192_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                176.60
+            </td>
+            <td>
+                0.26
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_1_cols_2_channels_1024_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                145.40
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_1_cols_2_channels_2048_tile_2048
             </td>
             <td>
                 ✅
@@ -2498,6 +1490,1014 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
         </tr>
         <tr>
             <td>
+                eltwise_mul_1_cols_2_channels_4096_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                121.60
+            </td>
+            <td>
+                0.19
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_2_cols_2_channels_1024_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                162.80
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_2_cols_2_channels_2048_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                151.20
+            </td>
+            <td>
+                0.08
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_2_cols_2_channels_4096_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                140.00
+            </td>
+            <td>
+                0.17
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_2_cols_2_channels_8192_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                183.00
+            </td>
+            <td>
+                0.26
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_4_cols_2_channels_1024_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                170.40
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_4_cols_2_channels_2048_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                115.20
+            </td>
+            <td>
+                0.11
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_4_cols_2_channels_4096_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                170.60
+            </td>
+            <td>
+                0.13
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_4_cols_2_channels_8192_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                180.40
+            </td>
+            <td>
+                0.26
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_8_cols_2_channels_1024_tile_128
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                177.00
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_8_cols_2_channels_2048_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                145.80
+            </td>
+            <td>
+                0.08
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_8_cols_2_channels_4096_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                185.60
+            </td>
+            <td>
+                0.12
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                eltwise_mul_8_cols_2_channels_8192_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                189.20
+            </td>
+            <td>
+                0.27
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_1_cols_1_channels_1024_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                143.00
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_1_cols_1_channels_2048_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                144.60
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_1_cols_1_channels_4096_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                142.00
+            </td>
+            <td>
+                0.12
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_1_cols_1_channels_8192_tile_8192
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                191.60
+            </td>
+            <td>
+                0.18
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_1_cols_2_channels_1024_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                144.20
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_1_cols_2_channels_2048_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                168.00
+            </td>
+            <td>
+                0.05
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_1_cols_2_channels_4096_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                155.60
+            </td>
+            <td>
+                0.11
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_1_cols_2_channels_8192_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                189.00
+            </td>
+            <td>
+                0.19
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_2_cols_1_channels_1024_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                119.40
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_2_cols_1_channels_2048_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                169.00
+            </td>
+            <td>
+                0.05
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_2_cols_1_channels_4096_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                151.20
+            </td>
+            <td>
+                0.11
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_2_cols_1_channels_8192_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                174.60
+            </td>
+            <td>
+                0.20
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_2_cols_2_channels_1024_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                170.80
+            </td>
+            <td>
+                0.02
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_2_cols_2_channels_2048_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                150.60
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_2_cols_2_channels_4096_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                172.20
+            </td>
+            <td>
+                0.10
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_2_cols_2_channels_8192_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                163.40
+            </td>
+            <td>
+                0.21
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_4_cols_1_channels_1024_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                131.00
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_4_cols_1_channels_2048_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                163.60
+            </td>
+            <td>
+                0.05
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_4_cols_1_channels_4096_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                156.60
+            </td>
+            <td>
+                0.11
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_4_cols_1_channels_8192_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                131.80
+            </td>
+            <td>
+                0.25
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_4_cols_2_channels_1024_tile_128
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                195.20
+            </td>
+            <td>
+                0.02
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_4_cols_2_channels_2048_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                168.60
+            </td>
+            <td>
+                0.05
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_4_cols_2_channels_4096_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                159.20
+            </td>
+            <td>
+                0.10
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_4_cols_2_channels_8192_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                173.40
+            </td>
+            <td>
+                0.20
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_8_cols_1_channels_1024_tile_128
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                141.40
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_8_cols_1_channels_2048_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                150.00
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_8_cols_1_channels_4096_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                175.40
+            </td>
+            <td>
+                0.10
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_8_cols_1_channels_8192_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                191.40
+            </td>
+            <td>
+                0.17
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_8_cols_2_channels_1024_tile_64
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                156.40
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_8_cols_2_channels_2048_tile_128
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                177.40
+            </td>
+            <td>
+                0.05
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_8_cols_2_channels_4096_tile_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                182.00
+            </td>
+            <td>
+                0.09
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gelu_8_cols_2_channels_8192_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                217.80
+            </td>
+            <td>
+                0.16
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gemm_2048x2048x2048_64x64x64_8_cols_0_bcolmaj_0_ccolmaj_0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                6446.20
+            </td>
+            <td>
+                3.64
+            </td>
+            <td>
+                2666.45
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gemm_2048x2048x8192_64x64x64_8_cols_0_bcolmaj_0_ccolmaj_0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                24749.20
+            </td>
+            <td>
+                2.84
+            </td>
+            <td>
+                2776.65
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gemm_2048x64x2048_64x64x64_8_cols_0_bcolmaj_0_ccolmaj_0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                511.60
+            </td>
+            <td>
+                16.63
+            </td>
+            <td>
+                1075.88
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gemm_2048x64x8192_64x64x64_8_cols_0_bcolmaj_0_ccolmaj_0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                1562.60
+            </td>
+            <td>
+                21.14
+            </td>
+            <td>
+                1397.95
+            </td>
+        </tr>
+        <tr>
+            <td>
+                gemm_2048x8192x2048_64x64x64_8_cols_0_bcolmaj_0_ccolmaj_0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                24551.60
+            </td>
+            <td>
+                2.86
+            </td>
+            <td>
+                2798.99
+            </td>
+        </tr>
+        <tr>
+            <td>
+                layer_norm_1_cols_1_channels_1024_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                147.00
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                layer_norm_1_cols_1_channels_2048_tile_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                174.80
+            </td>
+            <td>
+                0.08
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                layer_norm_1_cols_1_channels_4096_tile_4096
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                180.20
+            </td>
+            <td>
+                0.14
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                layer_norm_1_cols_1_channels_8192_tile_8192
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                199.40
+            </td>
+            <td>
+                0.25
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                layer_norm_1_cols_2_channels_1024_tile_512
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                168.80
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                layer_norm_1_cols_2_channels_2048_tile_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                150.80
+            </td>
+            <td>
+                0.08
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
                 layer_norm_1_cols_2_channels_4096_tile_2048
             </td>
             <td>
@@ -2505,10 +2505,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                155.20
+                176.20
             </td>
             <td>
-                0.16
+                0.14
             </td>
             <td>
                 n/a
@@ -2523,10 +2523,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                161.80
+                175.20
             </td>
             <td>
-                0.31
+                0.30
             </td>
             <td>
                 n/a
@@ -2541,10 +2541,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                135.40
+                140.80
             </td>
             <td>
-                0.05
+                0.04
             </td>
             <td>
                 n/a
@@ -2559,10 +2559,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                201.80
+                151.80
             </td>
             <td>
-                0.06
+                0.08
             </td>
             <td>
                 n/a
@@ -2577,10 +2577,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                205.00
+                176.80
             </td>
             <td>
-                0.13
+                0.14
             </td>
             <td>
                 n/a
@@ -2595,10 +2595,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                155.40
+                173.80
             </td>
             <td>
-                0.34
+                0.28
             </td>
             <td>
                 n/a
@@ -2613,10 +2613,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                187.00
+                157.00
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -2631,7 +2631,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                146.60
+                156.40
             </td>
             <td>
                 0.08
@@ -2649,10 +2649,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                150.00
+                170.20
             </td>
             <td>
-                0.17
+                0.15
             </td>
             <td>
                 n/a
@@ -2667,10 +2667,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                129.80
+                160.60
             </td>
             <td>
-                0.38
+                0.31
             </td>
             <td>
                 n/a
@@ -2685,10 +2685,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                135.80
+                160.00
             </td>
             <td>
-                0.05
+                0.04
             </td>
             <td>
                 n/a
@@ -2703,10 +2703,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                151.00
+                177.80
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -2721,10 +2721,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                205.20
+                177.00
             </td>
             <td>
-                0.13
+                0.14
             </td>
             <td>
                 n/a
@@ -2739,10 +2739,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                134.40
+                157.40
             </td>
             <td>
-                0.38
+                0.31
             </td>
             <td>
                 n/a
@@ -2757,7 +2757,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                171.40
+                176.00
             </td>
             <td>
                 0.04
@@ -2775,10 +2775,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                161.00
+                169.80
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -2793,10 +2793,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                170.40
+                181.60
             </td>
             <td>
-                0.15
+                0.14
             </td>
             <td>
                 n/a
@@ -2811,10 +2811,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                175.60
+                176.60
             </td>
             <td>
-                0.28
+                0.29
             </td>
             <td>
                 n/a
@@ -2829,7 +2829,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                172.00
+                164.00
             </td>
             <td>
                 0.04
@@ -2847,10 +2847,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                160.80
+                141.80
             </td>
             <td>
-                0.08
+                0.09
             </td>
             <td>
                 n/a
@@ -2865,10 +2865,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                153.60
+                197.80
             </td>
             <td>
-                0.16
+                0.12
             </td>
             <td>
                 n/a
@@ -2883,10 +2883,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                168.60
+                181.20
             </td>
             <td>
-                0.30
+                0.27
             </td>
             <td>
                 n/a
@@ -2901,7 +2901,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                211.20
+                210.40
             </td>
             <td>
                 0.03
@@ -2919,7 +2919,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                193.60
+                205.20
             </td>
             <td>
                 0.06
@@ -2937,7 +2937,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                212.20
+                209.80
             </td>
             <td>
                 0.12
@@ -2955,10 +2955,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                162.60
+                272.20
             </td>
             <td>
-                0.30
+                0.20
             </td>
             <td>
                 n/a
@@ -2973,10 +2973,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                735.40
+                789.40
             </td>
             <td>
-                0.05
+                0.04
             </td>
             <td>
                 0.04
@@ -2991,13 +2991,13 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                3218.40
+                3217.40
             </td>
             <td>
-                10.48
+                10.45
             </td>
             <td>
-                10.47
+                10.44
             </td>
         </tr>
         <tr>
@@ -3009,13 +3009,13 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                2183.60
+                2007.80
             </td>
             <td>
-                15.49
+                16.73
             </td>
             <td>
-                15.48
+                16.72
             </td>
         </tr>
         <tr>
@@ -3027,13 +3027,13 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                1664.20
+                1687.40
             </td>
             <td>
-                20.22
+                19.98
             </td>
             <td>
-                20.21
+                19.97
             </td>
         </tr>
         <tr>
@@ -3045,13 +3045,13 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                1921.40
+                2051.20
             </td>
             <td>
-                17.56
+                16.49
             </td>
             <td>
-                17.54
+                16.48
             </td>
         </tr>
         <tr>
@@ -3063,13 +3063,13 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                3147.80
+                3222.20
             </td>
             <td>
-                10.70
+                10.46
             </td>
             <td>
-                10.69
+                10.45
             </td>
         </tr>
         <tr>
@@ -3081,13 +3081,13 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                2011.80
+                2047.00
             </td>
             <td>
-                16.70
+                16.42
             </td>
             <td>
-                16.69
+                16.41
             </td>
         </tr>
         <tr>
@@ -3099,13 +3099,13 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                1773.00
+                1695.20
             </td>
             <td>
-                19.11
+                19.87
             </td>
             <td>
-                19.09
+                19.86
             </td>
         </tr>
         <tr>
@@ -3117,13 +3117,13 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                2076.40
+                1992.00
             </td>
             <td>
-                16.29
+                16.91
             </td>
             <td>
-                16.28
+                16.90
             </td>
         </tr>
         <tr>
@@ -3135,7 +3135,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                206.40
+                184.00
             </td>
             <td>
                 0.02
@@ -3153,7 +3153,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                174.80
+                211.60
             </td>
             <td>
                 0.02
@@ -3171,7 +3171,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                174.00
+                185.80
             </td>
             <td>
                 0.04
@@ -3189,7 +3189,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                199.20
+                173.80
             </td>
             <td>
                 0.04
@@ -3207,10 +3207,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                216.20
+                211.80
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -3225,10 +3225,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                149.40
+                177.00
             </td>
             <td>
-                0.10
+                0.09
             </td>
             <td>
                 n/a
@@ -3243,10 +3243,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                181.40
+                199.80
             </td>
             <td>
-                0.17
+                0.15
             </td>
             <td>
                 n/a
@@ -3261,10 +3261,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                167.40
+                179.60
             </td>
             <td>
-                0.19
+                0.18
             </td>
             <td>
                 n/a
@@ -3279,10 +3279,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                180.40
+                156.40
             </td>
             <td>
-                0.02
+                0.03
             </td>
             <td>
                 n/a
@@ -3297,10 +3297,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                191.40
+                114.00
             </td>
             <td>
-                0.02
+                0.03
             </td>
             <td>
                 n/a
@@ -3315,7 +3315,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                147.80
+                162.40
             </td>
             <td>
                 0.05
@@ -3333,10 +3333,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                145.80
+                134.40
             </td>
             <td>
-                0.05
+                0.06
             </td>
             <td>
                 n/a
@@ -3351,10 +3351,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                147.60
+                175.20
             </td>
             <td>
-                0.10
+                0.09
             </td>
             <td>
                 n/a
@@ -3369,10 +3369,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                151.60
+                137.00
             </td>
             <td>
-                0.10
+                0.11
             </td>
             <td>
                 n/a
@@ -3387,10 +3387,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                145.20
+                145.80
             </td>
             <td>
-                0.22
+                0.21
             </td>
             <td>
                 n/a
@@ -3405,10 +3405,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                167.40
+                123.80
             </td>
             <td>
-                0.19
+                0.25
             </td>
             <td>
                 n/a
@@ -3423,10 +3423,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                200.40
+                150.20
             </td>
             <td>
-                0.02
+                0.03
             </td>
             <td>
                 n/a
@@ -3441,10 +3441,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                156.80
+                163.00
             </td>
             <td>
-                0.03
+                0.02
             </td>
             <td>
                 n/a
@@ -3459,7 +3459,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                142.80
+                182.00
             </td>
             <td>
                 0.05
@@ -3477,7 +3477,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                170.40
+                168.60
             </td>
             <td>
                 0.05
@@ -3513,10 +3513,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                135.00
+                179.60
             </td>
             <td>
-                0.11
+                0.09
             </td>
             <td>
                 n/a
@@ -3531,10 +3531,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                150.20
+                125.40
             </td>
             <td>
-                0.20
+                0.25
             </td>
             <td>
                 n/a
@@ -3549,10 +3549,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                146.00
+                139.40
             </td>
             <td>
-                0.21
+                0.22
             </td>
             <td>
                 n/a
@@ -3567,7 +3567,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                150.20
+                144.80
             </td>
             <td>
                 0.03
@@ -3585,7 +3585,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                149.60
+                147.00
             </td>
             <td>
                 0.03
@@ -3603,10 +3603,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                211.20
+                157.60
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -3621,10 +3621,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                183.40
+                158.40
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -3639,10 +3639,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                177.40
+                143.60
             </td>
             <td>
-                0.09
+                0.11
             </td>
             <td>
                 n/a
@@ -3657,10 +3657,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                138.60
+                168.60
             </td>
             <td>
-                0.11
+                0.09
             </td>
             <td>
                 n/a
@@ -3675,10 +3675,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                162.40
+                147.20
             </td>
             <td>
-                0.19
+                0.21
             </td>
             <td>
                 n/a
@@ -3693,7 +3693,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                136.00
+                135.80
             </td>
             <td>
                 0.23
@@ -3711,7 +3711,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                160.60
+                181.60
             </td>
             <td>
                 0.02
@@ -3729,10 +3729,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                179.80
+                158.60
             </td>
             <td>
-                0.02
+                0.03
             </td>
             <td>
                 n/a
@@ -3747,7 +3747,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                197.60
+                185.80
             </td>
             <td>
                 0.04
@@ -3765,10 +3765,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                224.60
+                167.40
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -3783,10 +3783,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                165.80
+                193.60
             </td>
             <td>
-                0.09
+                0.08
             </td>
             <td>
                 n/a
@@ -3801,10 +3801,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                142.20
+                196.40
             </td>
             <td>
-                0.11
+                0.08
             </td>
             <td>
                 n/a
@@ -3819,10 +3819,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                155.80
+                159.80
             </td>
             <td>
-                0.20
+                0.19
             </td>
             <td>
                 n/a
@@ -3837,10 +3837,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                138.00
+                170.60
             </td>
             <td>
-                0.23
+                0.19
             </td>
             <td>
                 n/a
@@ -3855,7 +3855,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                186.00
+                180.00
             </td>
             <td>
                 0.02
@@ -3873,7 +3873,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                167.60
+                172.40
             </td>
             <td>
                 0.02
@@ -3891,7 +3891,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                169.00
+                162.60
             </td>
             <td>
                 0.05
@@ -3909,10 +3909,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                180.00
+                120.00
             </td>
             <td>
-                0.04
+                0.07
             </td>
             <td>
                 n/a
@@ -3927,7 +3927,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                157.00
+                147.40
             </td>
             <td>
                 0.10
@@ -3945,7 +3945,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                147.00
+                138.20
             </td>
             <td>
                 0.11
@@ -3963,10 +3963,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                140.40
+                163.00
             </td>
             <td>
-                0.22
+                0.20
             </td>
             <td>
                 n/a
@@ -3981,10 +3981,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                170.40
+                139.80
             </td>
             <td>
-                0.19
+                0.22
             </td>
             <td>
                 n/a
@@ -3999,7 +3999,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                165.80
+                218.20
             </td>
             <td>
                 0.02
@@ -4017,10 +4017,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                200.80
+                155.40
             </td>
             <td>
-                0.02
+                0.03
             </td>
             <td>
                 n/a
@@ -4035,10 +4035,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                209.40
+                157.80
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -4053,10 +4053,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                192.60
+                135.80
             </td>
             <td>
-                0.04
+                0.06
             </td>
             <td>
                 n/a
@@ -4071,7 +4071,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                154.20
+                150.20
             </td>
             <td>
                 0.10
@@ -4089,10 +4089,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                162.40
+                137.40
             </td>
             <td>
-                0.10
+                0.11
             </td>
             <td>
                 n/a
@@ -4107,10 +4107,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                193.20
+                164.20
             </td>
             <td>
-                0.17
+                0.19
             </td>
             <td>
                 n/a
@@ -4125,10 +4125,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                153.80
+                171.80
             </td>
             <td>
-                0.20
+                0.18
             </td>
             <td>
                 n/a
@@ -4143,7 +4143,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                242.20
+                173.20
             </td>
             <td>
                 0.02
@@ -4161,7 +4161,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                172.60
+                171.40
             </td>
             <td>
                 0.02
@@ -4179,7 +4179,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                162.20
+                167.20
             </td>
             <td>
                 0.05
@@ -4197,10 +4197,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                202.00
+                135.00
             </td>
             <td>
-                0.04
+                0.06
             </td>
             <td>
                 n/a
@@ -4215,7 +4215,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                186.00
+                190.00
             </td>
             <td>
                 0.09
@@ -4233,10 +4233,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                140.80
+                132.80
             </td>
             <td>
-                0.11
+                0.12
             </td>
             <td>
                 n/a
@@ -4251,10 +4251,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                175.00
+                192.40
             </td>
             <td>
-                0.19
+                0.16
             </td>
             <td>
                 n/a
@@ -4269,7 +4269,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                179.00
+                171.20
             </td>
             <td>
                 0.18
@@ -4293,7 +4293,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 1.48
             </td>
             <td>
-                759.16
+                757.03
             </td>
         </tr>
         <tr>
@@ -4305,7 +4305,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                167.00
+                159.80
             </td>
             <td>
                 0.02
@@ -4323,7 +4323,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                159.20
+                148.80
             </td>
             <td>
                 0.05
@@ -4341,10 +4341,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                160.80
+                138.60
             </td>
             <td>
-                0.10
+                0.11
             </td>
             <td>
                 n/a
@@ -4359,7 +4359,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                168.60
+                183.80
             </td>
             <td>
                 0.02
@@ -4377,10 +4377,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                125.40
+                175.80
             </td>
             <td>
-                0.06
+                0.04
             </td>
             <td>
                 n/a
@@ -4395,10 +4395,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                149.80
+                125.80
             </td>
             <td>
-                0.11
+                0.12
             </td>
             <td>
                 n/a
@@ -4413,10 +4413,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                131.60
+                140.00
             </td>
             <td>
-                0.24
+                0.23
             </td>
             <td>
                 n/a
@@ -4431,10 +4431,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                161.20
+                139.20
             </td>
             <td>
-                0.02
+                0.03
             </td>
             <td>
                 n/a
@@ -4449,7 +4449,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                152.80
+                168.60
             </td>
             <td>
                 0.05
@@ -4467,7 +4467,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                173.60
+                155.80
             </td>
             <td>
                 0.10
@@ -4485,10 +4485,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                140.00
+                182.60
             </td>
             <td>
-                0.22
+                0.17
             </td>
             <td>
                 n/a
@@ -4503,7 +4503,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                150.60
+                134.80
             </td>
             <td>
                 0.03
@@ -4521,10 +4521,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                191.40
+                166.20
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -4539,7 +4539,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                152.00
+                148.00
             </td>
             <td>
                 0.10
@@ -4557,10 +4557,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                188.80
+                130.80
             </td>
             <td>
-                0.18
+                0.23
             </td>
             <td>
                 n/a
@@ -4575,7 +4575,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                154.40
+                146.60
             </td>
             <td>
                 0.04
@@ -4593,7 +4593,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                135.80
+                132.60
             </td>
             <td>
                 0.09
@@ -4611,10 +4611,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                158.80
+                140.40
             </td>
             <td>
-                0.15
+                0.16
             </td>
             <td>
                 n/a
@@ -4629,10 +4629,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                148.00
+                145.80
             </td>
             <td>
-                0.31
+                0.32
             </td>
             <td>
                 n/a
@@ -4647,10 +4647,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                191.00
+                161.80
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -4665,10 +4665,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                156.60
+                125.20
             </td>
             <td>
-                0.07
+                0.09
             </td>
             <td>
                 n/a
@@ -4683,10 +4683,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                159.40
+                193.20
             </td>
             <td>
-                0.14
+                0.12
             </td>
             <td>
                 n/a
@@ -4701,10 +4701,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                141.80
+                166.00
             </td>
             <td>
-                0.33
+                0.28
             </td>
             <td>
                 n/a
@@ -4719,7 +4719,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                152.20
+                155.00
             </td>
             <td>
                 0.04
@@ -4737,10 +4737,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                195.20
+                148.60
             </td>
             <td>
-                0.07
+                0.08
             </td>
             <td>
                 n/a
@@ -4755,10 +4755,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                149.20
+                135.80
             </td>
             <td>
-                0.15
+                0.17
             </td>
             <td>
                 n/a
@@ -4773,10 +4773,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                140.20
+                146.20
             </td>
             <td>
-                0.33
+                0.32
             </td>
             <td>
                 n/a
@@ -4791,7 +4791,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                137.40
+                132.40
             </td>
             <td>
                 0.04
@@ -4809,10 +4809,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                156.40
+                166.40
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -4827,7 +4827,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                139.40
+                137.80
             </td>
             <td>
                 0.17
@@ -4845,7 +4845,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                170.80
+                165.00
             </td>
             <td>
                 0.28
@@ -4863,7 +4863,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                154.60
+                136.20
             </td>
             <td>
                 0.04
@@ -4881,10 +4881,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                168.00
+                194.20
             </td>
             <td>
-                0.07
+                0.06
             </td>
             <td>
                 n/a
@@ -4899,10 +4899,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                233.80
+                134.60
             </td>
             <td>
-                0.10
+                0.17
             </td>
             <td>
                 n/a
@@ -4917,10 +4917,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                151.40
+                168.00
             </td>
             <td>
-                0.32
+                0.28
             </td>
             <td>
                 n/a
@@ -4935,7 +4935,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                170.40
+                171.00
             </td>
             <td>
                 0.03
@@ -4953,10 +4953,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                191.60
+                167.80
             </td>
             <td>
-                0.06
+                0.07
             </td>
             <td>
                 n/a
@@ -4971,10 +4971,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                209.40
+                151.80
             </td>
             <td>
-                0.12
+                0.15
             </td>
             <td>
                 n/a
@@ -4989,10 +4989,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                173.20
+                186.20
             </td>
             <td>
-                0.27
+                0.25
             </td>
             <td>
                 n/a
@@ -5007,10 +5007,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                182.60
+                147.40
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -5025,10 +5025,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                170.60
+                187.40
             </td>
             <td>
-                0.08
+                0.06
             </td>
             <td>
                 n/a
@@ -5043,10 +5043,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                170.00
+                195.40
             </td>
             <td>
-                0.14
+                0.13
             </td>
             <td>
                 n/a
@@ -5061,10 +5061,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                152.20
+                187.60
             </td>
             <td>
-                0.31
+                0.25
             </td>
             <td>
                 n/a
@@ -5079,7 +5079,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                198.60
+                184.20
             </td>
             <td>
                 0.03
@@ -5097,10 +5097,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                150.40
+                186.00
             </td>
             <td>
-                0.08
+                0.06
             </td>
             <td>
                 n/a
@@ -5115,7 +5115,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                196.20
+                219.00
             </td>
             <td>
                 0.12
@@ -5133,10 +5133,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                161.80
+                230.60
             </td>
             <td>
-                0.28
+                0.20
             </td>
             <td>
                 n/a
@@ -5151,10 +5151,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                128.00
+                138.40
             </td>
             <td>
-                0.05
+                0.04
             </td>
             <td>
                 n/a
@@ -5169,7 +5169,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                132.80
+                142.80
             </td>
             <td>
                 0.04
@@ -5187,10 +5187,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                147.60
+                170.60
             </td>
             <td>
-                0.16
+                0.14
             </td>
             <td>
                 n/a
@@ -5205,10 +5205,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                131.20
+                154.00
             </td>
             <td>
-                0.18
+                0.15
             </td>
             <td>
                 n/a
@@ -5223,10 +5223,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                149.40
+                122.00
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -5241,7 +5241,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                135.00
+                150.60
             </td>
             <td>
                 0.04
@@ -5259,7 +5259,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                159.00
+                158.80
             </td>
             <td>
                 0.15
@@ -5277,10 +5277,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                184.80
+                164.20
             </td>
             <td>
-                0.13
+                0.14
             </td>
             <td>
                 n/a
@@ -5295,10 +5295,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                136.40
+                149.80
             </td>
             <td>
-                0.34
+                0.31
             </td>
             <td>
                 n/a
@@ -5313,10 +5313,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                153.60
+                140.20
             </td>
             <td>
-                0.30
+                0.33
             </td>
             <td>
                 n/a
@@ -5331,7 +5331,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                147.20
+                146.60
             </td>
             <td>
                 0.04
@@ -5349,10 +5349,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                151.00
+                131.20
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -5367,10 +5367,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                179.40
+                131.80
             </td>
             <td>
-                0.13
+                0.18
             </td>
             <td>
                 n/a
@@ -5385,10 +5385,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                142.60
+                149.60
             </td>
             <td>
-                0.17
+                0.15
             </td>
             <td>
                 n/a
@@ -5403,10 +5403,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                127.40
+                146.80
             </td>
             <td>
-                0.36
+                0.31
             </td>
             <td>
                 n/a
@@ -5421,10 +5421,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                144.60
+                181.00
             </td>
             <td>
-                0.33
+                0.27
             </td>
             <td>
                 n/a
@@ -5439,7 +5439,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                151.00
+                160.80
             </td>
             <td>
                 0.04
@@ -5457,10 +5457,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                138.20
+                188.40
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -5475,7 +5475,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                207.00
+                185.80
             </td>
             <td>
                 0.12
@@ -5493,10 +5493,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                171.60
+                173.80
             </td>
             <td>
-                0.14
+                0.13
             </td>
             <td>
                 n/a
@@ -5511,10 +5511,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                221.80
+                164.40
             </td>
             <td>
-                0.21
+                0.28
             </td>
             <td>
                 n/a
@@ -5529,10 +5529,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                203.00
+                170.20
             </td>
             <td>
-                0.23
+                0.27
             </td>
             <td>
                 n/a
@@ -5547,10 +5547,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                140.00
+                172.20
             </td>
             <td>
-                0.03
+                0.02
             </td>
             <td>
                 n/a
@@ -5565,10 +5565,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                168.40
+                134.00
             </td>
             <td>
-                0.05
+                0.06
             </td>
             <td>
                 n/a
@@ -5583,10 +5583,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                143.60
+                166.60
             </td>
             <td>
-                0.11
+                0.09
             </td>
             <td>
                 n/a
@@ -5601,10 +5601,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                145.60
+                179.80
             </td>
             <td>
-                0.03
+                0.02
             </td>
             <td>
                 n/a
@@ -5619,7 +5619,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                133.40
+                140.00
             </td>
             <td>
                 0.06
@@ -5637,10 +5637,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                192.20
+                195.60
             </td>
             <td>
-                0.09
+                0.08
             </td>
             <td>
                 n/a
@@ -5655,10 +5655,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                165.40
+                149.00
             </td>
             <td>
-                0.19
+                0.21
             </td>
             <td>
                 n/a
@@ -5673,10 +5673,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                149.60
+                208.60
             </td>
             <td>
-                0.03
+                0.02
             </td>
             <td>
                 n/a
@@ -5691,10 +5691,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                167.00
+                180.00
             </td>
             <td>
-                0.05
+                0.04
             </td>
             <td>
                 n/a
@@ -5709,7 +5709,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                173.60
+                174.80
             </td>
             <td>
                 0.09
@@ -5727,10 +5727,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                195.00
+                180.40
             </td>
             <td>
-                0.16
+                0.18
             </td>
             <td>
                 n/a
@@ -5745,7 +5745,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                218.80
+                178.60
             </td>
             <td>
                 0.02
@@ -5763,10 +5763,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                167.60
+                187.00
             </td>
             <td>
-                0.05
+                0.04
             </td>
             <td>
                 n/a
@@ -5781,10 +5781,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                138.00
+                166.40
             </td>
             <td>
-                0.11
+                0.10
             </td>
             <td>
                 n/a
@@ -5799,10 +5799,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                153.80
+                171.20
             </td>
             <td>
-                0.20
+                0.18
             </td>
             <td>
                 n/a
@@ -5817,7 +5817,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                145.80
+                152.20
             </td>
             <td>
                 0.03
@@ -5835,7 +5835,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                152.40
+                145.40
             </td>
             <td>
                 0.05
@@ -5853,10 +5853,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                172.80
+                132.40
             </td>
             <td>
-                0.09
+                0.12
             </td>
             <td>
                 n/a
@@ -5871,7 +5871,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                149.60
+                138.00
             </td>
             <td>
                 0.03
@@ -5889,10 +5889,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                132.20
+                151.40
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -5907,10 +5907,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                158.60
+                189.40
             </td>
             <td>
-                0.10
+                0.09
             </td>
             <td>
                 n/a
@@ -5925,10 +5925,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                140.80
+                185.80
             </td>
             <td>
-                0.22
+                0.18
             </td>
             <td>
                 n/a
@@ -5943,7 +5943,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                147.40
+                152.40
             </td>
             <td>
                 0.03
@@ -5961,10 +5961,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                151.40
+                135.80
             </td>
             <td>
-                0.05
+                0.06
             </td>
             <td>
                 n/a
@@ -5979,10 +5979,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                145.20
+                178.80
             </td>
             <td>
-                0.11
+                0.09
             </td>
             <td>
                 n/a
@@ -5997,7 +5997,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                151.00
+                157.60
             </td>
             <td>
                 0.20
@@ -6015,7 +6015,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                165.20
+                164.40
             </td>
             <td>
                 0.02
@@ -6033,7 +6033,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                154.20
+                151.40
             </td>
             <td>
                 0.05
@@ -6051,10 +6051,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                145.40
+                168.00
             </td>
             <td>
-                0.11
+                0.09
             </td>
             <td>
                 n/a
@@ -6069,10 +6069,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                174.40
+                143.00
             </td>
             <td>
-                0.18
+                0.22
             </td>
             <td>
                 n/a
@@ -6087,10 +6087,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                166.40
+                149.00
             </td>
             <td>
-                0.14
+                0.16
             </td>
             <td>
                 n/a
@@ -6105,10 +6105,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                195.00
+                164.00
             </td>
             <td>
-                0.12
+                0.15
             </td>
             <td>
                 n/a
@@ -6123,10 +6123,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                171.20
+                153.80
             </td>
             <td>
-                0.13
+                0.16
             </td>
             <td>
                 n/a
@@ -6159,7 +6159,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                185.40
+                169.60
             </td>
             <td>
                 0.02
@@ -6177,10 +6177,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                139.60
+                148.60
             </td>
             <td>
-                0.06
+                0.05
             </td>
             <td>
                 n/a
@@ -6195,7 +6195,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                150.60
+                165.00
             </td>
             <td>
                 0.10
@@ -6213,10 +6213,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                141.00
+                161.80
             </td>
             <td>
-                0.03
+                0.02
             </td>
             <td>
                 n/a
@@ -6231,7 +6231,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                148.20
+                157.00
             </td>
             <td>
                 0.05
@@ -6249,10 +6249,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                147.80
+                181.20
             </td>
             <td>
-                0.10
+                0.09
             </td>
             <td>
                 n/a
@@ -6267,10 +6267,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                168.60
+                133.40
             </td>
             <td>
-                0.19
+                0.23
             </td>
             <td>
                 n/a
@@ -6285,10 +6285,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                169.00
+                140.20
             </td>
             <td>
-                0.02
+                0.03
             </td>
             <td>
                 n/a
@@ -6303,7 +6303,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                155.80
+                164.60
             </td>
             <td>
                 0.05
@@ -6321,7 +6321,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                145.20
+                143.40
             </td>
             <td>
                 0.11
@@ -6339,10 +6339,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                165.80
+                173.60
             </td>
             <td>
-                0.19
+                0.18
             </td>
             <td>
                 n/a
@@ -6357,7 +6357,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                172.20
+                170.20
             </td>
             <td>
                 0.02
@@ -6375,7 +6375,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                152.40
+                169.60
             </td>
             <td>
                 0.05
@@ -6393,10 +6393,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                190.40
+                135.40
             </td>
             <td>
-                0.10
+                0.11
             </td>
             <td>
                 n/a
@@ -6411,7 +6411,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                159.00
+                160.20
             </td>
             <td>
                 0.19
@@ -6429,10 +6429,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                200.40
+                225.20
             </td>
             <td>
-                4.90
+                4.40
             </td>
             <td>
                 n/a
@@ -6447,10 +6447,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                196.80
+                210.20
             </td>
             <td>
-                5.02
+                4.71
             </td>
             <td>
                 n/a
@@ -6465,10 +6465,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                189.80
+                210.20
             </td>
             <td>
-                5.22
+                4.70
             </td>
             <td>
                 n/a
@@ -6483,10 +6483,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                211.40
+                212.20
             </td>
             <td>
-                4.85
+                4.79
             </td>
             <td>
                 n/a
@@ -6501,10 +6501,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                271.00
+                239.20
             </td>
             <td>
-                7.32
+                8.19
             </td>
             <td>
                 n/a
@@ -6519,10 +6519,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                300.20
+                259.00
             </td>
             <td>
-                6.61
+                7.58
             </td>
             <td>
                 n/a
@@ -6537,10 +6537,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                227.20
+                251.60
             </td>
             <td>
-                8.62
+                7.79
             </td>
             <td>
                 n/a
@@ -6555,10 +6555,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                235.60
+                259.20
             </td>
             <td>
-                8.52
+                7.65
             </td>
             <td>
                 n/a
@@ -6573,10 +6573,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                201.80
+                258.20
             </td>
             <td>
-                9.76
+                7.71
             </td>
             <td>
                 n/a
@@ -6591,10 +6591,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                208.00
+                224.60
             </td>
             <td>
-                9.43
+                8.91
             </td>
             <td>
                 n/a
@@ -6609,10 +6609,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                344.20
+                364.00
             </td>
             <td>
-                11.50
+                10.87
             </td>
             <td>
                 n/a
@@ -6627,10 +6627,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                305.80
+                318.00
             </td>
             <td>
-                12.78
+                12.36
             </td>
             <td>
                 n/a
@@ -6645,10 +6645,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                318.00
+                361.60
             </td>
             <td>
-                12.38
+                10.90
             </td>
             <td>
                 n/a
@@ -6663,10 +6663,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                287.00
+                307.40
             </td>
             <td>
-                13.68
+                13.07
             </td>
             <td>
                 n/a
@@ -6681,10 +6681,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                277.00
+                296.80
             </td>
             <td>
-                14.20
+                13.53
             </td>
             <td>
                 n/a
@@ -6699,10 +6699,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                256.60
+                281.80
             </td>
             <td>
-                15.27
+                14.28
             </td>
             <td>
                 n/a
@@ -6717,10 +6717,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                304.60
+                251.00
             </td>
             <td>
-                12.99
+                15.59
             </td>
             <td>
                 n/a
@@ -6735,10 +6735,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                296.20
+                259.20
             </td>
             <td>
-                13.25
+                15.12
             </td>
             <td>
                 n/a
@@ -6753,10 +6753,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                158.00
+                200.60
             </td>
             <td>
-                3.12
+                2.52
             </td>
             <td>
                 n/a
@@ -6771,10 +6771,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                159.20
+                169.00
             </td>
             <td>
-                3.10
+                2.93
             </td>
             <td>
                 n/a
@@ -6789,10 +6789,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                163.20
+                131.00
             </td>
             <td>
-                0.19
+                0.24
             </td>
             <td>
                 n/a
@@ -6807,10 +6807,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                163.80
+                123.80
             </td>
             <td>
-                0.19
+                0.25
             </td>
             <td>
                 n/a
@@ -6825,10 +6825,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                149.00
+                145.80
             </td>
             <td>
-                0.41
+                0.42
             </td>
             <td>
                 n/a
@@ -6843,10 +6843,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                171.00
+                125.00
             </td>
             <td>
-                0.38
+                0.50
             </td>
             <td>
                 n/a
@@ -6861,10 +6861,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                157.80
+                121.20
             </td>
             <td>
-                0.39
+                0.50
             </td>
             <td>
                 n/a
@@ -6879,10 +6879,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                167.00
+                146.00
             </td>
             <td>
-                0.75
+                0.85
             </td>
             <td>
                 n/a
@@ -6897,10 +6897,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                161.60
+                123.40
             </td>
             <td>
-                0.77
+                1.00
             </td>
             <td>
                 n/a
@@ -6915,10 +6915,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                149.20
+                140.20
             </td>
             <td>
-                0.84
+                0.89
             </td>
             <td>
                 n/a
@@ -6933,10 +6933,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                227.00
+                147.60
             </td>
             <td>
-                0.56
+                0.84
             </td>
             <td>
                 n/a
@@ -6951,10 +6951,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                179.00
+                134.20
             </td>
             <td>
-                0.09
+                0.11
             </td>
             <td>
                 n/a
@@ -6969,10 +6969,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                149.40
+                171.20
             </td>
             <td>
-                0.04
+                0.03
             </td>
             <td>
                 n/a
@@ -6987,10 +6987,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                155.00
+                170.80
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -7005,7 +7005,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                153.80
+                155.20
             </td>
             <td>
                 0.15
@@ -7023,10 +7023,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                173.20
+                156.60
             </td>
             <td>
-                0.03
+                0.04
             </td>
             <td>
                 n/a
@@ -7041,10 +7041,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                140.80
+                165.80
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -7059,10 +7059,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                198.60
+                126.60
             </td>
             <td>
-                0.13
+                0.18
             </td>
             <td>
                 n/a
@@ -7077,10 +7077,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                193.40
+                181.20
             </td>
             <td>
-                0.25
+                0.30
             </td>
             <td>
                 n/a
@@ -7095,7 +7095,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                196.00
+                199.20
             </td>
             <td>
                 0.03
@@ -7113,10 +7113,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                139.80
+                159.40
             </td>
             <td>
-                0.08
+                0.07
             </td>
             <td>
                 n/a
@@ -7131,10 +7131,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                182.80
+                122.80
             </td>
             <td>
-                0.13
+                0.19
             </td>
             <td>
                 n/a
@@ -7149,10 +7149,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                183.00
+                166.60
             </td>
             <td>
-                0.26
+                0.28
             </td>
             <td>
                 n/a
@@ -7167,7 +7167,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                192.00
+                219.80
             </td>
             <td>
                 0.03
@@ -7185,7 +7185,7 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                200.20
+                198.40
             </td>
             <td>
                 0.06
@@ -7203,10 +7203,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                159.60
+                163.40
             </td>
             <td>
-                0.14
+                0.15
             </td>
             <td>
                 n/a
@@ -7221,10 +7221,10 @@ Tested on `2025_11_21_19_01_45` at commit `adc7cf7`.
                 5/5
             </td>
             <td>
-                260.60
+                205.60
             </td>
             <td>
-                0.19
+                0.23
             </td>
             <td>
                 n/a
