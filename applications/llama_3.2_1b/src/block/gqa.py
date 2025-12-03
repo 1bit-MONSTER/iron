@@ -10,12 +10,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from src.operator.rope import apply_rope
-from src.operator.aie_rope import AIERope
-from src.operator.aie_softmax import AIESoftmax
-from src.operator.aie_mha import AIEMHA
-from src.operator.aie_gemm import AIEGEMM
-from src.operator.aie_gemv import AIEGEMV
+from operators import AIERope, AIESoftmax, AIEMHA, AIEGEMM, AIEGEMV
+from operators.rope.rope_utils import apply_rope
 
 from torchtune.modules import KVCache
 
@@ -66,7 +62,7 @@ class GroupedQueryAttention(nn.Module):
         self.prompt_length = prompt_length
 
         aie_gemm_config = {
-            "num_columns": 8,
+            "num_aie_columns": 8,
             "tile_m": 64,
             "tile_k": 64,
             "tile_n": 64,
@@ -86,7 +82,7 @@ class GroupedQueryAttention(nn.Module):
         # Initialize AIE Regular MHA operator
         if self.cfg["use_aie_regular_mha"]:
             self.aie_softmax = AIESoftmax(
-                num_columns=1,
+                num_aie_columns=1,
                 num_channels=1,
                 size=prompt_length * prompt_length,
                 last_dim=prompt_length,
@@ -102,7 +98,7 @@ class GroupedQueryAttention(nn.Module):
         # Initialize AIE RoPE operator
         if self.cfg["use_aie_rope"]:
             self.aie_rope = AIERope(
-                num_columns=1,
+                num_aie_columns=1,
                 num_channels=1,
                 size=self.prompt_length * self.head_dim,
                 last_dim=self.head_dim,
@@ -122,7 +118,7 @@ class GroupedQueryAttention(nn.Module):
         if self.cfg["use_kv_cache"] and self.cfg["use_aie_gemv"]:
 
             aie_gemv_config = {
-                "num_columns": 1,
+                "num_aie_columns": 1,
                 "is_mv": False,
                 "use_static_weight": True,
             }

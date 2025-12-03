@@ -11,12 +11,12 @@ import torch.nn as nn
 import json
 from pathlib import Path
 from src.block.transformer import TransformerBlock
-from src.operator.rope import compute_rope_params
+from operators.rope.rope_utils import compute_rope_params
+from operators import AIERMSNorm
 from rich.console import Console
 from rich.text import Text
 
 from .utils import assign
-from src.operator.aie_rms_norm import AIERMSNorm
 
 
 def dtype_from_string(inp):
@@ -147,7 +147,7 @@ class Llama3ModelWithJSONConfig(nn.Module):
             self.aie_final_norm_prefill = AIERMSNorm(
                 size=max_prefill_size,
                 eps=1e-5,
-                num_columns=8,
+                num_aie_columns=8,
                 num_channels=2,
                 tile_size=self.cfg["emb_dim"],
             )
@@ -157,7 +157,7 @@ class Llama3ModelWithJSONConfig(nn.Module):
                 self.aie_final_norm_decode = AIERMSNorm(
                     size=decode_size,
                     eps=1e-5,
-                    num_columns=1,
+                    num_aie_columns=1,
                     num_channels=2,
                     tile_size=self.cfg["emb_dim"],
                 )
