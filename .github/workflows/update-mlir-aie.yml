@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: devel
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -47,12 +49,19 @@ jobs:
         run: |
           echo "New version found: ${{ steps.latest_release.outputs.tag_with_v }}. Current version is v${{ steps.current_version.outputs.version }}."
           
+          new_branch="update-mlir-aie-to-${{ steps.latest_release.outputs.tag_with_v }}"
+          
+          # Check if branch already exists
+          if git ls-remote --exit-code origin "refs/heads/$new_branch"; then
+            echo "Branch $new_branch already exists. Skipping update."
+            exit 0
+          fi
+          
           # Configure git
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
           
           # Create new branch
-          new_branch="update-mlir-aie-to-${{ steps.latest_release.outputs.tag_with_v }}"
           git checkout -b $new_branch
           
           # Update requirements.txt
@@ -66,7 +75,12 @@ jobs:
           git push --set-upstream origin $new_branch
           
           # Create Pull Request
-          gh pr create --base main --head $new_branch --title "Update mlir-aie to ${{ steps.latest_release.outputs.tag_with_v }}" --body "This PR updates the mlir-aie version to the latest release."
+          sed 's/Describe the intent of your PR here./This PR updates the mlir-aie version from v${{ steps.current_version.outputs.version }} to the latest release, ${{ steps.latest_release.outputs.tag_with_v }}./' .github/PULL_REQUEST_TEMPLATE.md | \
+          gh pr create \
+            --base devel \
+            --head $new_branch \
+            --title "Update mlir-aie from v${{ steps.current_version.outputs.version }} to ${{ steps.latest_release.outputs.tag_with_v }}" \
+            --body-file -
           
       - name: No new version found
         if: steps.current_version.outputs.version == steps.latest_release.outputs.tag
