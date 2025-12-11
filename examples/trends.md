@@ -19,3 +19,20 @@
 </tr>
 </tbody>
 </table>
+
+
+## llama_3.2_1b_prompt_2048_tokens_40
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Num_Tokens (max)</th><th>Num_Tokens (mean)</th><th>Num_Tokens (median)</th><th>Num_Tokens (min)</th><th>Num_Tokens (stddev)</th><th>TPS (max)</th><th>TPS (mean)</th><th>TPS (median)</th><th>TPS (min)</th><th>TPS (stddev)</th><th>TTFT (max)</th><th>TTFT (mean)</th><th>TTFT (median)</th><th>TTFT (min)</th><th>TTFT (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>140ffa6</code> — 2025-12-11 00:07:58</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>0.00 (n/a)</td><td>4.71 (n/a)</td><td>4.71 (n/a)</td><td>4.71 (n/a)</td><td>4.71 (n/a)</td><td>0.00 (n/a)</td><td>4.38 (n/a)</td><td>4.38 (n/a)</td><td>4.38 (n/a)</td><td>4.38 (n/a)</td><td>0.00 (n/a)</td>
+</tr>
+</tbody>
+</table>
