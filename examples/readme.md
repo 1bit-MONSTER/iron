@@ -1,7 +1,7 @@
 
 # IRONCLAD
 
-Tested on `2025_12_11_00_10_28` at commit `140ffa6`.
+Tested on `2025_12_12_04_52_28` at commit `588c3b9`.
 
 <table>
     <thead>
@@ -14,6 +14,51 @@ Tested on `2025_12_11_00_10_28` at commit `140ffa6`.
     <tbody>
         <tr>
             <td>
+                llama_3.2_1b_prompt_13_tokens_1
+            </td>
+            <td>
+                ✅
+                1/1
+            </td>
+            <td>
+                0.62
+            </td>
+            <td>
+                0.00
+            </td>
+        </tr>
+        <tr>
+            <td>
+                llama_3.2_1b_prompt_13_tokens_40
+            </td>
+            <td>
+                ✅
+                1/1
+            </td>
+            <td>
+                0.61
+            </td>
+            <td>
+                4.97
+            </td>
+        </tr>
+        <tr>
+            <td>
+                llama_3.2_1b_prompt_2048_tokens_1
+            </td>
+            <td>
+                ✅
+                1/1
+            </td>
+            <td>
+                4.35
+            </td>
+            <td>
+                0.00
+            </td>
+        </tr>
+        <tr>
+            <td>
                 llama_3.2_1b_prompt_2048_tokens_40
             </td>
             <td>
@@ -21,10 +66,10 @@ Tested on `2025_12_11_00_10_28` at commit `140ffa6`.
                 1/1
             </td>
             <td>
-                4.38
+                4.35
             </td>
             <td>
-                4.71
+                4.59
             </td>
         </tr>
     </tbody>
