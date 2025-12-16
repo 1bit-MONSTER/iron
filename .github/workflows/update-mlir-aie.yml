@@ -16,6 +16,8 @@ permissions:
 jobs:
   check-and-update:
     runs-on: ubuntu-latest
+    outputs:
+      new_branch: ${{ steps.create_pr.outputs.branch_name }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -44,6 +46,7 @@ jobs:
           echo "tag=$latest_tag" >> $GITHUB_OUTPUT
 
       - name: Compare versions and create PR
+        id: create_pr
         if: steps.current_version.outputs.version != steps.latest_release.outputs.tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,6 +54,7 @@ jobs:
           echo "New version found: ${{ steps.latest_release.outputs.tag_with_v }}. Current version is v${{ steps.current_version.outputs.version }}."
           
           new_branch="update-mlir-aie-to-${{ steps.latest_release.outputs.tag_with_v }}"
+          echo "branch_name=$new_branch" >> $GITHUB_OUTPUT
           
           # Check if branch already exists
           if git ls-remote --exit-code origin "refs/heads/$new_branch"; then
@@ -84,12 +88,18 @@ jobs:
             --title "Update mlir-aie from v${{ steps.current_version.outputs.version }} to ${{ steps.latest_release.outputs.tag_with_v }}" \
             --body-file -
 
-          # Trigger CI workflows
-          echo "Triggering CI workflows..."
-          gh workflow run ci-lint.yml --ref $new_branch
-          gh workflow run small.yml --ref $new_branch
-          gh workflow run test-examples.yml --ref $new_branch
-          
       - name: No new version found
         if: steps.current_version.outputs.version == steps.latest_release.outputs.tag
         run: echo "mlir-aie is already at the latest version (${{ steps.current_version.outputs.version }})."
+
+  Linting:
+    needs: check-and-update
+    if: needs.check-and-update.outputs.new_branch != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check-and-update.outputs.new_branch }}
+      - name: Lint
+        uses: ./.github/actions/lint
