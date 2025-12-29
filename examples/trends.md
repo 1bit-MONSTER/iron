@@ -32,10 +32,10 @@
 </thead>
 <tbody>
 <tr>
-<td><code>eb18d10</code> — 2025-12-29 19:18:53</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.64 (+3.01%)</td><td>0.64 (+3.01%)</td><td>0.64 (+3.01%)</td><td>0.64 (+3.01%)</td><td>0.00 (n/a)</td>
+<td><code>50ad37c</code> — 2025-12-29 19:53:56</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.63 (-1.66%)</td><td>0.63 (-1.66%)</td><td>0.63 (-1.66%)</td><td>0.63 (-1.66%)</td><td>0.00 (n/a)</td>
 </tr>
 <tr>
-<td><code>ea7f586</code> — 2025-12-18 23:25:32</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.62 (n/a)</td><td>0.62 (n/a)</td><td>0.62 (n/a)</td><td>0.62 (n/a)</td><td>0.00 (n/a)</td>
+<td><code>eb18d10</code> — 2025-12-29 19:18:53</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.64 (n/a)</td><td>0.64 (n/a)</td><td>0.64 (n/a)</td><td>0.64 (n/a)</td><td>0.00 (n/a)</td>
 </tr>
 </tbody>
 </table>
@@ -52,10 +52,10 @@
 </thead>
 <tbody>
 <tr>
-<td><code>eb18d10</code> — 2025-12-29 19:18:53</td><td>40.00 (+0.00%)</td><td>40.00 (+0.00%)</td><td>40.00 (+0.00%)</td><td>40.00 (+0.00%)</td><td>0.00 (n/a)</td><td>5.01 (-0.40%)</td><td>5.01 (-0.40%)</td><td>5.01 (-0.40%)</td><td>5.01 (-0.40%)</td><td>0.00 (n/a)</td><td>0.63 (-0.25%)</td><td>0.63 (-0.25%)</td><td>0.63 (-0.25%)</td><td>0.63 (-0.25%)</td><td>0.00 (n/a)</td>
+<td><code>50ad37c</code> — 2025-12-29 19:53:56</td><td>40.00 (+0.00%)</td><td>40.00 (+0.00%)</td><td>40.00 (+0.00%)</td><td>40.00 (+0.00%)</td><td>0.00 (n/a)</td><td>5.07 (+1.20%)</td><td>5.07 (+1.20%)</td><td>5.07 (+1.20%)</td><td>5.07 (+1.20%)</td><td>0.00 (n/a)</td><td>0.63 (+0.47%)</td><td>0.63 (+0.47%)</td><td>0.63 (+0.47%)</td><td>0.63 (+0.47%)</td><td>0.00 (n/a)</td>
 </tr>
 <tr>
-<td><code>ea7f586</code> — 2025-12-18 23:25:32</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>0.00 (n/a)</td><td>5.03 (n/a)</td><td>5.03 (n/a)</td><td>5.03 (n/a)</td><td>5.03 (n/a)</td><td>0.00 (n/a)</td><td>0.63 (n/a)</td><td>0.63 (n/a)</td><td>0.63 (n/a)</td><td>0.63 (n/a)</td><td>0.00 (n/a)</td>
+<td><code>eb18d10</code> — 2025-12-29 19:18:53</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>0.00 (n/a)</td><td>5.01 (n/a)</td><td>5.01 (n/a)</td><td>5.01 (n/a)</td><td>5.01 (n/a)</td><td>0.00 (n/a)</td><td>0.63 (n/a)</td><td>0.63 (n/a)</td><td>0.63 (n/a)</td><td>0.63 (n/a)</td><td>0.00 (n/a)</td>
 </tr>
 </tbody>
 </table>
@@ -72,10 +72,10 @@
 </thead>
 <tbody>
 <tr>
-<td><code>eb18d10</code> — 2025-12-29 19:18:53</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>4.35 (-0.55%)</td><td>4.35 (-0.55%)</td><td>4.35 (-0.55%)</td><td>4.35 (-0.55%)</td><td>0.00 (n/a)</td>
+<td><code>50ad37c</code> — 2025-12-29 19:53:56</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>4.36 (+0.16%)</td><td>4.36 (+0.16%)</td><td>4.36 (+0.16%)</td><td>4.36 (+0.16%)</td><td>0.00 (n/a)</td>
 </tr>
 <tr>
-<td><code>ea7f586</code> — 2025-12-18 23:25:32</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>4.37 (n/a)</td><td>4.37 (n/a)</td><td>4.37 (n/a)</td><td>4.37 (n/a)</td><td>0.00 (n/a)</td>
+<td><code>eb18d10</code> — 2025-12-29 19:18:53</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>4.35 (n/a)</td><td>4.35 (n/a)</td><td>4.35 (n/a)</td><td>4.35 (n/a)</td><td>0.00 (n/a)</td>
 </tr>
 </tbody>
 </table>
@@ -92,10 +92,10 @@
 </thead>
 <tbody>
 <tr>
-<td><code>eb18d10</code> — 2025-12-29 19:18:53</td><td>40.00 (+0.00%)</td><td>40.00 (+0.00%)</td><td>40.00 (+0.00%)</td><td>40.00 (+0.00%)</td><td>0.00 (n/a)</td><td>4.55 (-2.78%)</td><td>4.55 (-2.78%)</td><td>4.55 (-2.78%)</td><td>4.55 (-2.78%)</td><td>0.00 (n/a)</td><td>4.39 (+0.20%)</td><td>4.39 (+0.20%)</td><td>4.39 (+0.20%)</td><td>4.39 (+0.20%)</td><td>0.00 (n/a)</td>
+<td><code>50ad37c</code> — 2025-12-29 19:53:56</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td>
 </tr>
 <tr>
-<td><code>ea7f586</code> — 2025-12-18 23:25:32</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>0.00 (n/a)</td><td>4.68 (n/a)</td><td>4.68 (n/a)</td><td>4.68 (n/a)</td><td>4.68 (n/a)</td><td>0.00 (n/a)</td><td>4.38 (n/a)</td><td>4.38 (n/a)</td><td>4.38 (n/a)</td><td>4.38 (n/a)</td><td>0.00 (n/a)</td>
+<td><code>eb18d10</code> — 2025-12-29 19:18:53</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>0.00 (n/a)</td><td>4.55 (n/a)</td><td>4.55 (n/a)</td><td>4.55 (n/a)</td><td>4.55 (n/a)</td><td>0.00 (n/a)</td><td>4.39 (n/a)</td><td>4.39 (n/a)</td><td>4.39 (n/a)</td><td>4.39 (n/a)</td><td>0.00 (n/a)</td>
 </tr>
 </tbody>
 </table>
