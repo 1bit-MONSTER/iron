@@ -37,91 +37,7 @@ from src.utils import (
     generate,
 )
 
-# Global logger for profiling
-_profile_logger = None
-
-
-def profile_function_calls(frame, event, arg):
-    """
-    Profile function that logs start and end times of every function call.
-
-    Args:
-        frame: The current stack frame
-        event: The event type ('call', 'return', 'c_call', 'c_return', 'c_exception')
-        arg: Event-specific argument
-    """
-    global _profile_logger
-
-    if _profile_logger is None:
-        return
-
-    func_name = frame.f_code.co_name
-    filename = frame.f_code.co_filename
-    line_no = frame.f_lineno
-
-    # Create a readable function identifier
-    func_identifier = f"{filename}:{func_name}:{line_no}"
-
-    if event == "call":
-        # Function is being called
-        timestamp = time.perf_counter()
-        _profile_logger.debug(f"[CALL] {func_identifier} started at {timestamp:.9f}")
-
-    elif event == "return":
-        # Function is returning
-        timestamp = time.perf_counter()
-        _profile_logger.debug(f"[RETURN] {func_identifier} ended at {timestamp:.9f}")
-
-    return profile_function_calls
-
-
-def enable_profiling(logs_dir_name):
-    """Enable function call profiling using sys.setprofile."""
-    global _profile_logger
-
-    # Create a dedicated logger for profiling
-    _profile_logger = logging.getLogger("function_profiler")
-    _profile_logger.setLevel(logging.DEBUG)
-    # Prevent propagation to root logger to avoid console output
-    _profile_logger.propagate = False
-
-    # Create log file for profiling data
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    log_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        logs_dir_name,
-        f"profile_{timestamp}.log",
-    )
-
-    # Add file handler for profiling (only file, no console output)
-    profile_handler = logging.FileHandler(log_path)
-    profile_handler.setLevel(logging.DEBUG)
-    profile_formatter = logging.Formatter("%(asctime)s - %(message)s")
-    profile_handler.setFormatter(profile_formatter)
-    _profile_logger.addHandler(profile_handler)
-
-    # Set the profile function
-    sys.setprofile(profile_function_calls)
-    _profile_logger.info("Function profiling enabled")
-
-    # Explicitly call profile_function_calls to log this function's call
-    import inspect
-
-    frame = inspect.currentframe()
-    profile_function_calls(frame, "call", None)
-
-
-def disable_profiling():
-    """Disable function call profiling."""
-    global _profile_logger
-
-    sys.setprofile(None)
-    if _profile_logger:
-        _profile_logger.info("Function profiling disabled")
-        # Close all handlers
-        for handler in _profile_logger.handlers[:]:
-            handler.close()
-            _profile_logger.removeHandler(handler)
+import custom_profile
 
 
 _iron_chat = r"""
@@ -421,7 +337,7 @@ if __name__ == "__main__":
 
     # Enable function profiling
     if args.profile:
-        enable_profiling(logs_dir_name)
+        custom_profile.enable_profiling()
 
     try:
         prompt = args.prompt
@@ -445,5 +361,5 @@ if __name__ == "__main__":
         )
     finally:
         if args.profile:
-            # Disable profiling when done
-            disable_profiling()
+            custom_profile.store_profile(Path(logs_dir_name) / "profile.json")
+

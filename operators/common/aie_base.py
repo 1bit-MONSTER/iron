@@ -213,16 +213,28 @@ class AIEOperatorBase(ABC):
             insts_bos = set(
                 self.xrt_kernels[kernel_name][2] for (kernel_name, *_) in self.runlist
             )
-            for bo in bos | insts_bos:
-                bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+            sync_to_device(bos | insts_bos)
             start = time.perf_counter()
-            self.xrt_runlist.execute()
-            self.xrt_runlist.wait()
+            execute_runlist(self.xrt_runlist)
             stop = time.perf_counter()
-            for bo in bos:
-                bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
+            sync_from_device(bos)
             elapsed = stop - start
         return elapsed
+
+
+def sync_to_device(bos):
+    for bo in bos:
+        bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+
+
+def sync_from_device(bos):
+    for bo in bos:
+        bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
+
+
+def execute_runlist(runlist):
+    runlist.execute()
+    runlist.wait()
 
 
 class AIEOperatorConstraintError(RuntimeError):
