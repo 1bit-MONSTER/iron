@@ -1,7 +1,7 @@
 
 # IRONCLAD
 
-Tested on `2026_01_05_19_20_08` at commit `a4b6ffe`.
+Tested on `2026_01_08_18_49_13` at commit `331dcca`.
 
 <table>
     <thead>
@@ -21,7 +21,7 @@ Tested on `2026_01_05_19_20_08` at commit `a4b6ffe`.
                 1/1
             </td>
             <td>
-                0.63
+                0.66
             </td>
             <td>
                 0.00
@@ -36,10 +36,10 @@ Tested on `2026_01_05_19_20_08` at commit `a4b6ffe`.
                 1/1
             </td>
             <td>
-                0.62
+                0.61
             </td>
             <td>
-                4.96
+                5.04
             </td>
         </tr>
         <tr>
@@ -51,7 +51,7 @@ Tested on `2026_01_05_19_20_08` at commit `a4b6ffe`.
                 1/1
             </td>
             <td>
-                4.38
+                2.65
             </td>
             <td>
                 0.00
@@ -66,10 +66,10 @@ Tested on `2026_01_05_19_20_08` at commit `a4b6ffe`.
                 1/1
             </td>
             <td>
-                4.35
+                2.67
             </td>
             <td>
-                4.74
+                4.78
             </td>
         </tr>
     </tbody>
