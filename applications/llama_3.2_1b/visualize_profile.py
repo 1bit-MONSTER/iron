@@ -296,13 +296,13 @@ def draw_flame_graph(rectangles, total_time, output_file='flame_graph.png'):
     max_depth = max(rect['depth'] for rect in rectangles)
     fig, ax = plt.subplots(figsize=(20, max_depth + 2))
     
-    # Color palette - rocket colormap
-    if HAS_SEABORN:
-        colors = sns.color_palette("pastel")
-    else:
-        # Use matplotlib's tab20 colormap
-        cmap = plt.cm.get_cmap('tab20')
-        colors = [cmap(i) for i in range(20)]
+    # Define base colors: blue and green alternating by row
+    import colorsys
+    blue_hue = 0.58  # Blue in HSV
+    green_hue = 0.33  # Green in HSV
+    
+    # Track x-position at each depth to determine column parity
+    depth_positions = {}
     
     for rect in rectangles:
         depth = rect['depth']
@@ -316,16 +316,40 @@ def draw_flame_graph(rectangles, total_time, output_file='flame_graph.png'):
         x_start_abs = x_start * total_time
         width_abs = width * total_time
         
-        # Choose color based on function name hash
-        color_idx = hash(func_name) % len(colors)
+        # Alternate hue between blue and green by depth (row)
+        hue = blue_hue if depth % 2 == 0 else green_hue
         
+        # Track column index at this depth
+        if depth not in depth_positions:
+            depth_positions[depth] = []
+        
+        # Find column index (how many rectangles we've seen at this depth)
+        column_idx = len(depth_positions[depth])
+        depth_positions[depth].append(x_start_abs)
+        
+        # Alternate brightness by column: odd columns are lighter, even are darker
+        if column_idx % 2 == 0:
+            saturation = 0.6
+            value = 0.85
+        else:
+            saturation = 0.5
+            value = 0.95
+        
+        # Convert HSV to RGB
+        rgb = colorsys.hsv_to_rgb(hue, saturation, value)
+        
+        # Create rectangle with no vertical spacing (height=1.0) and only left/right borders
         patch = mpatches.Rectangle(
-            (x_start_abs, depth), width_abs, 0.8,
-            facecolor=colors[color_idx],
-            edgecolor='black',
-            linewidth=1
+            (x_start_abs, depth), width_abs, 1.0,
+            facecolor=rgb,
+            edgecolor='none',
+            linewidth=0
         )
         ax.add_patch(patch)
+        
+        # Add left and right borders only
+        ax.plot([x_start_abs, x_start_abs], [depth, depth + 1.0], 'k-', linewidth=0.2, zorder=10)
+        ax.plot([x_start_abs + width_abs, x_start_abs + width_abs], [depth, depth + 1.0], 'k-', linewidth=0.2, zorder=10)
         
         # Add text label if above threshold AND width is sufficient
         # Use absolute width for threshold check
@@ -354,7 +378,7 @@ def draw_flame_graph(rectangles, total_time, output_file='flame_graph.png'):
                 label = '\n'.join(label_lines[:max_lines])
             
             ax.text(
-                x_start_abs + width_abs/2, depth + 0.4,
+                x_start_abs + width_abs/2, depth + 0.5,
                 label,
                 ha='center', va='center',
                 fontsize=7,
@@ -362,7 +386,7 @@ def draw_flame_graph(rectangles, total_time, output_file='flame_graph.png'):
             )
     
     ax.set_xlim(0, total_time)
-    ax.set_ylim(-0.5, max_depth + 0.5)
+    ax.set_ylim(0, max_depth + 1)
     ax.set_xlabel('Cumulative Time (seconds)', fontsize=12)
     ax.set_ylabel('Call Stack Depth', fontsize=12)
     ax.set_title('Flame Graph - Profile Visualization', fontsize=14, weight='bold')
