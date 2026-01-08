@@ -89,25 +89,41 @@ class AIEOperatorBase(ABC):
     def get_bo(self, buffer_name):
         return self.buffer_bos[buffer_name]
 
-    def read_buffer(self, buffer_name, shape, dtype=bfloat16):
+    def read_buffer(self, buffer_name, shape, copy=False, dtype=bfloat16):
         """Read buffer and return values as a numpy array"""
-        size = np.prod(shape) * np.dtype(dtype).itemsize
-        output_bytes = self.get_bo(buffer_name).read(size, 0)
-        output_data_flat = np.frombuffer(output_bytes, dtype=dtype)
-        return output_data_flat.reshape(*shape)
+        # Create a byte accessible memory view of the buffer object
+        mv = self.get_bo(buffer_name).map()
+
+        # Interpret the buffer as a 1-dimensional array then change its view to the expected shape
+        arr = np.frombuffer(mv, dtype=dtype, count=np.prod(shape)).reshape(shape)
+
+        # Return an independent copy of the array if needed
+        return arr.copy() if copy else arr
 
     def read_buffer_as_torch(self, buffer_name, shape, dtype=bfloat16):
         return numpy_to_torch(self.read_buffer(buffer_name, shape, dtype))
 
     def write_buffer(self, buffer_name, array):
         """Write buffer from a numpy array into a XRT buffer object"""
-        if isinstance(array, torch.Tensor):
-            numpy_array = torch_to_numpy(array)
-        else:
-            numpy_array = array
         if buffer_name in self.buffer_static_data:
             raise RuntimeError(f"Cannot write to static buffer: {buffer_name}")
-        self.get_bo(buffer_name).write(numpy_array.flatten().view(np.uint8), 0)
+
+        # Normalize the source
+        if isinstance(array, torch.Tensor):
+            src = torch_to_numpy(array)
+        else:
+            src = np.asarray(array)
+
+        # Create a flattened 1D byte view of the source
+        src_bytes = src.ravel().view(np.uint8)
+
+        bo = self.get_bo(buffer_name)
+        mv = bo.map()  # byte accessible memory view
+        # Interpret the buffer as a 1-dimensional array
+        dst_bytes = np.frombuffer(mv, dtype=np.uint8, count=bo.size())
+
+        # The BO is an existing array, so copyto() can be called, which doesn't create a new array
+        np.copyto(dst_bytes[: src_bytes.size], src_bytes, casting="no")
 
     @abstractmethod
     def set_up_artifacts(self):

@@ -18,9 +18,10 @@ def generate_test_params(extensive=False):
     K_list = [2048] if not extensive else [2048, 8192, 64]
     N_list = [2048] if not extensive else [2048, 8192]
     m, k, n = 64, 64, 64
-    num_aie_columns = 2
+    num_aie_columns = 8
     col_maj = [(False, False), (True, False), (False, True)]
     trace_size = 0
+    partition_N = 1
 
     params = []
     names = []
@@ -43,10 +44,11 @@ def generate_test_params(extensive=False):
                             k,
                             n,
                             trace_size,
+                            partition_N,
                         )
                     )
                     names.append(
-                        f"gemm_{M}x{K}x{N}_{m}x{k}x{n}_{num_aie_columns}_cols_{int(b_col_maj)}_bcolmaj_{int(c_col_maj)}_ccolmaj_{trace_size}"
+                        f"gemm_{M}x{K}x{N}_{m}x{k}x{n}_{num_aie_columns}_cols_{int(b_col_maj)}_bcolmaj_{int(c_col_maj)}_ccolmaj_{trace_size}{f"_{partition_N}" if partition_N > 1 else ""}"
                     )
 
     return params, names
@@ -71,16 +73,28 @@ all_params = [
     Throughput=r"Throughput: (?P<value>[\d\.e\+-]+) GFLOP/s",
 )
 @pytest.mark.parametrize(
-    "M,K,N,num_aie_columns,b_col_maj,c_col_maj,m,k,n,trace_size",
+    "M,K,N,num_aie_columns,b_col_maj,c_col_maj,m,k,n,trace_size,partition_N",
     all_params,
 )
 def test_gemm(
-    M, K, N, num_aie_columns, b_col_maj, c_col_maj, m, k, n, trace_size, aie_context
+    M,
+    K,
+    N,
+    num_aie_columns,
+    b_col_maj,
+    c_col_maj,
+    m,
+    k,
+    n,
+    trace_size,
+    partition_N,
+    aie_context,
 ):
     golden_ref = generate_golden_reference(
         M=M,
         K=K,
         N=N,
+        partition_N=partition_N,
         b_col_maj=b_col_maj,
         c_col_maj=c_col_maj,
     )
@@ -94,15 +108,19 @@ def test_gemm(
         emulate_bf16_mmul_with_bfp16=False,
         b_col_maj=b_col_maj,
         c_col_maj=c_col_maj,
+        partition_N=partition_N,
         context=aie_context,
     )
 
     input_buffers = {
         "A": golden_ref["input"].flatten(),
-        "B": golden_ref["input_b"].flatten(),
     }
-    output_buffers = {"C": golden_ref["output"].flatten()}
+    output_buffers = {}
 
+    # Create A, B, C dictionaries from the partitioned buffers
+    for i in range(partition_N):
+        input_buffers[f"B_{i}"] = golden_ref["input_b"][i].flatten()
+        output_buffers[f"C_{i}"] = golden_ref["output"][i].flatten()
     errors, latency_us, bandwidth_gbps = run_test(
         operator, input_buffers, output_buffers, rel_tol=0.005, abs_tol=0.005
     )
