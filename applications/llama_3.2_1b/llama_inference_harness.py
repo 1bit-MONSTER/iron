@@ -11,6 +11,7 @@ The 'harness' function does the following:
 import torch
 import math
 import sys
+import time
 
 import safetensors.torch
 import tiktoken, tiktoken.load
@@ -38,9 +39,6 @@ class LlamaConfig:
     # Generation
     temperature = 0.7
     top_k = 50
-    
-    # Sampling
-    dtype = torch.float32
 
     # Tokenization 
     special_tokens = {
@@ -101,15 +99,19 @@ def generate_token(
     angles,
     forward_pass,
     token_ids,
+    attn_keys_caches=None,
+    attn_values_caches=None,
 ):
     generated_tokens = []
     
     # Step 1: Forward pass
-    logits = forward_pass(
-        token_ids,
+    logits, attn_keys_caches, attn_values_caches = forward_pass(
+        config,
         weights,
         angles,
-        config,
+        token_ids,
+        attn_keys_caches,
+        attn_values_caches
     )
     
     # Step 2: Get logits for last token
@@ -133,7 +135,7 @@ def generate_token(
     probs = torch.nn.functional.softmax(last_token_logits, dim=-1)
     next_token = torch.multinomial(probs, num_samples=1)
 
-    return next_token.item()
+    return next_token.item(), attn_keys_caches, attn_values_caches
 
 
 def harness(
@@ -161,19 +163,46 @@ def harness(
     )
     
     # Tokenize prompt
-    token_ids = [config.special_tokens["<|begin_of_text|>"]]
-    token_ids += tokenizer.encode(prompt)
-    assert len(token_ids) + num_tokens <= config.context_length, "Prompt + new tokens to generate too long (exceed context)"
-    token_ids = torch.tensor([token_ids], dtype=torch.long)
-    
-    # Generate tokens
-    print(prompt, end='', flush=True)
-    for _ in range(num_tokens):
-        next_token = generate_token(config, weights, angles, forward_pass, token_ids)
-        token_ids = torch.cat([token_ids, torch.tensor([[next_token]])], dim=1)
+    prompt_token_ids = [config.special_tokens["<|begin_of_text|>"]]
+    prompt_token_ids += tokenizer.encode(prompt)
+    assert len(prompt_token_ids) + num_tokens <= config.context_length, "Prompt + new tokens to generate too long (exceed context)"
+    prompt_token_ids = torch.tensor([prompt_token_ids], dtype=torch.long)
 
+    # Set up KV cache -- initially empty
+    # This is what passes information from previous tokens to the current token during generation
+    attn_keys_caches = [torch.empty(1, config.n_kv_groups, 0, config.head_dim, dtype=weights["model.layers.0.self_attn.k_proj.weight"].dtype) for _ in range(config.n_layers)] # (batch_size, n_kv_groups, seq_len, head_dim)
+    attn_values_caches = [torch.empty(1, config.n_kv_groups, 0, config.head_dim, dtype=weights["model.layers.0.self_attn.v_proj.weight"].dtype) for _ in range(config.n_layers)] # (batch_size, n_kv_groups, seq_len, head_dim)
+
+    # Generate tokens
+    # First token (prefill)
+    n_tokens_generated = 0
+    t_prefill_start = time.perf_counter()
+    first_token, attn_keys_caches, attn_values_caches = generate_token(config, weights, angles, forward_pass, prompt_token_ids, attn_keys_caches, attn_values_caches)
+    token_text = tokenizer.decode([first_token])
+    n_tokens_generated  += 1
+    print(prompt, end='', flush=True)
+    print(token_text, end='', flush=True)
+    t_prefill_stop = time.perf_counter()
+
+    # Remaining tokens (decode)
+    last_token = torch.tensor([[first_token]])
+    t_decode_start = time.perf_counter()
+    for _ in range(num_tokens-1):
+        next_token, attn_keys_caches, attn_values_caches = generate_token(config, weights, angles, forward_pass, last_token, attn_keys_caches, attn_values_caches)
         token_text = tokenizer.decode([next_token])
+        n_tokens_generated += 1
         print(token_text, end='', flush=True)
+        last_token = torch.tensor([[next_token]])
+    t_decode_end = time.perf_counter()
+
+    t_prefill = t_prefill_stop - t_prefill_start
+    t_decode = t_decode_end - t_decode_start
+    sys.stderr.write("\n\n=== Performance Statistics ===\n")
+    sys.stderr.write(f"[Prefill] Time to first token:   {t_prefill:7.3f} s\n")
+    sys.stderr.write(f"[Decode]  Time per token (mean): {t_decode / (n_tokens_generated - 1):7.3f} s\n")
+    sys.stderr.write(f"[Decode]  Tokens per second:     {(n_tokens_generated - 1) / t_decode:7.3f}\n")
+    sys.stderr.write(f"[Total]   Time per token (mean): {(t_prefill + t_decode) / n_tokens_generated:7.3f} s\n")
+    sys.stderr.write(f"[Total]   Tokens per second:     {n_tokens_generated / (t_prefill + t_decode):7.3f}\n")
 
 
 if __name__ == "__main__":
