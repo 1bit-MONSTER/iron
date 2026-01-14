@@ -14,6 +14,7 @@ from operators.common import AIEOperatorBase
 from operators import (
     AIERMSNorm,
     AIEGEMM,
+    AIEGEMV
 )
 
 
@@ -27,7 +28,7 @@ class AIELlamaOperators:
     def __init__(self, config, prompt_len):
         self.context = AIEContext()
 
-        # RMS Norm
+        # Final RMS Norm
         self.final_norm_prefill = AIERMSNorm(
             size=prompt_len,
             eps=1e-5,
@@ -43,6 +44,31 @@ class AIELlamaOperators:
             num_channels=2,
             tile_size=config.emb_dim,
             context=self.context,
+        )
+
+        # Final GEMM
+        self.out_head_prefill = AIEGEMM(
+            M=prompt_len,
+            K=config.emb_dim,
+            N=config.vocab_size,
+            num_aie_columns=8,
+            tile_m=64,
+            tile_k=64,
+            tile_n=64,
+            b_col_maj=True,
+            use_static_weight=True,
+            separate_c_tiles=True,
+            partition_N=4,
+            context=self.context
+        )
+        self.out_head_decode = AIEGEMV(
+            M=config.vocab_size, K=config.emb_dim,
+            num_aie_columns=8,
+            is_mv=True,
+            use_static_weight=True,
+            tile_size_input=4,
+            tile_size_output=32,
+            context=self.context
         )
 
     def setup(self):
@@ -293,7 +319,7 @@ def llama_forward_pass_prefill(
     else:
         lm_head_weight = config.weights['model.embed_tokens.weight']
     
-    logits = torch.nn.functional.linear(x, lm_head_weight)  # (batch, seq_len, vocab_size)
+    logits = aieops.out_head_prefill(x)  # (batch, seq_len, vocab_size)
     
     return logits, state
 
@@ -331,9 +357,7 @@ def llama_forward_pass_decode(
     x = aieops.final_norm_decode(x)
     
     # Step 5: Output projection
-    lm_head_weight = config.weights['model.embed_tokens.weight']
-    
-    logits = torch.nn.functional.linear(x, lm_head_weight)  # (batch, seq_len, vocab_size)
+    logits = aieops.out_head_decode(x)  # (batch, seq_len, vocab_size)
     
     return logits, state
 
@@ -349,6 +373,8 @@ def main():
     aieops = AIELlamaOperators(config, 2048)
     aieops.final_norm_prefill.weight = config.weights['model.norm.weight']
     aieops.final_norm_decode.weight = config.weights['model.norm.weight']
+    aieops.out_head_prefill.weight = config.weights['model.embed_tokens.weight'].T
+    aieops.out_head_decode.weight = config.weights['model.embed_tokens.weight'].T
     aieops.setup()
 
     print(prompt, end='', flush=True)
