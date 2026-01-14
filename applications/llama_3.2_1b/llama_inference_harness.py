@@ -21,37 +21,65 @@ import tiktoken, tiktoken.load
 # ##########################################################################
 
 class LlamaConfig:
-    """Fixed model configuration for Llama 3.2 1B"""
+    def __init__(self, weights_path, tokenizer_path):
+        # Model architecture
+        self.vocab_size = 128256
+        self.emb_dim = 2048
+        self.n_layers = 16
+        self.n_heads = 32
+        self.n_kv_groups = 8
+        self.head_dim = self.emb_dim // self.n_heads  # 64
+        self.hidden_dim = 8192
+        
+        # RoPE
+        self.rope_base = 500000.0
+        self.context_length = 131072
+        
+        # Generation
+        self.temperature = 0.7
+        self.top_k = 50
 
-    # Model architecture
-    vocab_size = 128256
-    emb_dim = 2048
-    n_layers = 16
-    n_heads = 32
-    n_kv_groups = 8
-    head_dim = emb_dim // n_heads  # 64
-    hidden_dim = 8192
-    
-    # RoPE
-    rope_base = 500000.0
-    context_length = 131072
-    
-    # Generation
-    temperature = 0.7
-    top_k = 50
+        # Tokenization 
+        self.special_tokens = {
+            "<|begin_of_text|>": 128000,
+            "<|end_of_text|>": 128001,
+            "<|start_header_id|>": 128006,
+            "<|end_header_id|>": 128007,
+            "<|eot_id|>": 128009,
+        }
+        self.special_tokens.update({
+            f"<|reserved_{i}|>": i
+            for i in list(range(128002, 128006)) + list(range(128009, 128256))
+        })
 
-    # Tokenization 
-    special_tokens = {
-        "<|begin_of_text|>": 128000,
-        "<|end_of_text|>": 128001,
-        "<|start_header_id|>": 128006,
-        "<|end_header_id|>": 128007,
-        "<|eot_id|>": 128009,
-    }
-    special_tokens.update({
-        f"<|reserved_{i}|>": i
-        for i in list(range(128002, 128006)) + list(range(128009, 128256))
-    })
+        # Load model weights and tokenizer
+        self.weights = safetensors.torch.load_file(weights_path)
+        self.tokenizer = get_tokenizer(tokenizer_path, self.special_tokens)
+        # TODO: Assert that weight dimensions match config
+
+        # Compute RoPE angle look-up table
+        self.angles = compute_rope_angles(
+            self.head_dim,
+            self.context_length,
+            self.rope_base
+        )
+
+
+class LlamaModelState:
+    def __init__(self, config):
+        # Current IDs of tokens being processed (most recent token for decode; all prompt tokens for prefill)
+        self.token_ids = torch.empty(0, dtype=torch.long)
+
+        # Set up KV cache -- initially empty
+        # This is what passes information from previous tokens to the current token during generation
+        self.attn_keys_caches = [
+            torch.empty(1, config.n_kv_groups, 0, config.head_dim, dtype=config.weights["model.layers.0.self_attn.k_proj.weight"].dtype)  # (batch_size, n_kv_groups, seq_len, head_dim)
+            for _ in range(config.n_layers)
+        ]
+        self.attn_values_caches = [
+            torch.empty(1, config.n_kv_groups, 0, config.head_dim, dtype=config.weights["model.layers.0.self_attn.v_proj.weight"].dtype)  # (batch_size, n_kv_groups, seq_len, head_dim)
+            for _ in range(config.n_layers)
+        ]
 
 
 # Utilities
@@ -74,7 +102,7 @@ def compute_rope_angles(head_dim, context_length, rope_base=500000.0):
     return angles
 
 
-def get_tokenizer(tokenizer_path, config):
+def get_tokenizer(tokenizer_path, special_tokens):
     mergeable = tiktoken.load.load_tiktoken_bpe(tokenizer_path)
     return tiktoken.Encoding(
         name="llama3.2-1b",
@@ -86,7 +114,7 @@ def get_tokenizer(tokenizer_path, config):
         r"|\s+(?!\S)"
         r"|\s+",
         mergeable_ranks=mergeable,
-        special_tokens=config.special_tokens,
+        special_tokens=special_tokens,
     )
 
 
@@ -95,23 +123,15 @@ def get_tokenizer(tokenizer_path, config):
 
 def generate_token(
     config,
-    weights,
-    angles,
     forward_pass,
-    token_ids,
-    attn_keys_caches=None,
-    attn_values_caches=None,
+    state
 ):
     generated_tokens = []
     
     # Step 1: Forward pass
-    logits, attn_keys_caches, attn_values_caches = forward_pass(
+    logits, state = forward_pass(
         config,
-        weights,
-        angles,
-        token_ids,
-        attn_keys_caches,
-        attn_values_caches
+        state
     )
     
     # Step 2: Get logits for last token
@@ -135,64 +155,56 @@ def generate_token(
     probs = torch.nn.functional.softmax(last_token_logits, dim=-1)
     next_token = torch.multinomial(probs, num_samples=1)
 
-    return next_token.item(), attn_keys_caches, attn_values_caches
+    return next_token.item(), state
 
 
-def harness(
-    forward_pass,
+def init(
     weights_path="/scratch/roesti/models/llama3.2-1b/model.safetensors",
     tokenizer_path="/scratch/roesti/models/llama3.2-1b/tokenizer.model",
     prompt="The capital of France is ",
-    num_tokens=100
 ):
+    config = LlamaConfig(weights_path, tokenizer_path)
+    state = LlamaModelState(config)
 
     seed = 1608560892
     torch.manual_seed(seed)
 
-    config = LlamaConfig()
-    
-    # Load model weights and tokenizer
-    weights = safetensors.torch.load_file(weights_path)
-    tokenizer = get_tokenizer(tokenizer_path, config)
-
-    # Compute RoPE angle look-up table
-    angles = compute_rope_angles(
-        config.head_dim,
-        config.context_length,
-        config.rope_base
-    )
-    
     # Tokenize prompt
     prompt_token_ids = [config.special_tokens["<|begin_of_text|>"]]
-    prompt_token_ids += tokenizer.encode(prompt)
-    assert len(prompt_token_ids) + num_tokens <= config.context_length, "Prompt + new tokens to generate too long (exceed context)"
+    prompt_token_ids += config.tokenizer.encode(prompt)
+    assert len(prompt_token_ids) <= config.context_length, "Prompt + new tokens to generate too long (exceed context)"
     prompt_token_ids = torch.tensor([prompt_token_ids], dtype=torch.long)
 
-    # Set up KV cache -- initially empty
-    # This is what passes information from previous tokens to the current token during generation
-    attn_keys_caches = [torch.empty(1, config.n_kv_groups, 0, config.head_dim, dtype=weights["model.layers.0.self_attn.k_proj.weight"].dtype) for _ in range(config.n_layers)] # (batch_size, n_kv_groups, seq_len, head_dim)
-    attn_values_caches = [torch.empty(1, config.n_kv_groups, 0, config.head_dim, dtype=weights["model.layers.0.self_attn.v_proj.weight"].dtype) for _ in range(config.n_layers)] # (batch_size, n_kv_groups, seq_len, head_dim)
+    state.token_ids = prompt_token_ids
 
+    return config, state
+
+
+def generate(
+    config,
+    state,
+    forward_pass,
+    num_tokens=100
+):
     # Generate tokens
     # First token (prefill)
     n_tokens_generated = 0
     t_prefill_start = time.perf_counter()
-    first_token, attn_keys_caches, attn_values_caches = generate_token(config, weights, angles, forward_pass, prompt_token_ids, attn_keys_caches, attn_values_caches)
-    token_text = tokenizer.decode([first_token])
+    first_token, state = generate_token(config, forward_pass, state)
+    token_text = config.tokenizer.decode([first_token])
     n_tokens_generated  += 1
-    print(prompt, end='', flush=True)
     print(token_text, end='', flush=True)
     t_prefill_stop = time.perf_counter()
 
     # Remaining tokens (decode)
-    last_token = torch.tensor([[first_token]])
+    state.token_ids = torch.tensor([[first_token]], dtype=torch.long)
     t_decode_start = time.perf_counter()
     for _ in range(num_tokens-1):
-        next_token, attn_keys_caches, attn_values_caches = generate_token(config, weights, angles, forward_pass, last_token, attn_keys_caches, attn_values_caches)
-        token_text = tokenizer.decode([next_token])
+        next_token, state = generate_token(config, forward_pass, state)
+        token_text = config.tokenizer.decode([next_token])
         n_tokens_generated += 1
         print(token_text, end='', flush=True)
-        last_token = torch.tensor([[next_token]])
+        state.token_ids = torch.tensor([[next_token]], dtype=torch.long)
     t_decode_end = time.perf_counter()
 
     t_prefill = t_prefill_stop - t_prefill_start

@@ -2,7 +2,52 @@
 
 import torch
 import math
+from pathlib import Path
+import sys
 import llama_inference_harness as harness
+
+repo_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(repo_root))
+
+from operators.common.aie_context import AIEContext
+from operators.common import AIEOperatorBase
+from operators import (
+    AIERMSNorm,
+    AIEGEMM,
+)
+
+
+# AIE Operator Configuration
+# ##########################################################################
+
+aieops = None
+
+class AIELlamaOperators:
+    
+    def __init__(self, config, prompt_len):
+        self.context = AIEContext()
+
+        # RMS Norm
+        self.final_norm_prefill = AIERMSNorm(
+            size=prompt_len,
+            eps=1e-5,
+            num_aie_columns=8,
+            num_channels=2,
+            tile_size=config.emb_dim,
+            context=self.context,
+        )
+        self.final_norm_decode = AIERMSNorm(
+            size=config.emb_dim,
+            eps=1e-5,
+            num_aie_columns=1,
+            num_channels=2,
+            tile_size=config.emb_dim,
+            context=self.context,
+        )
+
+    def setup(self):
+        self.context.compile_all()
+        self.context.prepare_runtime()
 
 
 # Operators
@@ -197,16 +242,26 @@ def llama_forward_pass(
     state
 ):
     batch, seq_len = state.token_ids.shape
-    
-    # Step 1: Token embedding
+
     tok_emb_weight = config.weights['model.embed_tokens.weight']
     x = torch.nn.functional.embedding(state.token_ids, tok_emb_weight)  # (batch, seq_len, emb_dim)
-    
-    # Step 2: Create causal mask
     attn_mask = torch.triu(
         torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool),
         diagonal=1
     )
+
+    if seq_len == 1:
+        return llama_forward_pass_decode(config, state, x, attn_mask)
+    else:
+        return llama_forward_pass_prefill(config, state, x, attn_mask)
+
+def llama_forward_pass_prefill(
+    config,
+    state,
+    x,
+    attn_mask
+):
+    batch, seq_len, _ = x.shape
     
     # Step 3: Apply transformer blocks
     for layer_idx in range(config.n_layers):
@@ -230,14 +285,56 @@ def llama_forward_pass(
         )
     
     # Step 4: Final normalization
-    final_norm_weight = config.weights['model.norm.weight']
-    x = rms_norm_forward(x, final_norm_weight)
+    x = aieops.final_norm_prefill(x)
+    
+    # Step 5: Output projection (check for tied embeddings)
+    if 'lm_head.weight' in config.weights:
+        lm_head_weight = config.weights['lm_head.weight']
+    else:
+        lm_head_weight = config.weights['model.embed_tokens.weight']
+    
+    logits = torch.nn.functional.linear(x, lm_head_weight)  # (batch, seq_len, vocab_size)
+    
+    return logits, state
+
+
+def llama_forward_pass_decode(
+    config,
+    state,
+    x,
+    attn_mask
+):
+    batch, seq_len, _ = x.shape
+    
+    # Step 3: Apply transformer blocks
+    for layer_idx in range(config.n_layers):
+        x, state.attn_keys_caches[layer_idx], state.attn_values_caches[layer_idx] = transformer_block_forward(
+            x,
+            state.attn_keys_caches[layer_idx],
+            state.attn_values_caches[layer_idx],
+            config.n_heads,
+            config.n_kv_groups,
+            W_norm1=config.weights[f'model.layers.{layer_idx}.input_layernorm.weight'],
+            W_attn_query=config.weights[f'model.layers.{layer_idx}.self_attn.q_proj.weight'],
+            W_attn_key=config.weights[f'model.layers.{layer_idx}.self_attn.k_proj.weight'],
+            W_attn_value=config.weights[f'model.layers.{layer_idx}.self_attn.v_proj.weight'],
+            W_attn_out=config.weights[f'model.layers.{layer_idx}.self_attn.o_proj.weight'],
+            W_ffn_fc1=config.weights[f'model.layers.{layer_idx}.mlp.gate_proj.weight'],
+            W_ffn_fc2=config.weights[f'model.layers.{layer_idx}.mlp.up_proj.weight'],
+            W_ffn_fc3=config.weights[f'model.layers.{layer_idx}.mlp.down_proj.weight'],
+            W_norm2=config.weights[f'model.layers.{layer_idx}.post_attention_layernorm.weight'],
+            rope_angles=config.angles,
+            attn_mask=attn_mask,
+        )
+    
+    # Step 4: Final normalization
+    x = aieops.final_norm_decode(x)
     
     # Step 5: Output projection
     lm_head_weight = config.weights['model.embed_tokens.weight']
     
     logits = torch.nn.functional.linear(x, lm_head_weight)  # (batch, seq_len, vocab_size)
-
+    
     return logits, state
 
 
@@ -245,8 +342,15 @@ def llama_forward_pass(
 # ##########################################################################
 
 def main():
+    global aieops
     prompt = "The capital of France is "
     config, state = harness.init(prompt=prompt)
+
+    aieops = AIELlamaOperators(config, 2048)
+    aieops.final_norm_prefill.weight = config.weights['model.norm.weight']
+    aieops.final_norm_decode.weight = config.weights['model.norm.weight']
+    aieops.setup()
+
     print(prompt, end='', flush=True)
     harness.generate(config, state, llama_forward_pass)
 
