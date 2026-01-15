@@ -4,53 +4,61 @@ import torch
 import math
 from pathlib import Path
 import sys
+import ml_dtypes
 import llama_inference_harness as harness
 
 repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(repo_root))
 
 from operators.common.aie_context import AIEContext
-from operators.common import AIEOperatorBase
+from operators.common import (
+    AIEBuffer
+)
+from operators.common.utils import torch_to_numpy, numpy_to_torch
 from operators import (
     AIERMSNorm,
     AIEGEMM,
-    AIEGEMV
+    #AIEGEMV
 )
 
 
 # AIE Operator Configuration
 # ##########################################################################
 
-aieops = None
+aie_ops = None
 
 class AIELlamaOperators:
     
     def __init__(self, config, prompt_len):
         self.context = AIEContext()
+        self.context.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Final RMS Norm
         self.final_norm_prefill = AIERMSNorm(
-            size=prompt_len,
+            size=prompt_len * config.emb_dim,
             eps=1e-5,
             num_aie_columns=8,
             num_channels=2,
             tile_size=config.emb_dim,
-            context=self.context,
-        )
+            context=self.context
+        ).compile().get_callable()
         self.final_norm_decode = AIERMSNorm(
             size=config.emb_dim,
             eps=1e-5,
             num_aie_columns=1,
             num_channels=2,
             tile_size=config.emb_dim,
-            context=self.context,
-        )
+            context=self.context
+        ).compile().get_callable()
 
         # Final GEMM
-        self.out_head_prefill = AIEGEMM(
+        min_N = 64 * 8 * 4  # tile_n * num_aie_columns * partition_N
+        config.padded_vocab_size = (config.vocab_size + min_N - 1) // min_N * min_N
+        config.vocab_partitions = 4
+        self.out_head_prefill_compilable = AIEGEMM(
             M=prompt_len,
             K=config.emb_dim,
-            N=config.vocab_size,
+            N=config.padded_vocab_size // config.vocab_partitions,
             num_aie_columns=8,
             tile_m=64,
             tile_k=64,
@@ -58,22 +66,49 @@ class AIELlamaOperators:
             b_col_maj=True,
             use_static_weight=True,
             separate_c_tiles=True,
-            partition_N=4,
             context=self.context
-        )
-        self.out_head_decode = AIEGEMV(
-            M=config.vocab_size, K=config.emb_dim,
-            num_aie_columns=8,
-            is_mv=True,
-            use_static_weight=True,
-            tile_size_input=4,
-            tile_size_output=32,
-            context=self.context
-        )
+        ).compile()
+        self.out_head_prefill = self.out_head_prefill_compilable.get_callable()
+        #self.out_head_decode = AIEGEMV(
+        #    M=config.vocab_size, K=config.emb_dim,
+        #    num_aie_columns=8,
+        #    is_mv=True,
+        #    use_static_weight=True,
+        #    tile_size_input=4,
+        #    tile_size_output=32,
+        #    context=self.context
+        #)
 
-    def setup(self):
-        self.context.compile_all()
-        self.context.prepare_runtime()
+
+# Allocate buffers shared with NPU
+# ##########################################################################
+
+aie_buffers = None
+
+class AIELlamaBuffers:
+    def __init__(self, config, prompt_len):
+        self.x_prefill = AIEBuffer(shape=(prompt_len, config.emb_dim), dtype=ml_dtypes.bfloat16)
+        self.x_decode = AIEBuffer(shape=(1, config.emb_dim), dtype=ml_dtypes.bfloat16)
+        self.W_final_norm = AIEBuffer.from_torch(config.weights['model.norm.weight'])
+
+        # Final linear layer
+        W_out_head_parts = aie_ops.out_head_prefill_compilable.partition_B(
+            torch_to_numpy(config.weights['model.embed_tokens.weight']), 
+            config.vocab_partitions
+        )
+        self.W_out_head_parts = [
+            AIEBuffer.from_np(W_out_head_part) 
+            for W_out_head_part in W_out_head_parts
+        ]
+        self.logits_prefill = AIEBuffer(shape=(config.vocab_partitions, prompt_len, config.padded_vocab_size // config.vocab_partitions))
+        self.logits_prefill_parts = [
+            self.logits_prefill.subbuffer(
+                length=prompt_len * (config.padded_vocab_size // config.vocab_partitions),
+                offset=i * prompt_len * (config.padded_vocab_size // config.vocab_partitions),
+                shape=(prompt_len, config.padded_vocab_size // config.vocab_partitions),
+            )
+            for i in range(config.vocab_partitions)
+        ]
 
 
 # Operators
@@ -311,15 +346,24 @@ def llama_forward_pass_prefill(
         )
     
     # Step 4: Final normalization
-    x = aieops.final_norm_prefill(x)
+    aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
+    aie_buffers.x_prefill.to("npu")
+    aie_ops.final_norm_prefill(aie_buffers.x_prefill, aie_buffers.W_final_norm, aie_buffers.x_prefill)
     
     # Step 5: Output projection (check for tied embeddings)
-    if 'lm_head.weight' in config.weights:
-        lm_head_weight = config.weights['lm_head.weight']
-    else:
-        lm_head_weight = config.weights['model.embed_tokens.weight']
+    # Since vocab size is a very large dimension unsupported by the AIE GEMM, we have to execute the GEMM in multiple partitions and reassemble the output.
+    # for i in range(config.vocab_partitions):
+    #     aie_ops.out_head_prefill(aie_buffers.x_prefill, aie_buffers.W_out_head_parts[i], aie_buffers.logits_prefill_parts[i])
+    # aie_buffers.logits_prefill.to("cpu")
+    # # Reassemble (transpose) the logits from partitions
+    # logits_padded_partitioned = aie_buffers.logits_prefill.view_as_torch()  # (vocab_partitions, padded_seq_len, padded_vocab_size // vocab_partitions)
+    # logits_padded = logits_padded_partitioned.transpose(0, 1).contiguous().view(-1, config.padded_vocab_size)  # (padded_seq_len, padded_vocab_size)
+    # logits = logits_padded.unsqueeze(0)[:,:seq_len,:config.vocab_size]  # (batch, seq_len, vocab_size)
+
+    aie_buffers.x_prefill.to("cpu")
+    x = aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
     
-    logits = aieops.out_head_prefill(x)  # (batch, seq_len, vocab_size)
+    logits = torch.nn.functional.linear(x, config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
     
     return logits, state
 
@@ -354,10 +398,14 @@ def llama_forward_pass_decode(
         )
     
     # Step 4: Final normalization
-    x = aieops.final_norm_decode(x)
+    aie_buffers.x_decode.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
+    aie_buffers.x_decode.to("npu")
+    aie_ops.final_norm_decode(aie_buffers.x_decode, aie_buffers.W_final_norm, aie_buffers.x_decode)
+    aie_buffers.x_decode.to("cpu")
     
     # Step 5: Output projection
-    logits = aieops.out_head_decode(x)  # (batch, seq_len, vocab_size)
+    lm_head_weight = config.weights['model.embed_tokens.weight']
+    logits = torch.nn.functional.linear(aie_buffers.x_decode.view_as_torch().unsqueeze(0), lm_head_weight)  # (batch, seq_len, vocab_size)
     
     return logits, state
 
@@ -366,19 +414,15 @@ def llama_forward_pass_decode(
 # ##########################################################################
 
 def main():
-    global aieops
+    global aie_ops, aie_buffers
     prompt = "The capital of France is "
     config, state = harness.init(prompt=prompt)
 
-    aieops = AIELlamaOperators(config, 2048)
-    aieops.final_norm_prefill.weight = config.weights['model.norm.weight']
-    aieops.final_norm_decode.weight = config.weights['model.norm.weight']
-    aieops.out_head_prefill.weight = config.weights['model.embed_tokens.weight'].T
-    aieops.out_head_decode.weight = config.weights['model.embed_tokens.weight'].T
-    aieops.setup()
+    aie_ops = AIELlamaOperators(config, 2048)
+    aie_buffers = AIELlamaBuffers(config, 2048)
 
     print(prompt, end='', flush=True)
-    harness.generate(config, state, llama_forward_pass)
+    harness.generate(config, state, llama_forward_pass, use_kv_cache=False)
 
 if __name__ == "__main__":
     main()

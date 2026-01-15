@@ -69,7 +69,9 @@ class LlamaModelState:
     def __init__(self, config):
         # Current IDs of tokens being processed (most recent token for decode; all prompt tokens for prefill)
         self.token_ids = torch.empty(0, dtype=torch.long)
+        self.reset_kv_cache(config)
 
+    def reset_kv_cache(self, config):
         # Set up KV cache -- initially empty
         # This is what passes information from previous tokens to the current token during generation
         self.attn_keys_caches = [
@@ -184,7 +186,8 @@ def generate(
     config,
     state,
     forward_pass,
-    num_tokens=100
+    num_tokens=100,
+    use_kv_cache=True
 ):
     # Generate tokens
     # First token (prefill)
@@ -197,14 +200,22 @@ def generate(
     t_prefill_stop = time.perf_counter()
 
     # Remaining tokens (decode)
-    state.token_ids = torch.tensor([[first_token]], dtype=torch.long)
+    if use_kv_cache:
+        state.token_ids = torch.tensor([[first_token]], dtype=torch.long)
+    else:
+        state.reset_kv_cache(config)
+        state.token_ids = torch.cat([state.token_ids, torch.tensor([[first_token]], dtype=torch.long)], dim=1)
     t_decode_start = time.perf_counter()
     for _ in range(num_tokens-1):
         next_token, state = generate_token(config, forward_pass, state)
         token_text = config.tokenizer.decode([next_token])
         n_tokens_generated += 1
         print(token_text, end='', flush=True)
-        state.token_ids = torch.tensor([[next_token]], dtype=torch.long)
+        if use_kv_cache:
+            state.token_ids = torch.tensor([[next_token]], dtype=torch.long)
+        else:
+            state.reset_kv_cache(config)
+            state.token_ids = torch.cat([state.token_ids, torch.tensor([[next_token]], dtype=torch.long)], dim=1)
     t_decode_end = time.perf_counter()
 
     t_prefill = t_prefill_stop - t_prefill_start

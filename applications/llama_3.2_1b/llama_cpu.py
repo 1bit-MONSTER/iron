@@ -234,9 +234,7 @@ def llama_forward_pass(
     x = rms_norm_forward(x, final_norm_weight)
     
     # Step 5: Output projection
-    lm_head_weight = config.weights['model.embed_tokens.weight']
-    
-    logits = torch.nn.functional.linear(x, lm_head_weight)  # (batch, seq_len, vocab_size)
+    logits = torch.nn.functional.linear(x, config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
 
     return logits, state
 
