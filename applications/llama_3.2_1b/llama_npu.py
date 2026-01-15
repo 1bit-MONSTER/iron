@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import ml_dtypes
 import llama_inference_harness as harness
+import time
 
 repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(repo_root))
@@ -109,6 +110,14 @@ class AIELlamaBuffers:
             )
             for i in range(config.vocab_partitions)
         ]
+
+        for buf in (
+            [
+                self.W_final_norm
+            ] +
+            self.W_out_head_parts
+        ):
+            buf.to("npu")
 
 
 # Operators
@@ -352,18 +361,20 @@ def llama_forward_pass_prefill(
     
     # Step 5: Output projection (check for tied embeddings)
     # Since vocab size is a very large dimension unsupported by the AIE GEMM, we have to execute the GEMM in multiple partitions and reassemble the output.
-    # for i in range(config.vocab_partitions):
-    #     aie_ops.out_head_prefill(aie_buffers.x_prefill, aie_buffers.W_out_head_parts[i], aie_buffers.logits_prefill_parts[i])
-    # aie_buffers.logits_prefill.to("cpu")
-    # # Reassemble (transpose) the logits from partitions
-    # logits_padded_partitioned = aie_buffers.logits_prefill.view_as_torch()  # (vocab_partitions, padded_seq_len, padded_vocab_size // vocab_partitions)
-    # logits_padded = logits_padded_partitioned.transpose(0, 1).contiguous().view(-1, config.padded_vocab_size)  # (padded_seq_len, padded_vocab_size)
-    # logits = logits_padded.unsqueeze(0)[:,:seq_len,:config.vocab_size]  # (batch, seq_len, vocab_size)
+    aie_buffers.logits_prefill.to("npu")
+    for i in range(config.vocab_partitions):
+        aie_ops.out_head_prefill(aie_buffers.x_prefill, aie_buffers.W_out_head_parts[i], aie_buffers.logits_prefill_parts[i])
+    aie_buffers.logits_prefill.to("cpu")
+    time.sleep(0.15)  # FIXME: There is a synchronization issue; without this, the latter part of logits (rightmore columns after transpose) are missing (all zeroes)
+    logits_padded_partitioned = aie_buffers.logits_prefill.view_as_torch()  # (vocab_partitions, padded_seq_len, padded_vocab_size // vocab_partitions)
+    logits_padded = logits_padded_partitioned.transpose(0, 1).contiguous().view(-1, config.padded_vocab_size)  # (padded_seq_len, padded_vocab_size)
+    logits = logits_padded.unsqueeze(0)[:,:seq_len,:config.vocab_size]  # (batch, seq_len, vocab_size)
 
-    aie_buffers.x_prefill.to("cpu")
-    x = aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
-    
-    logits = torch.nn.functional.linear(x, config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
+    # Reference:
+    # aie_buffers.x_prefill.to("cpu")
+    # x = aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
+    # logits_ref = torch.nn.functional.linear(x, config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
+    # assert (logits - logits_ref).max() < 0.5
     
     return logits, state
 
@@ -399,9 +410,7 @@ def llama_forward_pass_decode(
     
     # Step 4: Final normalization
     aie_buffers.x_decode.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
-    aie_buffers.x_decode.to("npu")
     aie_ops.final_norm_decode(aie_buffers.x_decode, aie_buffers.W_final_norm, aie_buffers.x_decode)
-    aie_buffers.x_decode.to("cpu")
     
     # Step 5: Output projection
     lm_head_weight = config.weights['model.embed_tokens.weight']
@@ -415,14 +424,19 @@ def llama_forward_pass_decode(
 
 def main():
     global aie_ops, aie_buffers
+    max_seq_len = 2048
     prompt = "The capital of France is "
+    #with open('prompt.txt', 'r') as f:
+    #    prompt = f.read()
+    #prompt = prompt[:max_seq_len]
+
     config, state = harness.init(prompt=prompt)
 
-    aie_ops = AIELlamaOperators(config, 2048)
-    aie_buffers = AIELlamaBuffers(config, 2048)
+    aie_ops = AIELlamaOperators(config, max_seq_len)
+    aie_buffers = AIELlamaBuffers(config, max_seq_len)
 
     print(prompt, end='', flush=True)
-    harness.generate(config, state, llama_forward_pass, use_kv_cache=False)
+    harness.generate(config, state, llama_forward_pass, use_kv_cache=True)
 
 if __name__ == "__main__":
     main()

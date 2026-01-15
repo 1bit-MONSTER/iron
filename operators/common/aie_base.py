@@ -226,9 +226,11 @@ class AIEBuffer:
         if dest == "npu":
             if self.on != "npu":
                 self.bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+                self.on = "npu"
         elif dest == "cpu":
             if self.on != "cpu":
                 self.bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
+                self.on = "cpu"
         else:
             raise RuntimeError(f"Unknown destination for AIEBuffer.to(): {dest}")
         return self
@@ -278,3 +280,6 @@ class SingleXclbinCallable:
         opcode = 3
         bos = [buffer.bo for buffer in buffers]
         run = self.xrt_kernel(opcode, self.insts_buffer.bo, self.insts_buffer.shape[0], *bos)
+        for buffer in buffers:
+            buffer.to("cpu") 
+
