@@ -181,19 +181,7 @@ def inference(
             hook_handles.append(handle)
 
     device = torch.device("cpu")
-    model.to(device)
     chat_tokenizer = ChatFormat(tokenizer)
-
-    total_params = sum(p.numel() for p in model.parameters())
-    total_params_normalized = total_params - model.tok_emb.weight.numel()
-    logging.info(f"Total number of parameters: {total_params:,}")
-    logging.info(f"Total number of unique parameters: {total_params_normalized:,}")
-    logging.info(
-        f"float32 (PyTorch default): {model_memory_size(model, input_dtype=torch.float32):.2f} GB"
-    )
-    logging.info(
-        f"bfloat16: {model_memory_size(model, input_dtype=torch.bfloat16):.2f} GB"
-    )
 
     combined_weights = load_file(weights_file_path)
     # Get parameters from model config
@@ -210,7 +198,6 @@ def inference(
         "rope_freq": model.cfg["rope_freq"],
     }
     load_weights_into_llama(model, model_config, combined_weights)
-    model.to(device)
     del combined_weights
 
     logging.info("Preparing AIE operators...")
