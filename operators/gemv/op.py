@@ -29,8 +29,9 @@ class AIEGEMV(SingleMLIRSourceOperator):
         num_aie_columns=1,
         tile_size_input=2,
         tile_size_output=None,
-        is_mv=True,
+        num_batches=1,
         use_static_weight=False,
+        kernel_vector_size=64,
         context=None,
     ):
         if tile_size_output is None:
@@ -45,6 +46,9 @@ class AIEGEMV(SingleMLIRSourceOperator):
         self.num_aie_columns = num_aie_columns
         self.tile_size_input = tile_size_input
         self.tile_size_output = tile_size_output
+        self.num_batches = num_batches
+        self.kernel_vector_size = kernel_vector_size
+        assert K >= kernel_vector_size and K % kernel_vector_size == 0, "K must be multiple of kernel_vector_size"
 
         self.xclbin_artifact = None
         self.insts_artifact = None
@@ -52,7 +56,7 @@ class AIEGEMV(SingleMLIRSourceOperator):
         SingleMLIRSourceOperator.__init__(self, context=context)
 
     def get_operator_name(self):
-        return f"{self.M}x{self.K}_{self.tile_size_input}tsi_{self.tile_size_output}tso_{self.num_aie_columns}col"
+        return f"{self.M}x{self.K}_{self.tile_size_input}tsi_{self.tile_size_output}tso_{self.num_batches}batch_{self.num_aie_columns}col"
 
     def get_mlir_artifact(self):
         operator_dir = Path(__file__).parent
@@ -68,24 +72,35 @@ class AIEGEMV(SingleMLIRSourceOperator):
                 self.K,
                 self.tile_size_input,
                 self.tile_size_output,
+                self.num_batches,
             ],
+            callback_kwargs={
+                "kernel_archive": self.get_kernel_archive_name(),
+            }
         )
+    
+    def get_kernel_archive_name(self):
+        return f"mv_{self.K}k.a"
 
     def get_kernel_artifacts(self):
         return [
             KernelObjectArtifact.new(
-                f"mv.o",
+                f"mv_{self.K}k.o",
                 depends=[
                     SourceArtifact.new(
                         self.context.base_dir / "aie_kernels" / "generic" / "mv.cc"
                     )
                 ],
+                extra_flags=[
+                    f"-DDIM_K={self.K}",
+                    f"-DVEC_SIZE={self.kernel_vector_size}",
+                ]
             ),
         ]
 
     def get_arg_spec(self):
         return [
-            AIERuntimeArgSpec("in", (self.M, self.K)),  # matrix
-            AIERuntimeArgSpec("in", (self.K,)),  # vector
-            AIERuntimeArgSpec("out", (self.M,)),  # output
+            AIERuntimeArgSpec("in", (self.num_batches, self.M, self.K)),  # matrix
+            AIERuntimeArgSpec("in", (self.num_batches, self.K, 1)),  # vector
+            AIERuntimeArgSpec("out", (self.num_batches, self.M, 1)),  # output
         ]

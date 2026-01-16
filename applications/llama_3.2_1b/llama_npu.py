@@ -8,6 +8,7 @@ import numpy as np
 import ml_dtypes
 import llama_inference_harness as harness
 import logging
+import time
 
 repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(repo_root))
@@ -260,6 +261,56 @@ class AIELlamaOperators:
             context=self.context
         ).compile().get_callable()
         
+        # Value projection: (seq_len, emb_dim) -> (seq_len, n_kv_groups * head_dim)
+        self.prefill.attn_value = AIEGEMM(
+            M=prompt_len,
+            K=config.emb_dim,
+            N=config.n_kv_groups * config.head_dim,
+            num_aie_columns=8,
+            tile_m=64,
+            tile_k=64,
+            tile_n=64,
+            b_col_maj=False,
+            use_static_weight=True,
+            context=self.context
+        ).compile().get_callable()
+        
+        self.decode.attn_value = AIEGEMV(
+            M=config.n_kv_groups * config.head_dim,
+            K=config.emb_dim,
+            num_aie_columns=8,
+            tile_size_input=4,
+            tile_size_output=config.head_dim // 2,
+            context=self.context
+        ).compile().get_callable()
+        
+        # Attention score computation: Q @ K^T per head
+        # For prefill: (seq_len, head_dim) @ (head_dim, seq_len) = (seq_len, seq_len) per head
+        self.prefill.attn_scores = AIEGEMM(
+            M=prompt_len,
+            K=config.head_dim,
+            N=prompt_len,
+            num_aie_columns=8,
+            tile_m=64,
+            tile_k=64,
+            tile_n=64,
+            b_col_maj=False,
+            use_static_weight=False,
+            context=self.context
+        ).compile().get_callable()
+        
+        # For decode: per head, (1, head_dim) @ (head_dim, max_context_len)
+        # Use GEMV: (max_context_len, head_dim) @ (head_dim,) = (max_context_len,)
+        self.decode.attn_scores = AIEGEMV(
+            M=prompt_len,  # max possible context length
+            K=config.head_dim,
+            num_aie_columns=8,
+            tile_size_input=4,
+            tile_size_output=prompt_len // 8,
+            num_batches=config.n_heads,
+            context=self.context
+        ).compile().get_callable()
+        
 
 
 # Allocate buffers shared with NPU
@@ -287,6 +338,26 @@ class AIEPrefillBuffers:
         # Attention projection buffers
         self.attn_queries = AIEBuffer(shape=(prompt_len, n_heads * head_dim), dtype=ml_dtypes.bfloat16)
         self.attn_keys = AIEBuffer(shape=(prompt_len, n_kv_groups * head_dim), dtype=ml_dtypes.bfloat16)
+        self.attn_values = AIEBuffer(shape=(prompt_len, n_kv_groups * head_dim), dtype=ml_dtypes.bfloat16)
+        # Attention score computation buffers (per-head) - parent buffer with subbuffers
+        self.attn_scores_queries_per_head = [
+            AIEBuffer(shape=(prompt_len, head_dim), dtype=ml_dtypes.bfloat16)
+            for h in range(n_heads)
+        ]
+        self.attn_scores_keys_per_head = [
+            AIEBuffer(shape=(head_dim, prompt_len), dtype=ml_dtypes.bfloat16)
+            for h in range(n_heads)
+        ]
+        # Parent buffer for all heads' scores: (n_heads * prompt_len, prompt_len)
+        self.attn_scores = AIEBuffer(shape=(n_heads * prompt_len, prompt_len), dtype=ml_dtypes.bfloat16)
+        self.attn_scores_per_head = [
+            self.attn_scores.subbuffer(
+                length=prompt_len * prompt_len,
+                offset=h * prompt_len * prompt_len,
+                shape=(prompt_len, prompt_len)
+            )
+            for h in range(n_heads)
+        ]
 
 class AIEDecodeBuffers:
     def __init__(self, emb_dim, hidden_dim, n_heads, n_kv_groups, head_dim):
@@ -308,6 +379,12 @@ class AIEDecodeBuffers:
         # Attention projection buffers
         self.attn_queries = AIEBuffer(shape=(1, n_heads * head_dim), dtype=ml_dtypes.bfloat16)
         self.attn_keys = AIEBuffer(shape=(1, n_kv_groups * head_dim), dtype=ml_dtypes.bfloat16)
+        self.attn_values = AIEBuffer(shape=(1, n_kv_groups * head_dim), dtype=ml_dtypes.bfloat16)
+        # Attention score computation buffers (batched)
+        # Batched GEMV expects: (num_batches, M, K) @ (num_batches, K, 1) = (num_batches, M, 1)
+        self.attn_scores_keys = AIEBuffer(shape=(n_heads, emb_dim, head_dim), dtype=ml_dtypes.bfloat16)  # Max context length
+        self.attn_scores_queries = AIEBuffer(shape=(n_heads, head_dim, 1), dtype=ml_dtypes.bfloat16)
+        self.attn_scores = AIEBuffer(shape=(n_heads, emb_dim, 1), dtype=ml_dtypes.bfloat16)
 
 class AIELlamaBuffers:
     def __init__(self, config, prompt_len):
@@ -323,6 +400,8 @@ class AIELlamaBuffers:
         self.W_attn_query_decode = []
         self.W_attn_key_prefill = []
         self.W_attn_key_decode = []
+        self.W_attn_value_prefill = []
+        self.W_attn_value_decode = []
         # SwiGLU FFN weights
         self.W_ffn_gate_prefill = []
         self.W_ffn_up_prefill = []
@@ -348,6 +427,12 @@ class AIELlamaBuffers:
             )
             self.W_attn_key_prefill.append(
                 AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.k_proj.weight'].T).to("npu")
+            )
+            self.W_attn_value_decode.append(
+                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.v_proj.weight']).to("npu")
+            )
+            self.W_attn_value_prefill.append(
+                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.v_proj.weight'].T).to("npu")
             )
             self.W_ffn_gate_decode.append(
                 AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.mlp.gate_proj.weight']).to("npu")
@@ -474,11 +559,13 @@ def grouped_query_attention_forward(
         bufs = aie_buffers.prefill
         W_attn_query = aie_buffers.W_attn_query_prefill[layer_idx]
         W_attn_key = aie_buffers.W_attn_key_prefill[layer_idx]
+        W_attn_value = aie_buffers.W_attn_value_prefill[layer_idx]
     else:
         ops = aie_ops.decode
         bufs = aie_buffers.decode
         W_attn_query = aie_buffers.W_attn_query_decode[layer_idx]
         W_attn_key = aie_buffers.W_attn_key_decode[layer_idx]
+        W_attn_value = aie_buffers.W_attn_value_decode[layer_idx]
 
     # Step 1: Linear projections
     # This multiplication produces queries, keys and values for all tokens in the sequence.
@@ -496,9 +583,12 @@ def grouped_query_attention_forward(
         rope_queries_in_view = bufs.rope_queries_in.view((bufs.rope_queries_in.shape[0] // num_heads, num_heads * head_dim))
         ops.attn_query(bufs.x_norm, W_attn_query, rope_queries_in_view)
     else:
-        x_norm_view = bufs.x_norm.view(np.prod(bufs.x_norm.shape))
-        rope_queries_in_view = bufs.rope_queries_in.view(np.prod(bufs.rope_queries_in.shape))
-        ops.attn_query(W_attn_query, x_norm_view, rope_queries_in_view)
+        # ropes_queries_in is (num_heads, head_dim)
+        # GEMV expects: (1, M, K) @ (1, K, 1) = (1, M, 1)
+        W_attn_query_view = W_attn_query.view((1, W_attn_query.shape[0], W_attn_query.shape[1]))
+        x_norm_view = bufs.x_norm.view((1, bufs.x_norm.shape[1], 1))
+        rope_queries_in_view = bufs.rope_queries_in.view((1, bufs.rope_queries_in.shape[0] * bufs.rope_queries_in.shape[1], 1))
+        ops.attn_query(W_attn_query_view, x_norm_view, rope_queries_in_view)
     
     # Key projection using NPU - write directly to RoPE input buffer to avoid CPU round-trip
     bufs.rope_keys_in.to("npu")
@@ -507,10 +597,28 @@ def grouped_query_attention_forward(
         rope_keys_in_view = bufs.rope_keys_in.view((bufs.rope_keys_in.shape[0] // num_kv_groups, num_kv_groups * head_dim))
         ops.attn_key(bufs.x_norm, W_attn_key, rope_keys_in_view)
     else:
-        rope_keys_in_view = bufs.rope_keys_in.view(np.prod(bufs.rope_keys_in.shape))
-        ops.attn_key(W_attn_key, x_norm_view, rope_keys_in_view)
+        # GEMV expects: (1, M, K) @ (1, K, 1) = (1, M, 1)
+        x_norm_view = bufs.x_norm.view((1, bufs.x_norm.shape[1], 1))
+        rope_keys_in_view = bufs.rope_keys_in.view((1, bufs.rope_keys_in.shape[0] * bufs.rope_keys_in.shape[1], 1))
+        W_attn_key_view = W_attn_key.view((1, W_attn_key.shape[0], W_attn_key.shape[1]))
+        ops.attn_key(W_attn_key_view, x_norm_view, rope_keys_in_view)
     
-    values = torch.nn.functional.linear(x, W_value)               # (batch, seq_len, num_kv_groups * head_dim)
+    # Value projection using NPU
+    bufs.attn_values.to("npu")
+    if seq_len > 1:
+        # Project to values buffer with appropriate view
+        ops.attn_value(bufs.x_norm, W_attn_value, bufs.attn_values)
+    else:
+        # GEMV expects: (1, M, K) @ (1, K, 1) = (1, M, 1)
+        x_norm_view = bufs.x_norm.view((1, bufs.x_norm.shape[1], 1))
+        attn_values_view = bufs.attn_values.view((1, bufs.attn_values.shape[1], 1))
+        W_attn_value_view = W_attn_value.view((1, W_attn_value.shape[0], W_attn_value.shape[1]))
+        ops.attn_value(W_attn_value_view, x_norm_view, attn_values_view)
+    
+    # Read values result from NPU
+    bufs.attn_values.to("cpu")
+    values = bufs.attn_values.view_as_torch()[:seq_len, :].clone()
+    values = values.unsqueeze(0)  # (batch, seq_len, n_kv_groups * head_dim)
     values = values.view(batch, seq_len, num_kv_groups, head_dim) # (batch, seq_len, num_kv_groups, head_dim)
     
     # Step 2: Apply RoPE to queries (already in rope_queries_in buffer on NPU)
@@ -560,12 +668,69 @@ def grouped_query_attention_forward(
     group_size = num_heads // num_kv_groups
     keys = keys.repeat_interleave(group_size, dim=1)
     values = values.repeat_interleave(group_size, dim=1)
+    context_len = keys.shape[2]
     
-    # Step 6: Compute attention scores
-    # (batch, num_heads, seq_len, head_dim) @ (batch, num_heads, head_dim, seq_len)
-    # -> (batch, num_heads, seq_len, seq_len)
-    # Entry at row i, column j, indicates how much token i's query attends to token j's key.
-    scores = torch.matmul(queries, keys.transpose(-2, -1)) / math.sqrt(head_dim)
+    # Step 6: Compute attention scores using NPU (per-head)
+    # (batch, num_heads, seq_len, head_dim) @ (batch, num_heads, head_dim, context_len)
+    # -> (batch, num_heads, seq_len, context_len)
+    queries_per_head = queries.squeeze(0)  # (num_heads, seq_len, head_dim)
+    keys_per_head = keys.squeeze(0).transpose(-2, -1)  # (num_heads, head_dim, context_len)
+    
+    if seq_len > 1:
+        # Prefill: use GEMM per head
+        for h in range(num_heads):
+            # Copy data for this head
+            bufs.attn_scores_queries_per_head[h].view_as_torch()[:context_len, :] = queries_per_head[h, :, :]
+            bufs.attn_scores_keys_per_head[h].view_as_torch()[:, :context_len] = keys_per_head[h, :, :context_len]
+            
+            # Transfer to NPU
+            bufs.attn_scores_queries_per_head[h].to("npu")
+            bufs.attn_scores_keys_per_head[h].to("npu")
+            bufs.attn_scores_per_head[h].to("npu")
+            
+            # Execute GEMM for this head
+            ops.attn_scores(
+                bufs.attn_scores_queries_per_head[h],
+                bufs.attn_scores_keys_per_head[h],
+                bufs.attn_scores_per_head[h]
+            )
+        
+        # Read back all results at once from parent buffer
+        bufs.attn_scores.to("cpu")
+        # Buffer is (n_heads * max_seq_len, max_seq_len), view as (n_heads, max_seq_len, max_seq_len) then slice
+        max_seq_len = bufs.attn_scores.shape[0] // num_heads
+        scores = bufs.attn_scores.view_as_torch().view(num_heads, max_seq_len, max_seq_len).unsqueeze(0)[:, :, :seq_len, :context_len]
+    else:
+        # Decode: batched GEMV with all heads at once
+        keys_transposed = keys_per_head.transpose(-2, -1)  # (num_heads, context_len, head_dim)
+        
+        # Copy all heads' data to batched buffers
+        # Keys: (num_heads, context_len, head_dim)
+        bufs.attn_scores_keys.view_as_torch()[:, :context_len, :] = keys_transposed[:, :context_len, :]
+        # Queries: (num_heads, head_dim, 1) - reshape from (num_heads, 1, head_dim)
+        bufs.attn_scores_queries.view_as_torch()[:, :, 0] = queries_per_head[:, 0, :]
+        
+        # Transfer to NPU
+        bufs.attn_scores_keys.to("npu")
+        bufs.attn_scores_queries.to("npu")
+        bufs.attn_scores.to("npu")
+        
+        # Execute batched GEMV: (num_heads, context_len, head_dim) @ (num_heads, head_dim, 1) = (num_heads, context_len, 1)
+        t_aie_start = time.perf_counter()
+        ops.attn_scores(bufs.attn_scores_keys, bufs.attn_scores_queries, bufs.attn_scores)
+        t_aie = time.perf_counter() - t_aie_start
+        # Reference:
+        t_cpu_start = time.perf_counter()
+        ref = bufs.attn_scores_keys.to("cpu").view_as_torch() @ bufs.attn_scores_queries.to("cpu").view_as_torch()
+        t_cpu = time.perf_counter() - t_cpu_start
+        
+        # Read back result
+        bufs.attn_scores.to("cpu")
+        # Result is (num_heads, max_context_len, 1), reshape to (batch, num_heads, 1, context_len)
+        scores = bufs.attn_scores.view_as_torch()[:, :context_len, 0].unsqueeze(0).unsqueeze(2)
+    
+    # Apply scaling
+    scores = scores / math.sqrt(head_dim)
     
     # Step 7: Apply mask
     # This ensures causality, so that tokens in the future cannot attend to tokens in the past.
@@ -610,18 +775,22 @@ def swiglu_ffn_forward(seq_len, layer_idx):
     if seq_len > 1:
         ops.ffn_up_gate(bufs.x_norm, W_ffn_gate, bufs.ffn_gate)
     else:
-        x_norm_view = bufs.x_norm.view(np.prod(bufs.x_norm.shape))
-        ffn_gate_view = bufs.ffn_gate.view(np.prod(bufs.ffn_gate.shape))
-        ops.ffn_up_gate(W_ffn_gate, x_norm_view, ffn_gate_view)
+        # GEMV expects: (1, M, K) @ (1, K, 1) = (1, M, 1)
+        x_norm_view = bufs.x_norm.view((1, bufs.x_norm.shape[1], 1))
+        ffn_gate_view = bufs.ffn_gate.view((1, bufs.ffn_gate.shape[1], 1))
+        W_ffn_gate_view = W_ffn_gate.view((1, W_ffn_gate.shape[0], W_ffn_gate.shape[1]))
+        ops.ffn_up_gate(W_ffn_gate_view, x_norm_view, ffn_gate_view)
     
     # Step 2: Up projection: (batch, seq_len, embedding_dim) -> (batch, seq_len, swiglu_hidden_dim)
     bufs.ffn_up.to("npu")
     if seq_len > 1:
         ops.ffn_up_gate(bufs.x_norm, W_ffn_up, bufs.ffn_up)
     else:
-        x_norm_view = bufs.x_norm.view(np.prod(bufs.x_norm.shape))
-        ffn_up_view = bufs.ffn_up.view(np.prod(bufs.ffn_up.shape))
-        ops.ffn_up_gate(W_ffn_up, x_norm_view, ffn_up_view)
+        # GEMV expects: (1, M, K) @ (1, K, 1) = (1, M, 1)
+        x_norm_view = bufs.x_norm.view((1, bufs.x_norm.shape[1], 1))
+        ffn_up_view = bufs.ffn_up.view((1, bufs.ffn_up.shape[1], 1))
+        W_ffn_up_view = W_ffn_up.view((1, W_ffn_up.shape[0], W_ffn_up.shape[1]))
+        ops.ffn_up_gate(W_ffn_up_view, x_norm_view, ffn_up_view)
     
     # Step 3: Apply SiLU activation to gate
     ffn_gate_view = bufs.ffn_gate.view(np.prod(bufs.ffn_gate.shape))
@@ -638,8 +807,11 @@ def swiglu_ffn_forward(seq_len, layer_idx):
     if seq_len > 1:
         ops.ffn_down(bufs.ffn_hidden, W_ffn_down, bufs.ffn_output)
     else:
-        ffn_output_view = bufs.ffn_output.view(np.prod(bufs.ffn_output.shape))
-        ops.ffn_down(W_ffn_down, ffn_hidden_view, ffn_output_view)
+        # GEMV expects: (1, M, K) @ (1, K, 1) = (1, M, 1)
+        ffn_hidden_view = bufs.ffn_hidden.view((1, bufs.ffn_hidden.shape[1], 1))
+        ffn_output_view = bufs.ffn_output.view((1, bufs.ffn_output.shape[1], 1))
+        W_ffn_down_view = W_ffn_down.view((1, W_ffn_down.shape[0], W_ffn_down.shape[1]))
+        ops.ffn_down(W_ffn_down_view, ffn_hidden_view, ffn_output_view)
 
 
 def transformer_block_forward(
@@ -780,7 +952,11 @@ def llama_forward_pass(
         # x = bufs.x.view_as_torch().unsqueeze(0)
         # logits = torch.nn.functional.linear(config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
         bufs.logits.to("npu")
-        ops.out_head(aie_buffers.W_out_head, bufs.x.view((config.emb_dim,)), bufs.logits)
+        # GEMV expects: (1, M, K) @ (1, K, 1) = (1, M, 1)
+        x_view = bufs.x.view((1, config.emb_dim, 1))
+        logits_view = bufs.logits.view((1, config.vocab_size, 1))
+        W_out_head_view = aie_buffers.W_out_head.view((1, aie_buffers.W_out_head.shape[0], aie_buffers.W_out_head.shape[1]))
+        ops.out_head(W_out_head_view, x_view, logits_view)
         bufs.logits.to("cpu")
         logits = bufs.logits.view_as_torch().view(1, 1, config.vocab_size)
 
