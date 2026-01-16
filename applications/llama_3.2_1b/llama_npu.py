@@ -29,6 +29,19 @@ from operators import (
 
 aie_ops = None
 
+class AIEPrefillOperations:
+    def __init__(self, rms_norm, residual_add, out_head, out_head_compilable):
+        self.rms_norm = rms_norm
+        self.residual_add = residual_add
+        self.out_head = out_head
+        self.out_head_compilable = out_head_compilable
+
+class AIEDecodeOperations:
+    def __init__(self, rms_norm, residual_add, out_head):
+        self.rms_norm = rms_norm
+        self.residual_add = residual_add
+        self.out_head = out_head
+
 class AIELlamaOperators:
     
     def __init__(self, config, prompt_len):
@@ -36,7 +49,7 @@ class AIELlamaOperators:
         self.context.build_dir.mkdir(parents=True, exist_ok=True)
 
         # RMS Norm
-        self.rms_norm_prefill = AIERMSNorm(
+        rms_norm_prefill = AIERMSNorm(
             size=prompt_len * config.emb_dim,
             eps=1e-5,
             num_aie_columns=8,
@@ -44,7 +57,7 @@ class AIELlamaOperators:
             tile_size=config.emb_dim,
             context=self.context
         ).compile().get_callable()
-        self.rms_norm_decode = AIERMSNorm(
+        rms_norm_decode = AIERMSNorm(
             size=config.emb_dim,
             eps=1e-5,
             num_aie_columns=1,
@@ -54,11 +67,11 @@ class AIELlamaOperators:
         ).compile().get_callable()
 
         # Residual additions
-        self.residual_add_prefill = AIEElementwiseAdd(
+        residual_add_prefill = AIEElementwiseAdd(
             size=prompt_len * config.emb_dim,
             tile_size=config.emb_dim
         ).compile().get_callable()
-        self.residual_add_decode = AIEElementwiseAdd(
+        residual_add_decode = AIEElementwiseAdd(
             size=config.emb_dim,
             tile_size=config.emb_dim // 8
         ).compile().get_callable()
@@ -67,7 +80,7 @@ class AIELlamaOperators:
         min_N = 64 * 8 * 4  # tile_n * num_aie_columns * partition_N
         config.padded_vocab_size = (config.vocab_size + min_N - 1) // min_N * min_N
         config.vocab_partitions = 4
-        self.out_head_prefill_compilable = AIEGEMM(
+        out_head_prefill_compilable = AIEGEMM(
             M=prompt_len,
             K=config.emb_dim,
             N=config.padded_vocab_size // config.vocab_partitions,
@@ -80,8 +93,8 @@ class AIELlamaOperators:
             separate_c_tiles=True,
             context=self.context
         ).compile()
-        self.out_head_prefill = self.out_head_prefill_compilable.get_callable()
-        self.out_head_decode = AIEGEMV(
+        out_head_prefill = out_head_prefill_compilable.get_callable()
+        out_head_decode = AIEGEMV(
             M=config.vocab_size,
             K=config.emb_dim,
             num_aie_columns=8,
@@ -90,6 +103,10 @@ class AIELlamaOperators:
             tile_size_output=32,
             context=self.context
         ).compile().get_callable()
+        
+        # Group operations
+        self.prefill = AIEPrefillOperations(rms_norm_prefill, residual_add_prefill, out_head_prefill, out_head_prefill_compilable)
+        self.decode = AIEDecodeOperations(rms_norm_decode, residual_add_decode, out_head_decode)
 
 
 # Allocate buffers shared with NPU
@@ -97,20 +114,25 @@ class AIELlamaOperators:
 
 aie_buffers = None
 
+class AIEPrefillBuffers:
+    def __init__(self, prompt_len, emb_dim):
+        self.x = AIEBuffer(shape=(prompt_len, emb_dim), dtype=ml_dtypes.bfloat16)
+        self.x_norm = AIEBuffer(shape=(prompt_len, emb_dim), dtype=ml_dtypes.bfloat16)
+        self.attn_output = AIEBuffer(shape=(prompt_len, emb_dim), dtype=ml_dtypes.bfloat16)
+        self.ffn_output = AIEBuffer(shape=(prompt_len, emb_dim), dtype=ml_dtypes.bfloat16)
+
+class AIEDecodeBuffers:
+    def __init__(self, emb_dim):
+        self.x = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
+        self.x_norm = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
+        self.attn_output = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
+        self.ffn_output = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
+
 class AIELlamaBuffers:
     def __init__(self, config, prompt_len):
         # Vector of the current token(s) being processed through the pipeline
-        self.x_prefill = AIEBuffer(shape=(prompt_len, config.emb_dim), dtype=ml_dtypes.bfloat16)
-        self.x_decode = AIEBuffer(shape=(1, config.emb_dim), dtype=ml_dtypes.bfloat16)
-
-        self.x_norm_prefill = AIEBuffer(shape=(prompt_len, config.emb_dim), dtype=ml_dtypes.bfloat16)
-        self.x_norm_decode = AIEBuffer(shape=(1, config.emb_dim), dtype=ml_dtypes.bfloat16)
-
-        self.attn_output_prefill = AIEBuffer(shape=(prompt_len, config.emb_dim), dtype=ml_dtypes.bfloat16)
-        self.attn_output_decode = AIEBuffer(shape=(1, config.emb_dim), dtype=ml_dtypes.bfloat16)
-
-        self.ffn_output_prefill = AIEBuffer(shape=(prompt_len, config.emb_dim), dtype=ml_dtypes.bfloat16)
-        self.ffn_output_decode = AIEBuffer(shape=(1, config.emb_dim), dtype=ml_dtypes.bfloat16)
+        self.prefill = AIEPrefillBuffers(prompt_len, config.emb_dim)
+        self.decode = AIEDecodeBuffers(config.emb_dim)
 
         # Transformer block layer-wise RMS norm
         self.W_norm1 = []
@@ -127,7 +149,7 @@ class AIELlamaBuffers:
         self.W_final_norm = AIEBuffer.from_torch(config.weights['model.norm.weight']).to("npu")
         # Final linear layer
         self.W_out_head = AIEBuffer.from_np(torch_to_numpy(config.weights['model.embed_tokens.weight'])).to("npu")  # unpadded/unpartitioned, used by GEMV
-        W_out_head_parts = aie_ops.out_head_prefill_compilable.partition_B(
+        W_out_head_parts = aie_ops.prefill.out_head_compilable.partition_B(
             torch_to_numpy(config.weights['model.embed_tokens.weight']), 
             config.vocab_partitions
         )
@@ -135,16 +157,16 @@ class AIELlamaBuffers:
             AIEBuffer.from_np(W_out_head_part).to("npu") 
             for W_out_head_part in W_out_head_parts
         ] # partitioned, padded parts of weight, used by GEMM
-        self.logits_prefill = AIEBuffer(shape=(config.vocab_partitions, prompt_len, config.padded_vocab_size // config.vocab_partitions)).to("npu")
-        self.logits_prefill_parts = [
-            self.logits_prefill.subbuffer(
+        self.prefill.logits = AIEBuffer(shape=(config.vocab_partitions, prompt_len, config.padded_vocab_size // config.vocab_partitions)).to("npu")
+        self.prefill.logits_parts = [
+            self.prefill.logits.subbuffer(
                 length=prompt_len * (config.padded_vocab_size // config.vocab_partitions),
                 offset=i * prompt_len * (config.padded_vocab_size // config.vocab_partitions),
                 shape=(prompt_len, config.padded_vocab_size // config.vocab_partitions),
             )
             for i in range(config.vocab_partitions)
         ]
-        self.logits_decode = AIEBuffer(shape=(config.vocab_size,))
+        self.decode.logits = AIEBuffer(shape=(config.vocab_size,))
 
 
 # Operators
@@ -304,19 +326,20 @@ def transformer_block_forward(
     rope_angles,
     attn_mask
 ):
-    # Step 1: RMS normalization
+    # Select prefill or decode operations and buffers
     if seq_len > 1:
-        aie_buffers.x_prefill.to("npu")
-        aie_buffers.x_norm_prefill.to("npu")
-        aie_ops.rms_norm_prefill(aie_buffers.x_prefill, W_norm1, aie_buffers.x_norm_prefill)
-        aie_buffers.x_norm_prefill.to("cpu")
-        x_norm = aie_buffers.x_norm_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
+        ops = aie_ops.prefill
+        bufs = aie_buffers.prefill
     else:
-        aie_buffers.x_decode.to("npu")
-        aie_buffers.x_norm_decode.to("npu")
-        x_norm = aie_ops.rms_norm_decode(aie_buffers.x_decode, W_norm1, aie_buffers.x_norm_decode)
-        aie_buffers.x_norm_decode.to("cpu")
-        x_norm = aie_buffers.x_norm_decode.view_as_torch().unsqueeze(0)
+        ops = aie_ops.decode
+        bufs = aie_buffers.decode
+    
+    # Step 1: RMS normalization
+    bufs.x.to("npu")
+    bufs.x_norm.to("npu")
+    ops.rms_norm(bufs.x, W_norm1, bufs.x_norm)
+    bufs.x_norm.to("cpu")
+    x_norm = bufs.x_norm.view_as_torch().unsqueeze(0)[:, :seq_len, :]
 
     # Step 2: Attention
     attn_output, attn_keys, attn_values = grouped_query_attention_forward(
@@ -331,46 +354,27 @@ def transformer_block_forward(
     )
     
     # Step 3: Residual
-    if seq_len > 1:
-        aie_buffers.attn_output_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = attn_output
-        aie_buffers.attn_output_prefill.to("npu")
-        x_view = aie_buffers.x_prefill.view(np.prod(aie_buffers.x_prefill.shape))
-        attn_output_view = aie_buffers.attn_output_prefill.view(np.prod(aie_buffers.attn_output_prefill.shape))
-        aie_ops.residual_add_prefill(x_view, attn_output_view, x_view)
-        x = aie_buffers.x_prefill.to("cpu").view_as_torch().unsqueeze(0)[:, :seq_len, :]
-    else:
-        aie_buffers.attn_output_decode.view_as_torch().unsqueeze(0)[0, 0, :] = attn_output
-        aie_buffers.attn_output_decode.to("npu")
-        x_view = aie_buffers.x_decode.view(np.prod(aie_buffers.x_decode.shape))
-        attn_output_view = aie_buffers.attn_output_decode.view(np.prod(aie_buffers.attn_output_decode.shape))
-        aie_ops.residual_add_decode(x_view, attn_output_view, x_view)
-        x = aie_buffers.x_decode.to("cpu").view_as_torch().unsqueeze(0)
+    bufs.attn_output.view_as_torch().unsqueeze(0)[0, :seq_len, :] = attn_output
+    bufs.attn_output.to("npu")
+    x_view = bufs.x.view(np.prod(bufs.x.shape))
+    attn_output_view = bufs.attn_output.view(np.prod(bufs.attn_output.shape))
+    ops.residual_add(x_view, attn_output_view, x_view)
+    x = bufs.x.to("cpu").view_as_torch().unsqueeze(0)[:, :seq_len, :]
     
     # Step 4: Post-norm
-    if seq_len > 1:
-        aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
-        aie_buffers.x_prefill.to("npu")
-        aie_buffers.x_norm_prefill.to("npu")
-        aie_ops.rms_norm_prefill(aie_buffers.x_prefill, W_norm2, aie_buffers.x_norm_prefill)
-        aie_buffers.x_norm_prefill.to("cpu")
-        x_norm = aie_buffers.x_norm_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
-    else:
-        aie_buffers.x_decode.view_as_torch().unsqueeze(0)[0, 0, :] = x
-        aie_buffers.x_decode.to("npu")
-        aie_buffers.x_norm_decode.to("npu")
-        x_norm = aie_ops.rms_norm_decode(aie_buffers.x_decode, W_norm2, aie_buffers.x_norm_decode)
-        aie_buffers.x_norm_decode.to("cpu")
-        x_norm = aie_buffers.x_norm_decode.view_as_torch().unsqueeze(0)
+    bufs.x.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
+    bufs.x.to("npu")
+    bufs.x_norm.to("npu")
+    ops.rms_norm(bufs.x, W_norm2, bufs.x_norm)
+    bufs.x_norm.to("cpu")
+    x_norm = bufs.x_norm.view_as_torch().unsqueeze(0)[:, :seq_len, :]
     
     # Step 5: fully-connected feed-forward network
     ffn_output = swiglu_ffn_forward(x_norm, W_ffn_fc1, W_ffn_fc2, W_ffn_fc3)
     
     # Step 6: Residual
     x = x + ffn_output
-    if seq_len > 1:
-        aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
-    else:
-        aie_buffers.x_decode.view_as_torch().unsqueeze(0)[0, 0, :] = x
+    bufs.x.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
     
     return attn_keys, attn_values
 
@@ -381,16 +385,21 @@ def llama_forward_pass(
 ):
     batch, seq_len = state.token_ids.shape
 
+    # Select prefill or decode operations and buffers
+    if seq_len > 1:
+        ops = aie_ops.prefill
+        bufs = aie_buffers.prefill
+    else:
+        ops = aie_ops.decode
+        bufs = aie_buffers.decode
+
     tok_emb_weight = config.weights['model.embed_tokens.weight']
     x = torch.nn.functional.embedding(state.token_ids, tok_emb_weight)  # (batch, seq_len, emb_dim)
     attn_mask = torch.triu(
         torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool),
         diagonal=1
     )
-    if seq_len > 1:
-        aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
-    else:
-        aie_buffers.x_decode.view_as_torch().unsqueeze(0)[0, 0, :] = x
+    bufs.x.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
 
     # Step 3: Apply transformer blocks
     for layer_idx in range(config.n_layers):
@@ -415,38 +424,34 @@ def llama_forward_pass(
 
     
     # Step 4: Final normalization
-    if seq_len > 1:
-        aie_buffers.x_prefill.to("npu")
-        aie_ops.rms_norm_prefill(aie_buffers.x_prefill, aie_buffers.W_final_norm, aie_buffers.x_prefill)
-    else:
-        aie_buffers.x_decode.to("npu")
-        aie_ops.rms_norm_decode(aie_buffers.x_decode, aie_buffers.W_final_norm, aie_buffers.x_decode)
+    bufs.x.to("npu")
+    ops.rms_norm(bufs.x, aie_buffers.W_final_norm, bufs.x)
     
     # Step 5: Output projection (check for tied embeddings)
     if seq_len > 1:
         # Since vocab size is a very large dimension unsupported by the AIE GEMM, we have to execute the GEMM in multiple partitions and reassemble the output.
         # Reference:
-        # aie_buffers.x_prefill.to("cpu")
-        # x = aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
+        # bufs.x.to("cpu")
+        # x = bufs.x.view_as_torch().unsqueeze(0)[:, :seq_len, :]
         # logits_ref = torch.nn.functional.linear(x, config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
         # assert (logits - logits_ref).max() < 0.5
-        aie_buffers.x_prefill.to("npu")
-        aie_buffers.logits_prefill.to("npu")
+        bufs.x.to("npu")
+        bufs.logits.to("npu")
         for i in range(config.vocab_partitions):
-            aie_ops.out_head_prefill(aie_buffers.x_prefill, aie_buffers.W_out_head_parts[i], aie_buffers.logits_prefill_parts[i])
-        aie_buffers.logits_prefill.to("cpu")
-        logits_padded_partitioned = aie_buffers.logits_prefill.view_as_torch()  # (vocab_partitions, padded_seq_len, padded_vocab_size // vocab_partitions)
+            ops.out_head(bufs.x, aie_buffers.W_out_head_parts[i], bufs.logits_parts[i])
+        bufs.logits.to("cpu")
+        logits_padded_partitioned = bufs.logits.view_as_torch()  # (vocab_partitions, padded_seq_len, padded_vocab_size // vocab_partitions)
         logits_padded = logits_padded_partitioned.transpose(0, 1).contiguous().view(-1, config.padded_vocab_size)  # (padded_seq_len, padded_vocab_size)
         logits = logits_padded.unsqueeze(0)[:,:seq_len,:config.vocab_size]  # (batch, seq_len, vocab_size)
     else:
         # Step 5: Output projection
         # Reference:
-        # x = aie_buffers.x_decode.view_as_torch().unsqueeze(0)
+        # x = bufs.x.view_as_torch().unsqueeze(0)
         # logits = torch.nn.functional.linear(config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
-        aie_buffers.logits_decode.to("npu")
-        aie_ops.out_head_decode(aie_buffers.W_out_head, aie_buffers.x_decode.view((config.emb_dim,)), aie_buffers.logits_decode)
-        aie_buffers.logits_decode.to("cpu")
-        logits = aie_buffers.logits_decode.view_as_torch().view(1, 1, config.vocab_size)
+        bufs.logits.to("npu")
+        ops.out_head(aie_buffers.W_out_head, bufs.x.view((config.emb_dim,)), bufs.logits)
+        bufs.logits.to("cpu")
+        logits = bufs.logits.view_as_torch().view(1, 1, config.vocab_size)
 
     return logits, state
 
