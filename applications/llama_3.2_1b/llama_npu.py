@@ -237,6 +237,29 @@ class AIELlamaOperators:
             context=self.context
         ).compile().get_callable()
         
+        # Key projection: (seq_len, emb_dim) -> (seq_len, n_kv_groups * head_dim)
+        self.prefill.attn_key = AIEGEMM(
+            M=prompt_len,
+            K=config.emb_dim,
+            N=config.n_kv_groups * config.head_dim,
+            num_aie_columns=8,
+            tile_m=64,
+            tile_k=64,
+            tile_n=64,
+            b_col_maj=False,
+            use_static_weight=True,
+            context=self.context
+        ).compile().get_callable()
+        
+        self.decode.attn_key = AIEGEMV(
+            M=config.n_kv_groups * config.head_dim,
+            K=config.emb_dim,
+            num_aie_columns=8,
+            tile_size_input=4,
+            tile_size_output=config.head_dim // 2,
+            context=self.context
+        ).compile().get_callable()
+        
 
 
 # Allocate buffers shared with NPU
@@ -263,6 +286,7 @@ class AIEPrefillBuffers:
         self.rope_angles_keys = AIEBuffer(shape=(prompt_len, head_dim), dtype=ml_dtypes.bfloat16)
         # Attention projection buffers
         self.attn_queries = AIEBuffer(shape=(prompt_len, n_heads * head_dim), dtype=ml_dtypes.bfloat16)
+        self.attn_keys = AIEBuffer(shape=(prompt_len, n_kv_groups * head_dim), dtype=ml_dtypes.bfloat16)
 
 class AIEDecodeBuffers:
     def __init__(self, emb_dim, hidden_dim, n_heads, n_kv_groups, head_dim):
@@ -283,6 +307,7 @@ class AIEDecodeBuffers:
         self.rope_angles_keys = AIEBuffer(shape=(1, head_dim), dtype=ml_dtypes.bfloat16)
         # Attention projection buffers
         self.attn_queries = AIEBuffer(shape=(1, n_heads * head_dim), dtype=ml_dtypes.bfloat16)
+        self.attn_keys = AIEBuffer(shape=(1, n_kv_groups * head_dim), dtype=ml_dtypes.bfloat16)
 
 class AIELlamaBuffers:
     def __init__(self, config, prompt_len):
@@ -296,6 +321,8 @@ class AIELlamaBuffers:
         # Attention projection weights
         self.W_attn_query_prefill = []
         self.W_attn_query_decode = []
+        self.W_attn_key_prefill = []
+        self.W_attn_key_decode = []
         # SwiGLU FFN weights
         self.W_ffn_gate_prefill = []
         self.W_ffn_up_prefill = []
@@ -315,6 +342,12 @@ class AIELlamaBuffers:
             )
             self.W_attn_query_prefill.append(
                 AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.q_proj.weight'].T).to("npu")
+            )
+            self.W_attn_key_decode.append(
+                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.k_proj.weight']).to("npu")
+            )
+            self.W_attn_key_prefill.append(
+                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.k_proj.weight'].T).to("npu")
             )
             self.W_ffn_gate_decode.append(
                 AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.mlp.gate_proj.weight']).to("npu")
@@ -440,10 +473,12 @@ def grouped_query_attention_forward(
         ops = aie_ops.prefill
         bufs = aie_buffers.prefill
         W_attn_query = aie_buffers.W_attn_query_prefill[layer_idx]
+        W_attn_key = aie_buffers.W_attn_key_prefill[layer_idx]
     else:
         ops = aie_ops.decode
         bufs = aie_buffers.decode
         W_attn_query = aie_buffers.W_attn_query_decode[layer_idx]
+        W_attn_key = aie_buffers.W_attn_key_decode[layer_idx]
 
     # Step 1: Linear projections
     # This multiplication produces queries, keys and values for all tokens in the sequence.
@@ -465,9 +500,17 @@ def grouped_query_attention_forward(
         rope_queries_in_view = bufs.rope_queries_in.view(np.prod(bufs.rope_queries_in.shape))
         ops.attn_query(W_attn_query, x_norm_view, rope_queries_in_view)
     
-    keys = torch.nn.functional.linear(x, W_key)                   # (batch, seq_len, num_kv_groups * head_dim)
+    # Key projection using NPU - write directly to RoPE input buffer to avoid CPU round-trip
+    bufs.rope_keys_in.to("npu")
+    if seq_len > 1:
+        # Project and write to rope buffer with appropriate view
+        rope_keys_in_view = bufs.rope_keys_in.view((bufs.rope_keys_in.shape[0] // num_kv_groups, num_kv_groups * head_dim))
+        ops.attn_key(bufs.x_norm, W_attn_key, rope_keys_in_view)
+    else:
+        rope_keys_in_view = bufs.rope_keys_in.view(np.prod(bufs.rope_keys_in.shape))
+        ops.attn_key(W_attn_key, x_norm_view, rope_keys_in_view)
+    
     values = torch.nn.functional.linear(x, W_value)               # (batch, seq_len, num_kv_groups * head_dim)
-    keys = keys.view(batch, seq_len, num_kv_groups, head_dim)     # (batch, seq_len, num_kv_groups, head_dim)
     values = values.view(batch, seq_len, num_kv_groups, head_dim) # (batch, seq_len, num_kv_groups, head_dim)
     
     # Step 2: Apply RoPE to queries (already in rope_queries_in buffer on NPU)
@@ -486,8 +529,18 @@ def grouped_query_attention_forward(
     queries = bufs.rope_queries_out.view_as_torch()[:seq_len * num_heads, :].clone()
     queries = queries.view(batch, seq_len, num_heads, head_dim)
     
-    # Apply RoPE to keys
-    keys = rope_forward(keys, angles, num_preceding_tokens, is_query=False)
+    # Apply RoPE to keys (already in rope_keys_in buffer on NPU)
+    bufs.rope_angles_keys.view_as_torch()[:seq_len, :] = angles_slice
+    bufs.rope_angles_keys.to("npu")
+    bufs.rope_keys_out.to("npu")
+    
+    # Execute RoPE on NPU (data already there from key projection)
+    ops.rope_keys(bufs.rope_keys_in, bufs.rope_angles_keys, bufs.rope_keys_out)
+    
+    # Read keys result from NPU
+    bufs.rope_keys_out.to("cpu")
+    keys = bufs.rope_keys_out.view_as_torch()[:seq_len * num_kv_groups, :].clone()
+    keys = keys.view(batch, seq_len, num_kv_groups, head_dim)
 
     # Step 3: Transpose for attention computation
     # As a result of the attention projections, the queries, keys and values for each head are interspersed with each other.
