@@ -323,19 +323,6 @@ def llama_forward_pass(
         diagonal=1
     )
 
-    if seq_len == 1:
-        return llama_forward_pass_decode(config, state, x, attn_mask)
-    else:
-        return llama_forward_pass_prefill(config, state, x, attn_mask)
-
-def llama_forward_pass_prefill(
-    config,
-    state,
-    x,
-    attn_mask
-):
-    batch, seq_len, _ = x.shape
-    
     # Step 3: Apply transformer blocks
     for layer_idx in range(config.n_layers):
         x, state.attn_keys_caches[layer_idx], state.attn_values_caches[layer_idx] = transformer_block_forward(
@@ -358,26 +345,40 @@ def llama_forward_pass_prefill(
         )
     
     # Step 4: Final normalization
-    aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
-    aie_buffers.x_prefill.to("npu")
-    aie_ops.final_norm_prefill(aie_buffers.x_prefill, aie_buffers.W_final_norm, aie_buffers.x_prefill)
+    if seq_len > 1:
+        aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
+        aie_buffers.x_prefill.to("npu")
+        aie_ops.final_norm_prefill(aie_buffers.x_prefill, aie_buffers.W_final_norm, aie_buffers.x_prefill)
+    else:
+        aie_buffers.x_decode.view_as_torch().view(1, 1, config.emb_dim)[0, 0, :] = x
+        aie_buffers.x_decode.to("npu")
+        aie_ops.final_norm_decode(aie_buffers.x_decode, aie_buffers.W_final_norm, aie_buffers.x_decode)
     
     # Step 5: Output projection (check for tied embeddings)
-    # Since vocab size is a very large dimension unsupported by the AIE GEMM, we have to execute the GEMM in multiple partitions and reassemble the output.
-    aie_buffers.logits_prefill.to("npu")
-    for i in range(config.vocab_partitions):
-        aie_ops.out_head_prefill(aie_buffers.x_prefill, aie_buffers.W_out_head_parts[i], aie_buffers.logits_prefill_parts[i])
-    aie_buffers.logits_prefill.to("cpu")
-    logits_padded_partitioned = aie_buffers.logits_prefill.view_as_torch()  # (vocab_partitions, padded_seq_len, padded_vocab_size // vocab_partitions)
-    logits_padded = logits_padded_partitioned.transpose(0, 1).contiguous().view(-1, config.padded_vocab_size)  # (padded_seq_len, padded_vocab_size)
-    logits = logits_padded.unsqueeze(0)[:,:seq_len,:config.vocab_size]  # (batch, seq_len, vocab_size)
+    if seq_len > 1:
+        # Since vocab size is a very large dimension unsupported by the AIE GEMM, we have to execute the GEMM in multiple partitions and reassemble the output.
+        aie_buffers.logits_prefill.to("npu")
+        for i in range(config.vocab_partitions):
+            aie_ops.out_head_prefill(aie_buffers.x_prefill, aie_buffers.W_out_head_parts[i], aie_buffers.logits_prefill_parts[i])
+        aie_buffers.logits_prefill.to("cpu")
+        logits_padded_partitioned = aie_buffers.logits_prefill.view_as_torch()  # (vocab_partitions, padded_seq_len, padded_vocab_size // vocab_partitions)
+        logits_padded = logits_padded_partitioned.transpose(0, 1).contiguous().view(-1, config.padded_vocab_size)  # (padded_seq_len, padded_vocab_size)
+        logits = logits_padded.unsqueeze(0)[:,:seq_len,:config.vocab_size]  # (batch, seq_len, vocab_size)
+        # Reference:
+        # aie_buffers.x_prefill.to("cpu")
+        # x = aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
+        # logits_ref = torch.nn.functional.linear(x, config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
+        # assert (logits - logits_ref).max() < 0.5
+    else:
+        # Step 5: Output projection
+        aie_buffers.logits_decode.to("npu")
+        aie_ops.out_head_decode(aie_buffers.W_out_head, aie_buffers.x_decode.view((config.emb_dim,)), aie_buffers.logits_decode)
+        aie_buffers.logits_decode.to("cpu")
+        logits = aie_buffers.logits_decode.view_as_torch().view(1, 1, config.vocab_size)
+        # Reference:
+        # x = aie_buffers.x_decode.view_as_torch().unsqueeze(0)
+        # logits = torch.nn.functional.linear(config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
 
-    # Reference:
-    # aie_buffers.x_prefill.to("cpu")
-    # x = aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
-    # logits_ref = torch.nn.functional.linear(x, config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
-    # assert (logits - logits_ref).max() < 0.5
-    
     return logits, state
 
 
@@ -410,20 +411,6 @@ def llama_forward_pass_decode(
             attn_mask=attn_mask,
         )
     
-    # Step 4: Final normalization
-    aie_buffers.x_decode.view_as_torch().view(1, 1, config.emb_dim)[0, 0, :] = x
-    aie_buffers.x_decode.to("npu")
-    aie_ops.final_norm_decode(aie_buffers.x_decode, aie_buffers.W_final_norm, aie_buffers.x_decode)
-    
-    # Step 5: Output projection
-    aie_buffers.logits_decode.to("npu")
-    aie_ops.out_head_decode(aie_buffers.W_out_head, aie_buffers.x_decode.view((config.emb_dim,)), aie_buffers.logits_decode)
-    aie_buffers.logits_decode.to("cpu")
-
-    logits = aie_buffers.logits_decode.view_as_torch().view(1, 1, config.vocab_size)
-    # Reference:
-    # x = aie_buffers.x_decode.view_as_torch().unsqueeze(0)
-    # logits = torch.nn.functional.linear(config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
     
     return logits, state
 
