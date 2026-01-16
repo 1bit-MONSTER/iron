@@ -373,8 +373,10 @@ def transformer_block_forward(
     ffn_output = swiglu_ffn_forward(x_norm, W_ffn_fc1, W_ffn_fc2, W_ffn_fc3)
     
     # Step 6: Residual
-    x = x + ffn_output
-    bufs.x.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
+    bufs.ffn_output.view_as_torch().unsqueeze(0)[0, :seq_len, :] = ffn_output
+    bufs.ffn_output.to("npu")
+    ffn_output_view = bufs.ffn_output.view(np.prod(bufs.ffn_output.shape))
+    ops.residual_add(x_view, ffn_output_view, x_view)
     
     return attn_keys, attn_values
 
