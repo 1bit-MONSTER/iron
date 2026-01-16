@@ -38,11 +38,14 @@ def rope(
     num_aie_columns=1,
     trace_size=0,
     method_type=None,
+    archive_name=None,
 ):
     dtype = bfloat16
 
     if angle_rows is None:
         angle_rows = rows
+    if archive_name is None:
+        archive_name = "rope" + (f"_{method_type}" if method_type is not None else "") + ".o"
 
     assert cols % (16 * 2) == 0 and cols >= (
         16 * 2
@@ -75,7 +78,7 @@ def rope(
     # AIE Core Function declaration
     rope_kernel = Kernel(
         "rope",
-        "rope" + (f"_{method_type}" if method_type is not None else "") + ".o",
+        archive_name,
         [tensor_tile_ty, angle_tile_ty, tensor_tile_ty, np.int32],
     )
 

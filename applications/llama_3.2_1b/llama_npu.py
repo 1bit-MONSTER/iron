@@ -25,6 +25,7 @@ from operators import (
 )
 from operators.elementwise_mul.op import AIEElementwiseMul
 from operators.silu.op import AIESiLU
+from operators.rope.op import AIERope
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -180,6 +181,38 @@ class AIELlamaOperators:
             context=self.context
         ).compile().get_callable()
         
+        # RoPE operators
+        # For queries: (seq_len, num_heads * head_dim) = (seq_len, 2048)
+        # For keys: (seq_len, num_kv_groups * head_dim) = (seq_len, 512)
+        # angle_rows=1 because all rows use the same angle row (angles are per position)
+        self.prefill.rope_queries = AIERope(
+            rows=prompt_len * config.n_heads,
+            cols=config.head_dim,
+            angle_rows=prompt_len,
+            context=self.context
+        ).compile().get_callable()
+        
+        self.prefill.rope_keys = AIERope(
+            rows=prompt_len * config.n_kv_groups,
+            cols=config.head_dim,
+            angle_rows=prompt_len,
+            context=self.context
+        ).compile().get_callable()
+        
+        self.decode.rope_queries = AIERope(
+            rows=1 * config.n_heads,
+            cols=config.head_dim,
+            angle_rows=1,
+            context=self.context
+        ).compile().get_callable()
+        
+        self.decode.rope_keys = AIERope(
+            rows=1 * config.n_kv_groups,
+            cols=config.head_dim,
+            angle_rows=1,
+            context=self.context
+        ).compile().get_callable()
+        
 
 
 # Allocate buffers shared with NPU
@@ -188,7 +221,7 @@ class AIELlamaOperators:
 aie_buffers = None
 
 class AIEPrefillBuffers:
-    def __init__(self, prompt_len, emb_dim, hidden_dim):
+    def __init__(self, prompt_len, emb_dim, hidden_dim, n_heads, n_kv_groups, head_dim):
         self.x = AIEBuffer(shape=(prompt_len, emb_dim), dtype=ml_dtypes.bfloat16)
         self.x_norm = AIEBuffer(shape=(prompt_len, emb_dim), dtype=ml_dtypes.bfloat16)
         self.attn_output = AIEBuffer(shape=(prompt_len, emb_dim), dtype=ml_dtypes.bfloat16)
@@ -197,9 +230,16 @@ class AIEPrefillBuffers:
         self.ffn_gate = AIEBuffer(shape=(prompt_len, hidden_dim), dtype=ml_dtypes.bfloat16)
         self.ffn_up = AIEBuffer(shape=(prompt_len, hidden_dim), dtype=ml_dtypes.bfloat16)
         self.ffn_hidden = AIEBuffer(shape=(prompt_len, hidden_dim), dtype=ml_dtypes.bfloat16)
+        # RoPE buffers
+        self.rope_queries_in = AIEBuffer(shape=(prompt_len * n_heads, head_dim), dtype=ml_dtypes.bfloat16)
+        self.rope_queries_out = AIEBuffer(shape=(prompt_len * n_heads, head_dim), dtype=ml_dtypes.bfloat16)
+        self.rope_keys_in = AIEBuffer(shape=(prompt_len * n_kv_groups, head_dim), dtype=ml_dtypes.bfloat16)
+        self.rope_keys_out = AIEBuffer(shape=(prompt_len * n_kv_groups, head_dim), dtype=ml_dtypes.bfloat16)
+        self.rope_angles_queries = AIEBuffer(shape=(prompt_len, head_dim), dtype=ml_dtypes.bfloat16)
+        self.rope_angles_keys = AIEBuffer(shape=(prompt_len, head_dim), dtype=ml_dtypes.bfloat16)
 
 class AIEDecodeBuffers:
-    def __init__(self, emb_dim, hidden_dim):
+    def __init__(self, emb_dim, hidden_dim, n_heads, n_kv_groups, head_dim):
         self.x = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
         self.x_norm = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
         self.attn_output = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
@@ -208,12 +248,19 @@ class AIEDecodeBuffers:
         self.ffn_gate = AIEBuffer(shape=(1, hidden_dim), dtype=ml_dtypes.bfloat16)
         self.ffn_up = AIEBuffer(shape=(1, hidden_dim), dtype=ml_dtypes.bfloat16)
         self.ffn_hidden = AIEBuffer(shape=(1, hidden_dim), dtype=ml_dtypes.bfloat16)
+        # RoPE buffers
+        self.rope_queries_in = AIEBuffer(shape=(1 * n_heads, head_dim), dtype=ml_dtypes.bfloat16)
+        self.rope_queries_out = AIEBuffer(shape=(1 * n_heads, head_dim), dtype=ml_dtypes.bfloat16)
+        self.rope_keys_in = AIEBuffer(shape=(1 * n_kv_groups, head_dim), dtype=ml_dtypes.bfloat16)
+        self.rope_keys_out = AIEBuffer(shape=(1 * n_kv_groups, head_dim), dtype=ml_dtypes.bfloat16)
+        self.rope_angles_queries = AIEBuffer(shape=(1, head_dim), dtype=ml_dtypes.bfloat16)
+        self.rope_angles_keys = AIEBuffer(shape=(1, head_dim), dtype=ml_dtypes.bfloat16)
 
 class AIELlamaBuffers:
     def __init__(self, config, prompt_len):
         # Vector of the current token(s) being processed through the pipeline
-        self.prefill = AIEPrefillBuffers(prompt_len, config.emb_dim, config.hidden_dim)
-        self.decode = AIEDecodeBuffers(config.emb_dim, config.hidden_dim)
+        self.prefill = AIEPrefillBuffers(prompt_len, config.emb_dim, config.hidden_dim, config.n_heads, config.n_kv_groups, config.head_dim)
+        self.decode = AIEDecodeBuffers(config.emb_dim, config.hidden_dim, config.n_heads, config.n_kv_groups, config.head_dim)
 
         # Transformer block layer-wise RMS norm
         self.W_norm1 = []
@@ -278,41 +325,58 @@ class AIELlamaBuffers:
 # Operators
 # ##########################################################################
 
-def rope_forward(x, angles):
-    """Rotary positional embedding using precomputed angles"""
-    # x: (batch, seq_len, num_heads, head_dim) after view and before transpose
-    # angles: (context_length, head_dim)
-    _, seq_len, _, head_dim = x.shape
-    angles_slice = angles[:seq_len]  # (seq_len, head_dim)
+def rope_forward(x, angles, seq_len, num_preceding_tokens, is_query):
+    """Rotary positional embedding using NPU"""
+    # x: (batch, seq_len, num_heads_or_groups, head_dim)
+    # angles: (context_length, head_dim) - full angle table
+    batch, seq_len_actual, num_heads_or_groups, head_dim = x.shape
     
-    # Split into even and odd dimensions
-    x1 = x[..., : head_dim // 2]  # (batch, seq_len, num_heads, head_dim//2)
-    x2 = x[..., head_dim // 2 :]  # (batch, seq_len, num_heads, head_dim//2)
+    # Select prefill or decode buffers
+    if seq_len > 1:
+        ops = aie_ops.prefill
+        bufs = aie_buffers.prefill
+    else:
+        ops = aie_ops.decode
+        bufs = aie_buffers.decode
     
-    # Get cos and sin from angles
-    cos = angles_slice[:, ::2]  # (seq_len, head_dim//2)
-    sin = angles_slice[:, 1::2]  # (seq_len, head_dim//2)
+    # Select appropriate buffers and operator based on query/key
+    if is_query:
+        rope_op = ops.rope_queries
+        buf_in = bufs.rope_queries_in
+        buf_out = bufs.rope_queries_out
+        buf_angles = bufs.rope_angles_queries
+    else:
+        rope_op = ops.rope_keys
+        buf_in = bufs.rope_keys_in
+        buf_out = bufs.rope_keys_out
+        buf_angles = bufs.rope_angles_keys
     
-    # Reshape for broadcasting: (1, seq_len, 1, head_dim//2)
-    # (The same cosine and sine values are used across batch and heads.)
-    cos = cos.unsqueeze(0).unsqueeze(2)
-    sin = sin.unsqueeze(0).unsqueeze(2)
+    # Reshape x to (seq_len * num_heads_or_groups, head_dim) for NPU
+    x_reshaped = x.view(batch * seq_len_actual * num_heads_or_groups, head_dim)
     
-    # Rotate: [x1*cos - x2*sin, x1*sin + x2*cos]
-    rotated = torch.empty_like(x)
-    rotated[..., : head_dim // 2] = x1 * cos - x2 * sin
-    rotated[..., head_dim // 2 :] = x1 * sin + x2 * cos
+    # Get the relevant angles slice and repeat for each head/group
+    angles_slice = angles[num_preceding_tokens : num_preceding_tokens + seq_len_actual]  # (seq_len, head_dim)
+    # Repeat angles for each head/group: (seq_len, head_dim) -> (seq_len * num_heads_or_groups, head_dim)
+    angles_repeated = angles_slice.repeat_interleave(num_heads_or_groups, dim=0)
     
-    return rotated
-
-
-def rms_norm_forward(x, weight, eps=1e-5):
-    """Root Mean Square Layer Normalization"""
-    # x: (batch, seq_len, dim)
-    variance = x.pow(2).mean(-1, keepdim=True)
-    x = x * torch.rsqrt(variance + eps)
-    return weight * x
-
+    # Copy to NPU buffers
+    buf_in.view_as_torch()[:seq_len_actual * num_heads_or_groups, :] = x_reshaped[:seq_len_actual * num_heads_or_groups]
+    buf_angles.view_as_torch()[:seq_len_actual, :] = angles_slice
+    
+    buf_in.to("npu")
+    buf_angles.to("npu")
+    buf_out.to("npu")
+    
+    # Execute RoPE on NPU
+    rope_op(buf_in, buf_angles, buf_out)
+    
+    buf_out.to("cpu")
+    
+    # Read result and reshape back
+    result = buf_out.view_as_torch()[:seq_len_actual * num_heads_or_groups, :].clone()
+    result = result.view(batch, seq_len_actual, num_heads_or_groups, head_dim)
+    
+    return result
 
 def grouped_query_attention_forward(
     x, 
@@ -348,8 +412,8 @@ def grouped_query_attention_forward(
     values = values.view(batch, seq_len, num_kv_groups, head_dim) # (batch, seq_len, num_kv_groups, head_dim)
     
     # Step 2: Apply RoPE
-    queries = rope_forward(queries, angles[num_preceding_tokens : num_preceding_tokens + seq_len])
-    keys = rope_forward(keys, angles[num_preceding_tokens : num_preceding_tokens + seq_len])
+    queries = rope_forward(queries, angles, seq_len, num_preceding_tokens, is_query=True)
+    keys = rope_forward(keys, angles, seq_len, num_preceding_tokens, is_query=False)
 
     # Step 3: Transpose for attention computation
     # As a result of the attention projections, the queries, keys and values for each head are interspersed with each other.
