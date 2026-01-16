@@ -12,15 +12,17 @@ from aie.iron.placers import SequentialPlacer
 from aie.iron.device import Tile, NPU1, NPU2
 from aie.helpers.taplib.tap import TensorAccessPattern
 from aie.iron.controlflow import range_
+from aie.helpers.util import np_ndarray_type_get_shape
 
 
-def my_silu(dev, size, num_columns, num_channels, tile_size, trace_size):
+def my_silu(dev, size, num_columns, tile_size, trace_size, archive_name):
     xfr_dtype = bfloat16
     line_size = 4096 if tile_size > 4096 else tile_size
     line_type = np.ndarray[(line_size,), np.dtype[xfr_dtype]]
     transfer_type = np.ndarray[(size,), np.dtype[xfr_dtype]]
 
-    # Calculate number of iterations per core
+    # Calculate number of iterations per core (using 1 channel per column)
+    num_channels = 1
     total_cores = num_columns * num_channels
     per_core_elements = size // total_cores
     N_div_n = per_core_elements // line_size
@@ -43,7 +45,7 @@ def my_silu(dev, size, num_columns, num_channels, tile_size, trace_size):
     # External, binary kernel definition
     silu_fcn = Kernel(
         "silu_bf16",
-        "silu.o",
+        archive_name,
         [line_type, line_type, np.int32],
     )
 
@@ -152,11 +154,6 @@ if __name__ == "__main__":
     p.add_argument(
         "-co", "--columns", required=True, dest="cols", help="Number of columns"
     )
-    # Number of channels is required to define the number of channels to be used
-    # It must be 1 or 2
-    p.add_argument(
-        "-ch", "--channels", required=True, dest="chans", help="Number of channels"
-    )
     # Tile size (elements per tile) - defaults to 1024 for backward compatibility
     p.add_argument(
         "-ts",
@@ -189,11 +186,10 @@ if __name__ == "__main__":
     elif isinstance(dev, NPU2) and columns > 8:
         raise ValueError("[ERROR] NPU2 device cannot allocate more than 8 columns")
 
-    channels = int(opts.chans)
-    if channels < 1 or channels > 2:
-        raise ValueError("Number of channels must be 1 or 2")
     tile_size = int(opts.tile_size)
-    if ((length % tile_size) % columns % channels) != 0:
+    # Using 1 channel per column for SiLU
+    num_channels = 1
+    if ((length % tile_size) % columns % num_channels) != 0:
         print(
             "transfer size ("
             + str(length)
@@ -204,7 +200,7 @@ if __name__ == "__main__":
         raise ValueError
     trace_size = opts.trace_size
 
-    module = my_silu(dev, length, columns, channels, tile_size, trace_size)
+    module = my_silu(dev, length, columns, tile_size, trace_size, "silu.o")
 
     output_file_path = Path(opts.output_file_path)
 

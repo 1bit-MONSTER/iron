@@ -12,9 +12,10 @@ from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1, NPU2
 from aie.helpers.taplib.tap import TensorAccessPattern
 from aie.iron.controlflow import range_
+from aie.helpers.util import np_ndarray_type_get_shape
 
 
-def my_eltwise_mul(dev, num_elements, num_columns, num_channels, tile_size, trace_size):
+def my_eltwise_mul(dev, num_elements, num_columns, tile_size, trace_size, archive_name):
     per_tile_elements = 4096 if tile_size > 4096 else tile_size
     n = per_tile_elements * num_columns
     if num_elements % n != 0:
@@ -36,7 +37,7 @@ def my_eltwise_mul(dev, num_elements, num_columns, num_channels, tile_size, trac
 
     # AIE Core Function declaration
     eltwise_mul_bf16_vector = Kernel(
-        "eltwise_mul_bf16_vector", "mul.o", [tile_ty, tile_ty, tile_ty, np.int32]
+        "eltwise_mul_bf16_vector", archive_name, [tile_ty, tile_ty, tile_ty, np.int32]
     )
 
     # Define a task that will run on a compute tile
@@ -146,11 +147,6 @@ if __name__ == "__main__":
     p.add_argument(
         "-co", "--columns", required=True, dest="cols", help="Number of columns"
     )
-    # Number of channels is required to define the number of channels to be used
-    # It must be 1 or 2
-    p.add_argument(
-        "-ch", "--channels", required=True, dest="chans", help="Number of channels"
-    )
     # Tile size (elements per tile) - defaults to 1024 for backward compatibility
     p.add_argument(
         "-ts",
@@ -183,9 +179,6 @@ if __name__ == "__main__":
     elif isinstance(dev, NPU2) and columns > 8:
         raise ValueError("[ERROR] NPU2 device cannot allocate more than 8 columns")
 
-    channels = int(opts.chans)
-    if channels < 1 or channels > 2:
-        raise ValueError("Number of channels must be 1 or 2")
     tile_size = int(opts.tile_size)
     if length % (tile_size * columns) != 0:
         print(
@@ -198,7 +191,7 @@ if __name__ == "__main__":
         raise ValueError
     trace_size = int(opts.trace_size) if opts.trace_size is not None else 0
 
-    module = my_eltwise_mul(dev, length, columns, channels, tile_size, trace_size)
+    module = my_eltwise_mul(dev, length, columns, tile_size, trace_size, "mul.o")
 
     output_file_path = Path(opts.output_file_path)
 

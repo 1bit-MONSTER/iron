@@ -62,9 +62,8 @@ def test_elementwise_mul(
 
     operator = AIEElementwiseMul(
         size=input_length,
-        num_aie_columns=num_aie_columns,
-        num_channels=num_channels,
         tile_size=tile_size,
+        num_aie_columns=num_aie_columns,
         context=aie_context,
     )
 
