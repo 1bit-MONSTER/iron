@@ -269,7 +269,7 @@ def swiglu_ffn_forward(x, fc1_weight, fc2_weight, fc3_weight):
 
 
 def transformer_block_forward(
-    x,
+    seq_len,
     attn_keys_cache,
     attn_values_cache,
     num_heads,
@@ -286,18 +286,14 @@ def transformer_block_forward(
     rope_angles,
     attn_mask
 ):
-    batch, seq_len, _ = x.shape
-
     # Step 1: RMS normalization
     if seq_len > 1:
-        aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
         aie_buffers.x_prefill.to("npu")
         aie_buffers.x_norm_prefill.to("npu")
         aie_ops.rms_norm_prefill(aie_buffers.x_prefill, W_norm1, aie_buffers.x_norm_prefill)
         aie_buffers.x_norm_prefill.to("cpu")
         x_norm = aie_buffers.x_norm_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
     else:
-        aie_buffers.x_decode.view_as_torch().unsqueeze(0)[0, 0, :] = x
         aie_buffers.x_decode.to("npu")
         aie_buffers.x_norm_decode.to("npu")
         x_norm = aie_ops.rms_norm_decode(aie_buffers.x_decode, W_norm1, aie_buffers.x_norm_decode)
@@ -317,6 +313,10 @@ def transformer_block_forward(
     )
     
     # Step 3: Residual
+    if seq_len > 1:
+        x = aie_buffers.x_prefill.to("cpu").view_as_torch().unsqueeze(0)[:, :seq_len, :]
+    else:
+        x = aie_buffers.x_decode.to("cpu").view_as_torch().unsqueeze(0)
     x = x + attn_output
     
     # Step 4: Post-norm
@@ -340,8 +340,12 @@ def transformer_block_forward(
     
     # Step 6: Residual
     x = x + ffn_output
+    if seq_len > 1:
+        aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
+    else:
+        aie_buffers.x_decode.view_as_torch().unsqueeze(0)[0, 0, :] = x
     
-    return x, attn_keys, attn_values
+    return attn_keys, attn_values
 
 
 def llama_forward_pass(
@@ -356,11 +360,15 @@ def llama_forward_pass(
         torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool),
         diagonal=1
     )
+    if seq_len > 1:
+        aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
+    else:
+        aie_buffers.x_decode.view_as_torch().unsqueeze(0)[0, 0, :] = x
 
     # Step 3: Apply transformer blocks
     for layer_idx in range(config.n_layers):
-        x, state.attn_keys_caches[layer_idx], state.attn_values_caches[layer_idx] = transformer_block_forward(
-            x,
+        state.attn_keys_caches[layer_idx], state.attn_values_caches[layer_idx] = transformer_block_forward(
+            seq_len,
             state.attn_keys_caches[layer_idx],
             state.attn_values_caches[layer_idx],
             config.n_heads,
@@ -377,14 +385,13 @@ def llama_forward_pass(
             rope_angles=config.angles,
             attn_mask=attn_mask,
         )
+
     
     # Step 4: Final normalization
     if seq_len > 1:
-        aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
         aie_buffers.x_prefill.to("npu")
         aie_ops.rms_norm_prefill(aie_buffers.x_prefill, aie_buffers.W_final_norm, aie_buffers.x_prefill)
     else:
-        aie_buffers.x_decode.view_as_torch().view(1, 1, config.emb_dim)[0, 0, :] = x
         aie_buffers.x_decode.to("npu")
         aie_ops.rms_norm_decode(aie_buffers.x_decode, aie_buffers.W_final_norm, aie_buffers.x_decode)
     
