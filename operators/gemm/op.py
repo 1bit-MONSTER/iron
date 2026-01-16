@@ -169,9 +169,9 @@ class AIEGEMM(SingleMLIRSourceOperator):
 
     def get_arg_spec(self):
         return [
-            AIERuntimeArgSpec((self.M, self.K)),  # input A
-            AIERuntimeArgSpec((self.K, self.N) if not self.b_col_maj else (self.N, self.K)),  # input B (weights)
-            AIERuntimeArgSpec((self.M, self.N) if not self.c_col_maj else (self.N, self.M)),  # output C
+            AIERuntimeArgSpec("in", (self.M, self.K)),  # input A
+            AIERuntimeArgSpec("in", (self.K, self.N) if not self.b_col_maj else (self.N, self.K)),  # input B (weights)
+            AIERuntimeArgSpec("out", (self.M, self.N) if not self.c_col_maj else (self.N, self.M)),  # output C
         ]
 
     # def _get_B_dims(self, B_shape):

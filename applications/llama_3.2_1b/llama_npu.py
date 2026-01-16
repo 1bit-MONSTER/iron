@@ -6,7 +6,6 @@ from pathlib import Path
 import sys
 import ml_dtypes
 import llama_inference_harness as harness
-import time
 
 repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(repo_root))
@@ -35,7 +34,7 @@ class AIELlamaOperators:
         self.context.build_dir.mkdir(parents=True, exist_ok=True)
 
         # Final RMS Norm
-        self.final_norm_prefill = AIERMSNorm(
+        self.rms_norm_prefill = AIERMSNorm(
             size=prompt_len * config.emb_dim,
             eps=1e-5,
             num_aie_columns=8,
@@ -43,7 +42,7 @@ class AIELlamaOperators:
             tile_size=config.emb_dim,
             context=self.context
         ).compile().get_callable()
-        self.final_norm_decode = AIERMSNorm(
+        self.rms_norm_decode = AIERMSNorm(
             size=config.emb_dim,
             eps=1e-5,
             num_aie_columns=1,
@@ -88,21 +87,37 @@ aie_buffers = None
 
 class AIELlamaBuffers:
     def __init__(self, config, prompt_len):
+        # Vector of the current token(s) being processed through the pipeline
         self.x_prefill = AIEBuffer(shape=(prompt_len, config.emb_dim), dtype=ml_dtypes.bfloat16)
         self.x_decode = AIEBuffer(shape=(1, config.emb_dim), dtype=ml_dtypes.bfloat16)
-        self.W_final_norm = AIEBuffer.from_torch(config.weights['model.norm.weight'])
 
+        self.x_norm_prefill = AIEBuffer(shape=(prompt_len, config.emb_dim), dtype=ml_dtypes.bfloat16)
+        self.x_norm_decode = AIEBuffer(shape=(1, config.emb_dim), dtype=ml_dtypes.bfloat16)
+
+        # Transformer block layer-wise RMS norm
+        self.W_norm1 = []
+        self.W_norm2 = []
+        for layer_idx in range(config.n_layers):
+            self.W_norm1.append(
+                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.input_layernorm.weight']).to("npu")
+            )
+            self.W_norm2.append(
+                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.post_attention_layernorm.weight']).to("npu")
+            )
+
+        # Final RMS norm weights
+        self.W_final_norm = AIEBuffer.from_torch(config.weights['model.norm.weight']).to("npu")
         # Final linear layer
-        self.W_out_head = AIEBuffer.from_np(torch_to_numpy(config.weights['model.embed_tokens.weight']))  # unpadded/unpartitioned, used by GEMV
+        self.W_out_head = AIEBuffer.from_np(torch_to_numpy(config.weights['model.embed_tokens.weight'])).to("npu")  # unpadded/unpartitioned, used by GEMV
         W_out_head_parts = aie_ops.out_head_prefill_compilable.partition_B(
             torch_to_numpy(config.weights['model.embed_tokens.weight']), 
             config.vocab_partitions
         )
         self.W_out_head_parts = [
-            AIEBuffer.from_np(W_out_head_part) 
+            AIEBuffer.from_np(W_out_head_part).to("npu") 
             for W_out_head_part in W_out_head_parts
         ] # partitioned, padded parts of weight, used by GEMM
-        self.logits_prefill = AIEBuffer(shape=(config.vocab_partitions, prompt_len, config.padded_vocab_size // config.vocab_partitions))
+        self.logits_prefill = AIEBuffer(shape=(config.vocab_partitions, prompt_len, config.padded_vocab_size // config.vocab_partitions)).to("npu")
         self.logits_prefill_parts = [
             self.logits_prefill.subbuffer(
                 length=prompt_len * (config.padded_vocab_size // config.vocab_partitions),
@@ -112,15 +127,6 @@ class AIELlamaBuffers:
             for i in range(config.vocab_partitions)
         ]
         self.logits_decode = AIEBuffer(shape=(config.vocab_size,))
-
-        for buf in (
-            [
-                self.W_final_norm,
-                self.W_out_head,
-            ] +
-            self.W_out_head_parts
-        ):
-            buf.to("npu")
 
 
 # Operators
@@ -280,9 +286,24 @@ def transformer_block_forward(
     rope_angles,
     attn_mask
 ):
+    batch, seq_len, _ = x.shape
+
     # Step 1: RMS normalization
-    x_norm = rms_norm_forward(x, W_norm1)
-    
+    if seq_len > 1:
+        aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
+        aie_buffers.x_prefill.to("npu")
+        aie_buffers.x_norm_prefill.to("npu")
+        aie_ops.rms_norm_prefill(aie_buffers.x_prefill, W_norm1, aie_buffers.x_norm_prefill)
+        aie_buffers.x_norm_prefill.to("cpu")
+        x_norm = aie_buffers.x_norm_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
+    else:
+        aie_buffers.x_decode.view_as_torch().unsqueeze(0)[0, 0, :] = x
+        aie_buffers.x_decode.to("npu")
+        aie_buffers.x_norm_decode.to("npu")
+        x_norm = aie_ops.rms_norm_decode(aie_buffers.x_decode, W_norm1, aie_buffers.x_norm_decode)
+        aie_buffers.x_decode.to("cpu")
+        x_norm = aie_buffers.x_norm_decode.view_as_torch().unsqueeze(0)
+
     # Step 2: Attention
     attn_output, attn_keys, attn_values = grouped_query_attention_forward(
         x_norm,
@@ -299,7 +320,20 @@ def transformer_block_forward(
     x = x + attn_output
     
     # Step 4: Post-norm
-    x_norm = rms_norm_forward(x, W_norm2)
+    if seq_len > 1:
+        aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
+        aie_buffers.x_prefill.to("npu")
+        aie_buffers.x_norm_prefill.to("npu")
+        aie_ops.rms_norm_prefill(aie_buffers.x_prefill, W_norm2, aie_buffers.x_norm_prefill)
+        aie_buffers.x_norm_prefill.to("cpu")
+        x_norm = aie_buffers.x_norm_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
+    else:
+        aie_buffers.x_decode.view_as_torch().unsqueeze(0)[0, 0, :] = x
+        aie_buffers.x_decode.to("npu")
+        aie_buffers.x_norm_decode.to("npu")
+        x_norm = aie_ops.rms_norm_decode(aie_buffers.x_decode, W_norm2, aie_buffers.x_norm_decode)
+        aie_buffers.x_decode.to("cpu")
+        x_norm = aie_buffers.x_norm_decode.view_as_torch().unsqueeze(0)
     
     # Step 5: fully-connected feed-forward network
     ffn_output = swiglu_ffn_forward(x_norm, W_ffn_fc1, W_ffn_fc2, W_ffn_fc3)
@@ -331,7 +365,7 @@ def llama_forward_pass(
             state.attn_values_caches[layer_idx],
             config.n_heads,
             config.n_kv_groups,
-            W_norm1=config.weights[f'model.layers.{layer_idx}.input_layernorm.weight'],
+            W_norm1=aie_buffers.W_norm1[layer_idx],
             W_attn_query=config.weights[f'model.layers.{layer_idx}.self_attn.q_proj.weight'],
             W_attn_key=config.weights[f'model.layers.{layer_idx}.self_attn.k_proj.weight'],
             W_attn_value=config.weights[f'model.layers.{layer_idx}.self_attn.v_proj.weight'],
@@ -339,7 +373,7 @@ def llama_forward_pass(
             W_ffn_fc1=config.weights[f'model.layers.{layer_idx}.mlp.gate_proj.weight'],
             W_ffn_fc2=config.weights[f'model.layers.{layer_idx}.mlp.up_proj.weight'],
             W_ffn_fc3=config.weights[f'model.layers.{layer_idx}.mlp.down_proj.weight'],
-            W_norm2=config.weights[f'model.layers.{layer_idx}.post_attention_layernorm.weight'],
+            W_norm2=aie_buffers.W_norm2[layer_idx],
             rope_angles=config.angles,
             attn_mask=attn_mask,
         )
@@ -348,15 +382,21 @@ def llama_forward_pass(
     if seq_len > 1:
         aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
         aie_buffers.x_prefill.to("npu")
-        aie_ops.final_norm_prefill(aie_buffers.x_prefill, aie_buffers.W_final_norm, aie_buffers.x_prefill)
+        aie_ops.rms_norm_prefill(aie_buffers.x_prefill, aie_buffers.W_final_norm, aie_buffers.x_prefill)
     else:
         aie_buffers.x_decode.view_as_torch().view(1, 1, config.emb_dim)[0, 0, :] = x
         aie_buffers.x_decode.to("npu")
-        aie_ops.final_norm_decode(aie_buffers.x_decode, aie_buffers.W_final_norm, aie_buffers.x_decode)
+        aie_ops.rms_norm_decode(aie_buffers.x_decode, aie_buffers.W_final_norm, aie_buffers.x_decode)
     
     # Step 5: Output projection (check for tied embeddings)
     if seq_len > 1:
         # Since vocab size is a very large dimension unsupported by the AIE GEMM, we have to execute the GEMM in multiple partitions and reassemble the output.
+        # Reference:
+        # aie_buffers.x_prefill.to("cpu")
+        # x = aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
+        # logits_ref = torch.nn.functional.linear(x, config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
+        # assert (logits - logits_ref).max() < 0.5
+        aie_buffers.x_prefill.to("npu")
         aie_buffers.logits_prefill.to("npu")
         for i in range(config.vocab_partitions):
             aie_ops.out_head_prefill(aie_buffers.x_prefill, aie_buffers.W_out_head_parts[i], aie_buffers.logits_prefill_parts[i])
@@ -364,54 +404,16 @@ def llama_forward_pass(
         logits_padded_partitioned = aie_buffers.logits_prefill.view_as_torch()  # (vocab_partitions, padded_seq_len, padded_vocab_size // vocab_partitions)
         logits_padded = logits_padded_partitioned.transpose(0, 1).contiguous().view(-1, config.padded_vocab_size)  # (padded_seq_len, padded_vocab_size)
         logits = logits_padded.unsqueeze(0)[:,:seq_len,:config.vocab_size]  # (batch, seq_len, vocab_size)
-        # Reference:
-        # aie_buffers.x_prefill.to("cpu")
-        # x = aie_buffers.x_prefill.view_as_torch().unsqueeze(0)[:, :seq_len, :]
-        # logits_ref = torch.nn.functional.linear(x, config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
-        # assert (logits - logits_ref).max() < 0.5
     else:
         # Step 5: Output projection
+        # Reference:
+        # x = aie_buffers.x_decode.view_as_torch().unsqueeze(0)
+        # logits = torch.nn.functional.linear(config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
         aie_buffers.logits_decode.to("npu")
         aie_ops.out_head_decode(aie_buffers.W_out_head, aie_buffers.x_decode.view((config.emb_dim,)), aie_buffers.logits_decode)
         aie_buffers.logits_decode.to("cpu")
         logits = aie_buffers.logits_decode.view_as_torch().view(1, 1, config.vocab_size)
-        # Reference:
-        # x = aie_buffers.x_decode.view_as_torch().unsqueeze(0)
-        # logits = torch.nn.functional.linear(config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
 
-    return logits, state
-
-
-def llama_forward_pass_decode(
-    config,
-    state,
-    x,
-    attn_mask
-):
-    batch, seq_len, _ = x.shape
-    
-    # Step 3: Apply transformer blocks
-    for layer_idx in range(config.n_layers):
-        x, state.attn_keys_caches[layer_idx], state.attn_values_caches[layer_idx] = transformer_block_forward(
-            x,
-            state.attn_keys_caches[layer_idx],
-            state.attn_values_caches[layer_idx],
-            config.n_heads,
-            config.n_kv_groups,
-            W_norm1=config.weights[f'model.layers.{layer_idx}.input_layernorm.weight'],
-            W_attn_query=config.weights[f'model.layers.{layer_idx}.self_attn.q_proj.weight'],
-            W_attn_key=config.weights[f'model.layers.{layer_idx}.self_attn.k_proj.weight'],
-            W_attn_value=config.weights[f'model.layers.{layer_idx}.self_attn.v_proj.weight'],
-            W_attn_out=config.weights[f'model.layers.{layer_idx}.self_attn.o_proj.weight'],
-            W_ffn_fc1=config.weights[f'model.layers.{layer_idx}.mlp.gate_proj.weight'],
-            W_ffn_fc2=config.weights[f'model.layers.{layer_idx}.mlp.up_proj.weight'],
-            W_ffn_fc3=config.weights[f'model.layers.{layer_idx}.mlp.down_proj.weight'],
-            W_norm2=config.weights[f'model.layers.{layer_idx}.post_attention_layernorm.weight'],
-            rope_angles=config.angles,
-            attn_mask=attn_mask,
-        )
-    
-    
     return logits, state
 
 

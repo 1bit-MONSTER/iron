@@ -177,9 +177,11 @@ class SingleMLIRSourceOperator(AIEOperatorBase, ABC):
         )
     
 class AIERuntimeArgSpec:
-    def __init__(self, shape, dtype=bfloat16):
+    def __init__(self, direction, shape, dtype=bfloat16):
         self.shape = shape
         self.dtype = dtype
+        assert direction in {"in", "out", "inout"}
+        self.direction = direction
 
 class AIEBuffer:
     def __init__(self, shape, dtype=bfloat16, bo=None, device_manager=None):
@@ -213,6 +215,7 @@ class AIEBuffer:
             offset * itemsize, # offset
         )
         sub_buffer = AIEBuffer(shape=shape, dtype=dtype, bo=sub_bo, device_manager=self.device_manager)
+        sub_buffer.on = self.on
         self.subviews.append(sub_buffer)
         return sub_buffer
     
@@ -290,7 +293,7 @@ class SingleXclbinCallable:
             for i in range(len(buffers))
         ), "Input buffer shapes or dtypes do not match expected argument specification."
         self.insts_buffer.to("npu")
-        assert all(buffer.on == "npu" for buffer in buffers), "Not all input buffers have been synced on the NPU."
+        assert all(buffer.on == "npu" for buffer, spec in zip(buffers, self.args_spec)), "Not all buffers have been synced on the NPU; for some reason even output buffers must be synced!"
         opcode = 3
         bos = [buffer.bo for buffer in buffers]
         run = self.xrt_kernel(opcode, self.insts_buffer.bo, self.insts_buffer.shape[0], *bos)

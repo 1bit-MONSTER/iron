@@ -85,7 +85,7 @@ class AIEGEMV(SingleMLIRSourceOperator):
 
     def get_arg_spec(self):
         return [
-            AIERuntimeArgSpec((self.M, self.K)),  # matrix
-            AIERuntimeArgSpec((self.K,)),  # vector
-            AIERuntimeArgSpec((self.M,)),  # output
+            AIERuntimeArgSpec("in", (self.M, self.K)),  # matrix
+            AIERuntimeArgSpec("in", (self.K,)),  # vector
+            AIERuntimeArgSpec("out", (self.M,)),  # output
         ]

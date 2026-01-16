@@ -102,7 +102,7 @@ class AIERMSNorm(SingleMLIRSourceOperator):
 
     def get_arg_spec(self):
         return [
-            AIERuntimeArgSpec((self.size // self.tile_size, self.tile_size)),  # input
-            AIERuntimeArgSpec((self.tile_size,)),  # weight
-            AIERuntimeArgSpec((self.size // self.tile_size, self.tile_size))  # output
+            AIERuntimeArgSpec("in", (self.size // self.tile_size, self.tile_size)),  # input
+            AIERuntimeArgSpec("in", (self.tile_size,)),  # weight
+            AIERuntimeArgSpec("out", (self.size // self.tile_size, self.tile_size))  # output
         ]
