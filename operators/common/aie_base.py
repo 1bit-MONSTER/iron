@@ -196,6 +196,8 @@ class AIEBuffer:
                 pyxrt.bo.host_only,
                 0x10000,
             )
+        self.memory_view = self.bo.map()
+        self.subviews = []
     
     def subbuffer(self, length, offset, shape, dtype=None):
         if dtype is None:
@@ -210,29 +212,42 @@ class AIEBuffer:
             length * itemsize, # size
             offset * itemsize, # offset
         )
-        return AIEBuffer(shape=shape, dtype=dtype, bo=sub_bo, device_manager=self.device_manager)
+        sub_buffer = AIEBuffer(shape=shape, dtype=dtype, bo=sub_bo, device_manager=self.device_manager)
+        self.subviews.append(sub_buffer)
+        return sub_buffer
+    
+    def view(self, shape):
+        assert np.prod(shape) == np.prod(self.shape)
+        sub_buffer = AIEBuffer(shape=shape, dtype=self.dtype, bo=self.bo, device_manager=self.device_manager)
+        sub_buffer.on = self.on
+        self.subviews.append(sub_buffer)
+        return sub_buffer
 
     def view_as_np(self):
         self.to("cpu")
-        # Create a byte accessible memory view of the buffer object
-        mv = self.bo.map()
         # Interpret the buffer as a 1-dimensional array then change its view to the expected shape
-        return np.frombuffer(mv, dtype=self.dtype, count=np.prod(self.shape)).reshape(self.shape)
+        return np.frombuffer(self.memory_view, dtype=self.dtype, count=np.prod(self.shape)).reshape(self.shape)
 
     def view_as_torch(self):
         return numpy_to_torch(self.view_as_np())
     
     def to(self, dest):
-        if dest == "npu":
-            if self.on != "npu":
-                self.bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
-                self.on = "npu"
-        elif dest == "cpu":
-            if self.on != "cpu":
-                self.bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
-                self.on = "cpu"
-        else:
+        direction = {
+            "npu": pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE,
+            "cpu": pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE
+        }
+        if dest not in direction:
             raise RuntimeError(f"Unknown destination for AIEBuffer.to(): {dest}")
+        if self.on == dest:
+            return self
+        direction = direction[dest]
+        self.bo.sync(direction)
+        self.on = dest
+        todo = self.subviews.copy()
+        while todo:
+            sub_buffer = todo.pop()
+            sub_buffer.on = self.on
+            todo.extend(sub_buffer.subviews)
         return self
     
     @staticmethod
@@ -275,11 +290,9 @@ class SingleXclbinCallable:
             for i in range(len(buffers))
         ), "Input buffer shapes or dtypes do not match expected argument specification."
         self.insts_buffer.to("npu")
-        for buffer in buffers:
-            buffer.to("npu")
+        assert all(buffer.on == "npu" for buffer in buffers), "Not all input buffers have been synced on the NPU."
         opcode = 3
         bos = [buffer.bo for buffer in buffers]
         run = self.xrt_kernel(opcode, self.insts_buffer.bo, self.insts_buffer.shape[0], *bos)
-        for buffer in buffers:
-            buffer.to("cpu") 
+        run.wait()
 

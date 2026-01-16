@@ -19,7 +19,7 @@ from operators.common.utils import torch_to_numpy, numpy_to_torch
 from operators import (
     AIERMSNorm,
     AIEGEMM,
-    #AIEGEMV
+    AIEGEMV
 )
 
 
@@ -70,15 +70,15 @@ class AIELlamaOperators:
             context=self.context
         ).compile()
         self.out_head_prefill = self.out_head_prefill_compilable.get_callable()
-        #self.out_head_decode = AIEGEMV(
-        #    M=config.vocab_size, K=config.emb_dim,
-        #    num_aie_columns=8,
-        #    is_mv=True,
-        #    use_static_weight=True,
-        #    tile_size_input=4,
-        #    tile_size_output=32,
-        #    context=self.context
-        #)
+        self.out_head_decode = AIEGEMV(
+            M=config.vocab_size,
+            K=config.emb_dim,
+            num_aie_columns=8,
+            use_static_weight=True,
+            tile_size_input=4,
+            tile_size_output=32,
+            context=self.context
+        ).compile().get_callable()
 
 
 # Allocate buffers shared with NPU
@@ -93,6 +93,7 @@ class AIELlamaBuffers:
         self.W_final_norm = AIEBuffer.from_torch(config.weights['model.norm.weight'])
 
         # Final linear layer
+        self.W_out_head = AIEBuffer.from_np(torch_to_numpy(config.weights['model.embed_tokens.weight']))  # unpadded/unpartitioned, used by GEMV
         W_out_head_parts = aie_ops.out_head_prefill_compilable.partition_B(
             torch_to_numpy(config.weights['model.embed_tokens.weight']), 
             config.vocab_partitions
@@ -100,7 +101,7 @@ class AIELlamaBuffers:
         self.W_out_head_parts = [
             AIEBuffer.from_np(W_out_head_part) 
             for W_out_head_part in W_out_head_parts
-        ]
+        ] # partitioned, padded parts of weight, used by GEMM
         self.logits_prefill = AIEBuffer(shape=(config.vocab_partitions, prompt_len, config.padded_vocab_size // config.vocab_partitions))
         self.logits_prefill_parts = [
             self.logits_prefill.subbuffer(
@@ -110,10 +111,12 @@ class AIELlamaBuffers:
             )
             for i in range(config.vocab_partitions)
         ]
+        self.logits_decode = AIEBuffer(shape=(config.vocab_size,))
 
         for buf in (
             [
-                self.W_final_norm
+                self.W_final_norm,
+                self.W_out_head,
             ] +
             self.W_out_head_parts
         ):
@@ -365,7 +368,6 @@ def llama_forward_pass_prefill(
     for i in range(config.vocab_partitions):
         aie_ops.out_head_prefill(aie_buffers.x_prefill, aie_buffers.W_out_head_parts[i], aie_buffers.logits_prefill_parts[i])
     aie_buffers.logits_prefill.to("cpu")
-    time.sleep(0.15)  # FIXME: There is a synchronization issue; without this, the latter part of logits (rightmore columns after transpose) are missing (all zeroes)
     logits_padded_partitioned = aie_buffers.logits_prefill.view_as_torch()  # (vocab_partitions, padded_seq_len, padded_vocab_size // vocab_partitions)
     logits_padded = logits_padded_partitioned.transpose(0, 1).contiguous().view(-1, config.padded_vocab_size)  # (padded_seq_len, padded_vocab_size)
     logits = logits_padded.unsqueeze(0)[:,:seq_len,:config.vocab_size]  # (batch, seq_len, vocab_size)
@@ -409,12 +411,19 @@ def llama_forward_pass_decode(
         )
     
     # Step 4: Final normalization
-    aie_buffers.x_decode.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
+    aie_buffers.x_decode.view_as_torch().view(1, 1, config.emb_dim)[0, 0, :] = x
+    aie_buffers.x_decode.to("npu")
     aie_ops.final_norm_decode(aie_buffers.x_decode, aie_buffers.W_final_norm, aie_buffers.x_decode)
     
     # Step 5: Output projection
-    lm_head_weight = config.weights['model.embed_tokens.weight']
-    logits = torch.nn.functional.linear(aie_buffers.x_decode.view_as_torch().unsqueeze(0), lm_head_weight)  # (batch, seq_len, vocab_size)
+    aie_buffers.logits_decode.to("npu")
+    aie_ops.out_head_decode(aie_buffers.W_out_head, aie_buffers.x_decode.view((config.emb_dim,)), aie_buffers.logits_decode)
+    aie_buffers.logits_decode.to("cpu")
+
+    logits = aie_buffers.logits_decode.view_as_torch().view(1, 1, config.vocab_size)
+    # Reference:
+    # x = aie_buffers.x_decode.view_as_torch().unsqueeze(0)
+    # logits = torch.nn.functional.linear(config.weights['model.embed_tokens.weight'])  # (batch, seq_len, vocab_size)
     
     return logits, state
 
