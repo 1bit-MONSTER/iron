@@ -4,6 +4,7 @@ import torch
 import math
 from pathlib import Path
 import sys
+import numpy as np
 import ml_dtypes
 import llama_inference_harness as harness
 
@@ -18,7 +19,8 @@ from operators.common.utils import torch_to_numpy, numpy_to_torch
 from operators import (
     AIERMSNorm,
     AIEGEMM,
-    AIEGEMV
+    AIEGEMV,
+    AIEElementwiseAdd
 )
 
 
@@ -33,7 +35,7 @@ class AIELlamaOperators:
         self.context = AIEContext()
         self.context.build_dir.mkdir(parents=True, exist_ok=True)
 
-        # Final RMS Norm
+        # RMS Norm
         self.rms_norm_prefill = AIERMSNorm(
             size=prompt_len * config.emb_dim,
             eps=1e-5,
@@ -49,6 +51,16 @@ class AIELlamaOperators:
             num_channels=2,
             tile_size=config.emb_dim,
             context=self.context
+        ).compile().get_callable()
+
+        # Residual additions
+        self.residual_add_prefill = AIEElementwiseAdd(
+            size=prompt_len * config.emb_dim,
+            tile_size=config.emb_dim
+        ).compile().get_callable()
+        self.residual_add_decode = AIEElementwiseAdd(
+            size=config.emb_dim,
+            tile_size=config.emb_dim // 8
         ).compile().get_callable()
 
         # Final GEMM
@@ -93,6 +105,12 @@ class AIELlamaBuffers:
 
         self.x_norm_prefill = AIEBuffer(shape=(prompt_len, config.emb_dim), dtype=ml_dtypes.bfloat16)
         self.x_norm_decode = AIEBuffer(shape=(1, config.emb_dim), dtype=ml_dtypes.bfloat16)
+
+        self.attn_output_prefill = AIEBuffer(shape=(prompt_len, config.emb_dim), dtype=ml_dtypes.bfloat16)
+        self.attn_output_decode = AIEBuffer(shape=(1, config.emb_dim), dtype=ml_dtypes.bfloat16)
+
+        self.ffn_output_prefill = AIEBuffer(shape=(prompt_len, config.emb_dim), dtype=ml_dtypes.bfloat16)
+        self.ffn_output_decode = AIEBuffer(shape=(1, config.emb_dim), dtype=ml_dtypes.bfloat16)
 
         # Transformer block layer-wise RMS norm
         self.W_norm1 = []
@@ -297,7 +315,7 @@ def transformer_block_forward(
         aie_buffers.x_decode.to("npu")
         aie_buffers.x_norm_decode.to("npu")
         x_norm = aie_ops.rms_norm_decode(aie_buffers.x_decode, W_norm1, aie_buffers.x_norm_decode)
-        aie_buffers.x_decode.to("cpu")
+        aie_buffers.x_norm_decode.to("cpu")
         x_norm = aie_buffers.x_norm_decode.view_as_torch().unsqueeze(0)
 
     # Step 2: Attention
@@ -314,10 +332,19 @@ def transformer_block_forward(
     
     # Step 3: Residual
     if seq_len > 1:
+        aie_buffers.attn_output_prefill.view_as_torch().unsqueeze(0)[0, :seq_len, :] = attn_output
+        aie_buffers.attn_output_prefill.to("npu")
+        x_view = aie_buffers.x_prefill.view(np.prod(aie_buffers.x_prefill.shape))
+        attn_output_view = aie_buffers.attn_output_prefill.view(np.prod(aie_buffers.attn_output_prefill.shape))
+        aie_ops.residual_add_prefill(x_view, attn_output_view, x_view)
         x = aie_buffers.x_prefill.to("cpu").view_as_torch().unsqueeze(0)[:, :seq_len, :]
     else:
+        aie_buffers.attn_output_decode.view_as_torch().unsqueeze(0)[0, 0, :] = attn_output
+        aie_buffers.attn_output_decode.to("npu")
+        x_view = aie_buffers.x_decode.view(np.prod(aie_buffers.x_decode.shape))
+        attn_output_view = aie_buffers.attn_output_decode.view(np.prod(aie_buffers.attn_output_decode.shape))
+        aie_ops.residual_add_decode(x_view, attn_output_view, x_view)
         x = aie_buffers.x_decode.to("cpu").view_as_torch().unsqueeze(0)
-    x = x + attn_output
     
     # Step 4: Post-norm
     if seq_len > 1:
@@ -332,7 +359,7 @@ def transformer_block_forward(
         aie_buffers.x_decode.to("npu")
         aie_buffers.x_norm_decode.to("npu")
         x_norm = aie_ops.rms_norm_decode(aie_buffers.x_decode, W_norm2, aie_buffers.x_norm_decode)
-        aie_buffers.x_decode.to("cpu")
+        aie_buffers.x_norm_decode.to("cpu")
         x_norm = aie_buffers.x_norm_decode.view_as_torch().unsqueeze(0)
     
     # Step 5: fully-connected feed-forward network

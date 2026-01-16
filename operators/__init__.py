@@ -3,7 +3,7 @@
 
 #from .axpy.op import AIEAXPY
 #from .dequant.op import AIEDequant
-#from .elementwise_add.op import AIEElementwiseAdd
+from .elementwise_add.op import AIEElementwiseAdd
 #from .elementwise_mul.op import AIEElementwiseMul
 #from .gelu.op import AIEGELU
 from .gemm.op import AIEGEMM
