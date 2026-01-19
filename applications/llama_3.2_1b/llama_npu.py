@@ -18,6 +18,7 @@ from operators.common import (
     AIEBuffer
 )
 from operators.common.utils import torch_to_numpy, numpy_to_torch
+from operators.common.aie_base import PatchableSingleXclbinCallable
 from operators import (
     AIERMSNorm,
     AIEGEMM,
@@ -27,6 +28,7 @@ from operators import (
 from operators.elementwise_mul.op import AIEElementwiseMul
 from operators.silu.op import AIESiLU
 from operators.rope.op import AIERope
+from operators.strided_copy.op import AIEStridedCopy
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -214,6 +216,32 @@ class AIELlamaOperators:
             context=self.context
         ).compile().get_callable()
         
+        # Strided copy operators for cache update (transpose and concatenate)
+        # Keys: transpose from (1, n_kv_groups, head_dim) to (n_kv_groups, 1, head_dim) and write to cache
+        self.decode.strided_copy_cache_compilable = AIEStridedCopy(
+            input_sizes=(config.n_kv_groups, 1, config.head_dim),
+            input_strides=(config.head_dim, config.n_kv_groups * config.head_dim, 1),
+            input_offset=0,
+            output_sizes=(1, config.n_kv_groups, 1, config.head_dim),
+            output_strides=(0, prompt_len * config.head_dim, config.head_dim, 1),
+            output_offset=0,  # Will be patched at runtime based on cached_prompt_len
+            input_buffer_size=1 * config.n_kv_groups * config.head_dim,
+            output_buffer_size=config.n_kv_groups * prompt_len * config.head_dim,
+            num_aie_channels=1,
+            context=self.context
+        ).compile()
+        
+        # Create patchable callable for runtime offset updates
+        self.decode.strided_copy_cache = PatchableSingleXclbinCallable(
+            xclbin_path=self.decode.strided_copy_cache_compilable.xclbin_artifact.path,
+            kernel_name=self.decode.strided_copy_cache_compilable.xclbin_artifact.kernel_name,
+            insts_bin_path=self.decode.strided_copy_cache_compilable.insts_artifact.path,
+            args_spec=self.decode.strided_copy_cache_compilable.get_arg_spec()
+        )
+        
+        # Store head_dim for patching
+        self.head_dim = config.head_dim
+        
         # Attention projection operators
         # Query projection: (seq_len, emb_dim) -> (seq_len, n_heads * head_dim)
         self.prefill.attn_query = AIEGEMM(
@@ -382,7 +410,6 @@ class AIEDecodeBuffers:
         self.rope_angles = AIEBuffer(shape=(1, head_dim), dtype=ml_dtypes.bfloat16)
         # Attention score computation buffers (batched)
         self.attn_scores_keys = AIEBuffer(shape=(n_heads, emb_dim, head_dim), dtype=ml_dtypes.bfloat16)  # Max context length
-        self.attn_scores_queries = AIEBuffer(shape=(n_heads, head_dim, 1), dtype=ml_dtypes.bfloat16)
         self.attn_scores = AIEBuffer(shape=(n_heads, emb_dim, 1), dtype=ml_dtypes.bfloat16)
 
 class AIELlamaBuffers:
@@ -390,6 +417,16 @@ class AIELlamaBuffers:
         # Vector of the current token(s) being processed through the pipeline
         self.prefill = AIEPrefillBuffers(prompt_len, config.emb_dim, config.hidden_dim, config.n_heads, config.n_kv_groups, config.head_dim)
         self.decode = AIEDecodeBuffers(config.emb_dim, config.hidden_dim, config.n_heads, config.n_kv_groups, config.head_dim)
+
+        # Per-layer KV cache buffers on NPU (used by strided copy for transpose and concatenate)
+        self.keys_cache = [
+            AIEBuffer(shape=(config.n_kv_groups, config.emb_dim, config.head_dim), dtype=ml_dtypes.bfloat16)
+            for _ in range(config.n_layers)
+        ]
+        self.values_cache = [
+            AIEBuffer(shape=(config.n_kv_groups, config.emb_dim, config.head_dim), dtype=ml_dtypes.bfloat16)
+            for _ in range(config.n_layers)
+        ]
 
         # Transformer block layer-wise RMS norm
         self.W_norm1 = []
@@ -603,54 +640,53 @@ def grouped_query_attention_forward_decode(
     aie_ops.decode.rope_queries(aie_buffers.decode.queries, aie_buffers.decode.rope_angles, aie_buffers.decode.queries)
     aie_ops.decode.rope_keys(aie_buffers.decode.keys, aie_buffers.decode.rope_angles, aie_buffers.decode.keys)
     
-    aie_buffers.decode.values.to("cpu")
-    values = aie_buffers.decode.values.view_as_torch()[:seq_len, :]
-    values = values.unsqueeze(0).view(batch, seq_len, config.n_kv_groups, config.head_dim)
+    # Read results from NPU for CPU reference computation
     aie_buffers.decode.queries.to("cpu")
     queries = aie_buffers.decode.queries.view_as_torch()[:seq_len * config.n_heads, :]
-    queries = queries.view(batch, seq_len, config.n_heads, config.head_dim)
-    aie_buffers.decode.keys.to("cpu")
-    keys = aie_buffers.decode.keys.view_as_torch()[:seq_len * config.n_kv_groups, :]
-    keys = keys.view(batch, seq_len, config.n_kv_groups, config.head_dim)
-
-    # Step 3: Transpose
-    queries = queries.transpose(1, 2)
-    keys = keys.transpose(1, 2)
-    values = values.transpose(1, 2)
-
-    # Step 4: Update cache
-    keys_cache = torch.cat([keys_cache, keys], dim=2)
-    values_cache = torch.cat([values_cache, values], dim=2)
-    keys = keys_cache
-    values = values_cache
+    # Since seq_len=1, the transpose is just a reinterpretation of the shape; no actual data movement needed
+    queries = queries.view(batch, config.n_heads, 1, config.head_dim)
     
-    # Step 5: Repeat keys and values for grouped attention
+    # Step 3: Update cache using strided copy on NPU (transpose and concatenate)
+    # Cache is already on NPU from prefill initialization or previous decode iteration
+    num_preceding_tokens = keys_cache.shape[2]
+    context_len = num_preceding_tokens + seq_len
+    
+    # Transpose and append new keys/values to this layer's cache on NPU
+    aie_ops.decode.strided_copy_cache(aie_buffers.decode.keys, aie_buffers.keys_cache[layer_idx])
+    aie_ops.decode.strided_copy_cache(aie_buffers.decode.values, aie_buffers.values_cache[layer_idx])
+    aie_buffers.keys_cache[layer_idx].to("cpu")
+    aie_buffers.values_cache[layer_idx].to("cpu")
+    keys = aie_buffers.keys_cache[layer_idx].view_as_torch()[:, :context_len, :].unsqueeze(0)  # (batch, n_kv_groups, context_len, head_dim)
+    values = aie_buffers.values_cache[layer_idx].view_as_torch()[:, :context_len, :].unsqueeze(0)  # (batch, n_kv_groups, context_len, head_dim)
+    keys_cache = keys
+    values_cache = values
+    
+    # Step 4: Repeat keys and values for grouped attention
     group_size = config.n_heads // config.n_kv_groups
     keys = keys.repeat_interleave(group_size, dim=1)
     values = values.repeat_interleave(group_size, dim=1)
     context_len = keys.shape[2]
     
-    # Step 6: Compute attention scores
+    # Step 5: Compute attention scores
     aie_buffers.decode.attn_scores_keys.view_as_torch()[:, :context_len, :] = keys.squeeze(0)[:, :context_len, :]
-    aie_buffers.decode.attn_scores_queries.view_as_torch()[:, :, 0] = queries.squeeze(0)[:, 0, :]
-    aie_ops.decode.gemv_attn_scores(aie_buffers.decode.attn_scores_keys, aie_buffers.decode.attn_scores_queries, aie_buffers.decode.attn_scores)
+    aie_ops.decode.gemv_attn_scores(aie_buffers.decode.attn_scores_keys, aie_buffers.decode.queries, aie_buffers.decode.attn_scores)
     aie_buffers.decode.attn_scores.to("cpu")
     scores = aie_buffers.decode.attn_scores.view_as_torch()[:, :context_len, 0].unsqueeze(0).unsqueeze(2)
     
     # Normalize
     scores = scores / math.sqrt(config.head_dim)
     
-    # Step 7: Apply mask
+    # Step 6: Apply mask
     if mask is not None:
         scores = scores.masked_fill(mask, float('-inf'))
     
-    # Step 8: Softmax
+    # Step 7: Softmax
     attention_weights = torch.nn.functional.softmax(scores, dim=-1)
     
-    # Step 9: Compute attention output
+    # Step 8: Compute attention output
     context = torch.matmul(attention_weights, values)
     
-    # Step 10: Concatenate heads and project
+    # Step 9: Concatenate heads and project
     context = context.transpose(1, 2).contiguous().view(batch, seq_len, -1)
     output = torch.nn.functional.linear(context, config.weights[f'model.layers.{layer_idx}.self_attn.o_proj.weight'])
     
@@ -819,6 +855,14 @@ def llama_forward_pass_prefill(
     logits_padded = logits_padded_partitioned.transpose(0, 1).contiguous().view(-1, config.padded_vocab_size)
     logits = logits_padded.unsqueeze(0)[:,:seq_len,:config.vocab_size]
 
+    # Step 6: Initialize per-layer NPU cache buffers with current cache state for decode phase
+    for layer_idx in range(config.n_layers):
+        cache_len = state.attn_keys_caches[layer_idx].shape[2]
+        aie_buffers.keys_cache[layer_idx].view_as_torch()[:, :cache_len, :] = state.attn_keys_caches[layer_idx].squeeze(0)
+        aie_buffers.values_cache[layer_idx].view_as_torch()[:, :cache_len, :] = state.attn_values_caches[layer_idx].squeeze(0)
+        aie_buffers.keys_cache[layer_idx].to("npu")
+        aie_buffers.values_cache[layer_idx].to("npu")
+
     return logits, state
 
 
@@ -827,6 +871,16 @@ def llama_forward_pass_decode(
     state
 ):
     batch, seq_len = state.token_ids.shape
+
+    # Patch strided copy operators once for all layers with current cache offset
+    num_preceding_tokens = state.attn_keys_caches[0].shape[2]
+    output_offset = num_preceding_tokens * config.head_dim
+    offset_val = output_offset * 2  # Multiply by 2 for bfloat16 byte offset
+    patches = {
+        39: (offset_val, 0xFFFFFFFF),
+        56: (offset_val, 0xFFFFFFFF),
+    }
+    aie_ops.decode.strided_copy_cache.patch(patches)
 
     # Step 1: RoPE angles
     num_preceding_tokens = state.attn_keys_caches[0].shape[2]
