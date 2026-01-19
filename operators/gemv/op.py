@@ -99,8 +99,9 @@ class AIEGEMV(SingleMLIRSourceOperator):
         ]
 
     def get_arg_spec(self):
+        batch_dim = (self.num_batches,) if self.num_batches > 1 else ()
         return [
-            AIERuntimeArgSpec("in", (self.num_batches, self.M, self.K)),  # matrix
-            AIERuntimeArgSpec("in", (self.num_batches, self.K, 1)),  # vector
-            AIERuntimeArgSpec("out", (self.num_batches, self.M, 1)),  # output
+            AIERuntimeArgSpec("in", batch_dim + (self.M, self.K)),  # matrix
+            AIERuntimeArgSpec("in", batch_dim + (self.K,)),  # vector
+            AIERuntimeArgSpec("out", batch_dim + (self.M,)),  # output
         ]
