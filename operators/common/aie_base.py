@@ -145,16 +145,16 @@ class SingleMLIRSourceOperator(AIEOperatorBase, ABC):
     def get_artifacts(self):
         operator_name = self.get_operator_name()
         mlir_artifact = self.get_mlir_artifact()
-        kernel_deps = self.get_kernel_artifacts()
+        kernel_deps_inputs = self.get_kernel_artifacts()
+        kernel_deps = [
+                KernelArchiveArtifact.new(
+                self.get_kernel_archive_name(),
+                depends=kernel_deps_inputs,
+            )
+        ] if kernel_deps_inputs else []
         xclbin_artifact = XclbinArtifact.new(
             f"{operator_name}.xclbin",
-            depends=[
-                mlir_artifact,
-                KernelArchiveArtifact.new(
-                    self.get_kernel_archive_name(),
-                    depends=kernel_deps,
-                ),
-            ],
+            depends=[mlir_artifact] + kernel_deps,
         )
         insts_artifact = InstsBinArtifact.new(
             f"{operator_name}.bin", depends=[mlir_artifact]
@@ -166,7 +166,6 @@ class SingleMLIRSourceOperator(AIEOperatorBase, ABC):
         self.xclbin_artifact = xclbin_artifact
         self.insts_artifact = insts_artifact
         self.add_artifacts([xclbin_artifact, insts_artifact])
-    
     
     def get_callable(self):
         return SingleXclbinCallable(
@@ -289,13 +288,26 @@ class SingleXclbinCallable:
     def __call__(self, *buffers):
         assert len(buffers) == len(self.args_spec)
         assert all(
-            buffers[i].shape == self.args_spec[i].shape and buffers[i].dtype == self.args_spec[i].dtype
+            np.prod(buffers[i].shape) >= np.prod(self.args_spec[i].shape) and buffers[i].dtype == self.args_spec[i].dtype
             for i in range(len(buffers))
         ), "Input buffer shapes or dtypes do not match expected argument specification."
         self.insts_buffer.to("npu")
-        assert all(buffer.on == "npu" for buffer, spec in zip(buffers, self.args_spec)), "Not all buffers have been synced on the NPU; for some reason even output buffers must be synced!"
+        for buf in buffers:
+            buf.to("npu")
         opcode = 3
         bos = [buffer.bo for buffer in buffers]
         run = self.xrt_kernel(opcode, self.insts_buffer.bo, self.insts_buffer.shape[0], *bos)
         run.wait()
 
+class PatchableSingleXclbinCallable(SingleXclbinCallable):
+    def __init__(self, xclbin_path, kernel_name, insts_bin_path, args_spec, device_manager=None):
+        super().__init__(xclbin_path, kernel_name, insts_bin_path, args_spec, device_manager)
+        self.baseline_instructions = self.insts_buffer.view_as_np().copy()
+    
+    def patch(self, patches):
+        """Apply patches with masking: dict of {position: (value, mask)}."""
+        insts = self.insts_buffer.view_as_np()
+        insts[:] = self.baseline_instructions
+        for pos, (val, mask) in patches.items():
+            insts[pos] = (insts[pos] & ~mask) | (val & mask)
+        self.insts_buffer.to("npu")
