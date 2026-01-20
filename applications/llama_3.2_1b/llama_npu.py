@@ -200,21 +200,7 @@ class AIELlamaOperators:
         ).compile().get_callable()
         
         # Softmax operators for attention weights
-        self.prefill.softmax_compilable = AIESoftmax(
-            rows=config.n_heads * prompt_len,
-            cols=prompt_len,
-            num_aie_columns=8,
-            num_channels=1,
-            rtp_vector_size=prompt_len,  # Compile with max size
-            context=self.context
-        ).compile()
-        
-        self.prefill.softmax = PatchableSingleXclbinCallable(
-            xclbin_path=self.prefill.softmax_compilable.xclbin_artifact.path,
-            kernel_name=self.prefill.softmax_compilable.xclbin_artifact.kernel_name,
-            insts_bin_path=self.prefill.softmax_compilable.insts_artifact.path,
-            args_spec=self.prefill.softmax_compilable.get_arg_spec()
-        )
+        # Prefill uses CPU softmax to reduce NPU operator count
         
         self.decode.softmax_compilable = AIESoftmax(
             rows=config.n_heads,
@@ -333,7 +319,7 @@ class AIELlamaOperators:
             context=self.context
         ).compile().get_callable()
         
-        self.decode.gemv_attn_key = AIEGEMV(
+        self.decode.gemv_attn_key_value = AIEGEMV(
             M=config.n_kv_groups * config.head_dim,
             K=config.emb_dim,
             num_aie_columns=8,
@@ -352,15 +338,6 @@ class AIELlamaOperators:
             tile_k=64,
             tile_n=64,
             b_col_maj=False,
-            context=self.context
-        ).compile().get_callable()
-        
-        self.decode.gemv_attn_value = AIEGEMV(
-            M=config.n_kv_groups * config.head_dim,
-            K=config.emb_dim,
-            num_aie_columns=8,
-            tile_size_input=4,
-            tile_size_output=config.head_dim // 2,
             context=self.context
         ).compile().get_callable()
         
@@ -410,6 +387,16 @@ class AIELlamaOperators:
             tile_size_input=4,
             tile_size_output=4,
             num_batches=config.n_heads,
+            context=self.context
+        ).compile().get_callable()
+        
+        # Output projection: (n_heads * head_dim,) @ (emb_dim, n_heads * head_dim)^T -> (emb_dim,)
+        self.decode.gemv_attn_output = AIEGEMV(
+            M=config.emb_dim,
+            K=config.n_heads * config.head_dim,
+            num_aie_columns=8,
+            tile_size_input=4,
+            tile_size_output=config.emb_dim // 8,
             context=self.context
         ).compile().get_callable()
 
@@ -510,6 +497,7 @@ class AIEDecodeBuffers:
             for h in range(n_heads)
         ]
         self.attn_context = AIEBuffer(shape=(n_heads, head_dim), dtype=ml_dtypes.bfloat16)
+        self.attn_context_concat = AIEBuffer(shape=(n_heads * head_dim,), dtype=ml_dtypes.bfloat16)
         self.attn_scores = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
         # Attention score scaling buffer (pre-initialized with 1/sqrt(head_dim))
         scale_factor = 1.0 / math.sqrt(head_dim)
@@ -544,6 +532,7 @@ class AIELlamaBuffers:
         self.W_attn_key_decode = []
         self.W_attn_value_prefill = []
         self.W_attn_value_decode = []
+        self.W_attn_output_decode = []
         # SwiGLU FFN weights
         self.W_ffn_gate_prefill = []
         self.W_ffn_up_prefill = []
@@ -575,6 +564,9 @@ class AIELlamaBuffers:
             )
             self.W_attn_value_prefill.append(
                 AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.v_proj.weight'].T).to("npu")
+            )
+            self.W_attn_output_decode.append(
+                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.o_proj.weight']).to("npu")
             )
             self.W_ffn_gate_decode.append(
                 AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.mlp.gate_proj.weight']).to("npu")
@@ -619,7 +611,7 @@ class AIELlamaBuffers:
         self.decode.logits = AIEBuffer(shape=(config.vocab_size,))
 
 
-# Operators
+# Prefill
 # ##########################################################################
 
 def grouped_query_attention_forward_prefill(
@@ -708,17 +700,9 @@ def grouped_query_attention_forward_prefill(
     if mask is not None:
         scores = scores.masked_fill(mask, float('-inf'))
     
-    # Step 8: Apply softmax to squeeze scores into probabilities (0, 1)
-    # Write scores back to NPU buffer for softmax, handling variable seq_len and context_len
-    scores_buf = aie_buffers.prefill.attn_scores.view_as_torch().view(config.n_heads, max_seq_len, max_seq_len)
-    scores_buf[:, :seq_len, :context_len] = scores.squeeze(0)
-    # Pad unused regions with -inf so they don't affect softmax
-    scores_buf[:, :seq_len, context_len:] = float('-inf')
-    scores_buf[:, seq_len:, :] = float('-inf')
-    aie_buffers.prefill.attn_scores.to("npu")
-    aie_ops.prefill.softmax(aie_buffers.prefill.attn_scores, aie_buffers.prefill.attn_weights)
-    aie_buffers.prefill.attn_weights.to("cpu")
-    attention_weights = aie_buffers.prefill.attn_weights.view_as_torch().view(config.n_heads, max_seq_len, max_seq_len).unsqueeze(0)[:, :, :seq_len, :context_len]
+    # Step 8: Apply softmax on CPU
+    scores = torch.softmax(scores.to(torch.float32), dim=-1).to(torch.bfloat16)
+    attention_weights = scores
     
     # Step 9: Compute attention output
     # (batch, num_heads, seq_len, seq_len) @ (batch, num_heads, seq_len, head_dim)
@@ -732,76 +716,6 @@ def grouped_query_attention_forward_prefill(
     output = torch.nn.functional.linear(context, config.weights[f'model.layers.{layer_idx}.self_attn.o_proj.weight'])
     
     return output, keys_cache, values_cache
-
-
-def grouped_query_attention_forward_decode(
-    config,
-    x, 
-    num_preceding_tokens,
-    layer_idx,
-    mask=None,
-):
-    batch, seq_len, emb_dim = x.shape
-
-    # Step 1: Linear projections - write directly to queries/keys/values buffers
-    aie_ops.decode.gemv_attn_query(aie_buffers.W_attn_query_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.queries)
-    aie_ops.decode.gemv_attn_key(aie_buffers.W_attn_key_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.keys)
-    aie_ops.decode.gemv_attn_value(aie_buffers.W_attn_value_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.values)
-    
-    # Step 2: Apply RoPE - use same buffers for input and output
-    aie_ops.decode.rope_queries(aie_buffers.decode.queries, aie_buffers.decode.rope_angles, aie_buffers.decode.queries)
-    aie_ops.decode.rope_keys(aie_buffers.decode.keys, aie_buffers.decode.rope_angles, aie_buffers.decode.keys)
-    
-    # Read results from NPU for CPU reference computation
-    aie_buffers.decode.queries.to("cpu")
-    queries = aie_buffers.decode.queries.view_as_torch()[:seq_len * config.n_heads, :]
-    # Since seq_len=1, the transpose is just a reinterpretation of the shape; no actual data movement needed
-    queries = queries.view(batch, config.n_heads, 1, config.head_dim)
-    
-    # Step 3: Update cache using strided copy on NPU (transpose and concatenate)
-    # Cache is already on NPU from prefill initialization or previous decode iteration
-    context_len = num_preceding_tokens + seq_len
-    
-    # Transpose and append new keys/values to this layer's cache on NPU
-    aie_ops.decode.strided_copy_cache(aie_buffers.decode.keys, aie_buffers.keys_cache[layer_idx])
-    aie_ops.decode.strided_copy_cache(aie_buffers.decode.values, aie_buffers.values_cache[layer_idx])
-    
-    # Step 4: Repeat keys and values for grouped attention using AIERepeat on NPU
-    group_size = config.n_heads // config.n_kv_groups
-    aie_ops.decode.attn_repeat_interleave(aie_buffers.keys_cache[layer_idx], aie_buffers.decode.attn_scores_keys)
-    aie_ops.decode.attn_repeat_interleave(aie_buffers.values_cache[layer_idx], aie_buffers.decode.attn_scores_values)
-    
-    # Step 5: Compute attention scores
-    # Copy repeated keys from keys_repeated buffer to attn_scores_keys for GEMV
-    aie_ops.decode.gemv_attn_scores(aie_buffers.decode.attn_scores_keys, aie_buffers.decode.queries, aie_buffers.decode.attn_scores)
-    # Apply scaling on NPU
-    aie_ops.decode.attn_scale(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_scale_factor, aie_buffers.decode.attn_scores)
-    
-    # Step 7: Softmax on NPU (patched once at beginning of decode pass)
-    aie_ops.decode.softmax(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_weights)
-    
-    # Step 8: Compute attention output on NPU
-    # Transpose values: (max_context_len, head_dim) -> (head_dim, max_context_len) for each head
-    for h in range(config.n_heads):
-        aie_ops.decode.transpose_values(
-            aie_buffers.decode.attn_scores_values_per_head[h],
-            aie_buffers.decode.attn_scores_values_transposed_per_head[h]
-        )
-    
-    # GEMV: (n_heads, head_dim, max_context_len) @ (n_heads, max_context_len) -> (n_heads, head_dim)
-    aie_ops.decode.gemv_attn_context(aie_buffers.decode.attn_scores_values_transposed, aie_buffers.decode.attn_weights, aie_buffers.decode.attn_context)
-    
-    # Read context from NPU
-    aie_buffers.decode.attn_context.to("cpu")
-    context = aie_buffers.decode.attn_context.view_as_torch().unsqueeze(1)  # (n_heads, 1, head_dim)
-    
-    # Step 9: Concatenate heads and project
-    # (n_heads, 1, head_dim) -> (n_heads, head_dim, 1) -> (1, 1, n_heads * head_dim)
-    context = context.transpose(1, 2).contiguous().view(batch, seq_len, -1)
-    # (1, 1, n_heads * head_dim) @ (emb_dim, n_heads * head_dim)^T -> (1, 1, emb_dim)
-    output = torch.nn.functional.linear(context, config.weights[f'model.layers.{layer_idx}.self_attn.o_proj.weight'])
-    
-    return output, None, None
 
 
 def swiglu_ffn_forward_prefill(layer_idx):
@@ -819,23 +733,6 @@ def swiglu_ffn_forward_prefill(layer_idx):
     
     # Step 5: Down projection
     aie_ops.prefill.ffn_down(aie_buffers.prefill.ffn_hidden, aie_buffers.W_ffn_down_prefill[layer_idx], aie_buffers.prefill.ffn_output)
-
-
-def swiglu_ffn_forward_decode(layer_idx):
-    # Step 1: Gate projection
-    aie_ops.decode.gemv_ffn_up_gate(aie_buffers.W_ffn_gate_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.ffn_gate)
-    
-    # Step 2: Up projection
-    aie_ops.decode.gemv_ffn_up_gate(aie_buffers.W_ffn_up_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.ffn_up)
-    
-    # Step 3: Apply SiLU activation
-    aie_ops.decode.ffn_silu(aie_buffers.decode.ffn_gate, aie_buffers.decode.ffn_gate)
-    
-    # Step 4: Element-wise multiplication
-    aie_ops.decode.eltwise_mul_ffn(aie_buffers.decode.ffn_gate, aie_buffers.decode.ffn_up, aie_buffers.decode.ffn_hidden)
-    
-    # Step 5: Down projection
-    aie_ops.decode.gemv_ffn_down(aie_buffers.W_ffn_down_decode[layer_idx], aie_buffers.decode.ffn_hidden, aie_buffers.decode.ffn_output)
 
 
 def transformer_block_forward_prefill(
@@ -881,47 +778,6 @@ def transformer_block_forward_prefill(
     return attn_keys, attn_values
 
 
-def transformer_block_forward_decode(
-    config,
-    seq_len,
-    num_preceding_tokens,
-    layer_idx,
-    attn_mask
-):
-    # Step 1: RMS normalization
-    aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_norm1[layer_idx], aie_buffers.decode.x_norm)
-    aie_buffers.decode.x_norm.to("cpu")
-    x_norm = aie_buffers.decode.x_norm.view_as_torch().unsqueeze(0)[:, :seq_len, :]
-
-    # Step 2: Attention
-    attn_output, attn_keys, attn_values = grouped_query_attention_forward_decode(
-        config,
-        x_norm,
-        num_preceding_tokens,
-        layer_idx,
-        attn_mask,
-    )
-    
-    # Step 3: Residual
-    aie_buffers.decode.attn_output.view_as_torch().unsqueeze(0)[0, :seq_len, :] = attn_output
-    aie_ops.decode.residual_add(aie_buffers.decode.x, aie_buffers.decode.attn_output, aie_buffers.decode.x)
-    x = aie_buffers.decode.x.to("cpu").view_as_torch().unsqueeze(0)[:, :seq_len, :]
-    
-    # Step 4: Post-norm
-    aie_buffers.decode.x.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
-    aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_norm2[layer_idx], aie_buffers.decode.x_norm)
-    aie_buffers.decode.x_norm.to("cpu")
-    x_norm = aie_buffers.decode.x_norm.view_as_torch().unsqueeze(0)[:, :seq_len, :]
-    
-    # Step 5: Feed-forward network
-    swiglu_ffn_forward_decode(layer_idx)
-    
-    # Step 6: Residual
-    aie_ops.decode.residual_add(aie_buffers.decode.x, aie_buffers.decode.ffn_output, aie_buffers.decode.x)
-    
-    return attn_keys, attn_values
-
-
 def llama_forward_pass_prefill(
     config,
     state
@@ -932,11 +788,6 @@ def llama_forward_pass_prefill(
     num_preceding_tokens = state.attn_keys_caches[0].shape[2]
     angles_slice = config.angles[num_preceding_tokens : num_preceding_tokens + seq_len]
     aie_buffers.prefill.rope_angles.view_as_torch()[:seq_len, :] = angles_slice
-    
-    # Patch softmax operator once for this prefill pass with the context length
-    context_len = num_preceding_tokens + seq_len
-    softmax_patches = {8: (context_len, 0xFFFFFFFF)}
-    aie_ops.prefill.softmax.patch(softmax_patches)
 
     # Step 2: Token embedding
     tok_emb_weight = config.weights['model.embed_tokens.weight']
@@ -980,15 +831,11 @@ def llama_forward_pass_prefill(
     return logits, state
 
 
-def llama_forward_pass_decode(
-    config,
-    state,
-):
-    batch, seq_len = state.token_ids.shape
+# Decode
+# ##########################################################################
 
-    # Patch operators once for all layers with current context length
-    num_preceding_tokens = state.num_preceding_tokens
-    context_len = num_preceding_tokens + seq_len
+def patch_operators_for_decode(config, num_preceding_tokens):
+    context_len = num_preceding_tokens + 1
     
     # Patch strided copy operator for cache offset
     output_offset = num_preceding_tokens * config.head_dim
@@ -1003,39 +850,103 @@ def llama_forward_pass_decode(
     softmax_patches = {8: (context_len, 0xFFFFFFFF)}
     aie_ops.decode.softmax.patch(softmax_patches)
 
-    # Step 1: RoPE angles
-    angles_slice = config.angles[num_preceding_tokens : num_preceding_tokens + seq_len]
+
+def llama_forward_pass_decode(config, state):
+    batch, seq_len = state.token_ids.shape
+    assert seq_len == 1 
+
+    patch_operators_for_decode(config, state.num_preceding_tokens)
+
+    # Step 1: Prefill RoPE angle look-up tables
+    angles_slice = config.angles[state.num_preceding_tokens : state.num_preceding_tokens + seq_len]
     aie_buffers.decode.rope_angles.view_as_torch()[:] = angles_slice
 
-    # Step 2: Token embedding
+    # Step 2: Token embedding (on CPU)
     tok_emb_weight = config.weights['model.embed_tokens.weight']
     x = torch.nn.functional.embedding(state.token_ids, tok_emb_weight)
-    attn_mask = torch.triu(
-        torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool),
-        diagonal=1
-    )
     aie_buffers.decode.x.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
 
     # Step 3: Transformer blocks
     for layer_idx in range(config.n_layers):
-        state.attn_keys_caches[layer_idx], state.attn_values_caches[layer_idx] = transformer_block_forward_decode(
+        transformer_block_forward_decode(
             config,
-            seq_len,
-            num_preceding_tokens,
+            state.num_preceding_tokens,
             layer_idx,
-            attn_mask=attn_mask,
         )
+    aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_final_norm, aie_buffers.decode.x) # Step 4: Final normalization
+    aie_ops.decode.gemv_out_head(aie_buffers.W_out_head, aie_buffers.decode.x, aie_buffers.decode.logits)  # Step 5: Output projection
 
-    # Step 4: Final normalization
-    aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_final_norm, aie_buffers.decode.x)
-    
-    # Step 5: Output projection
-    aie_ops.decode.gemv_out_head(aie_buffers.W_out_head, aie_buffers.decode.x, aie_buffers.decode.logits)
+    # Read outputs from NPU to CPU
     aie_buffers.decode.logits.to("cpu")
     logits = aie_buffers.decode.logits.view_as_torch().view(1, 1, config.vocab_size)
 
     return logits, state
 
+
+def transformer_block_forward_decode(config, num_preceding_tokens, layer_idx):
+    aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_norm1[layer_idx], aie_buffers.decode.x_norm) # Step 1: RMS normalization
+    grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_idx) # Step 2: Attention; results stored in attn_output
+    aie_ops.decode.residual_add(aie_buffers.decode.x, aie_buffers.decode.attn_output, aie_buffers.decode.x) # Step 3: Residual
+    aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_norm2[layer_idx], aie_buffers.decode.x_norm) # Step 4: Post-norm
+    swiglu_ffn_forward_decode(layer_idx) # Step 5: Feed-forward network
+    aie_ops.decode.residual_add(aie_buffers.decode.x, aie_buffers.decode.ffn_output, aie_buffers.decode.x) # Step 6: Residual
+
+
+def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_idx):
+    context_len = num_preceding_tokens + 1
+    group_size = config.n_heads // config.n_kv_groups
+
+    # Step 1: Linear projections - write directly to queries/keys/values buffers
+    aie_ops.decode.gemv_attn_query(aie_buffers.W_attn_query_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.queries)
+    aie_ops.decode.gemv_attn_key_value(aie_buffers.W_attn_key_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.keys)
+    aie_ops.decode.gemv_attn_key_value(aie_buffers.W_attn_value_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.values)
+    
+    # Step 2: Apply RoPE - use same buffers for input and output
+    aie_ops.decode.rope_queries(aie_buffers.decode.queries, aie_buffers.decode.rope_angles, aie_buffers.decode.queries)
+    aie_ops.decode.rope_keys(aie_buffers.decode.keys, aie_buffers.decode.rope_angles, aie_buffers.decode.keys)
+    
+    # Step 3: Update cache using strided copy on NPU (transpose and concatenate)
+    # Cache is already on NPU from prefill initialization or previous decode iteration
+    # Transpose and append new keys/values to this layer's cache on NPU
+    aie_ops.decode.strided_copy_cache(aie_buffers.decode.keys, aie_buffers.keys_cache[layer_idx])
+    aie_ops.decode.strided_copy_cache(aie_buffers.decode.values, aie_buffers.values_cache[layer_idx])
+    
+    # Step 4: Repeat keys and values for grouped attention using AIERepeat on NPU
+    aie_ops.decode.attn_repeat_interleave(aie_buffers.keys_cache[layer_idx], aie_buffers.decode.attn_scores_keys)
+    aie_ops.decode.attn_repeat_interleave(aie_buffers.values_cache[layer_idx], aie_buffers.decode.attn_scores_values)
+    
+    # Step 5: Compute attention scores
+    # Copy repeated keys from keys_repeated buffer to attn_scores_keys for GEMV
+    aie_ops.decode.gemv_attn_scores(aie_buffers.decode.attn_scores_keys, aie_buffers.decode.queries, aie_buffers.decode.attn_scores)
+    aie_ops.decode.attn_scale(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_scale_factor, aie_buffers.decode.attn_scores)
+    
+    # Step 7: Softmax on NPU (patched once at beginning of decode pass)
+    aie_ops.decode.softmax(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_weights)
+    
+    # Step 8: Compute attention output on NPU
+    # Transpose values: (max_context_len, head_dim) -> (head_dim, max_context_len) for each head
+    for h in range(config.n_heads):
+        aie_ops.decode.transpose_values(
+            aie_buffers.decode.attn_scores_values_per_head[h],
+            aie_buffers.decode.attn_scores_values_transposed_per_head[h]
+        )
+    # GEMV: (n_heads, head_dim, max_context_len) @ (n_heads, max_context_len) -> (n_heads, head_dim)
+    aie_ops.decode.gemv_attn_context(aie_buffers.decode.attn_scores_values_transposed, aie_buffers.decode.attn_weights, aie_buffers.decode.attn_context)
+    
+    # Step 9: Project on NPU: (emb_dim, n_heads * head_dim) @ (n_heads * head_dim,) -> (emb_dim,)
+    aie_ops.decode.gemv_attn_output(aie_buffers.W_attn_output_decode[layer_idx], aie_buffers.decode.attn_context, aie_buffers.decode.attn_output)
+
+
+def swiglu_ffn_forward_decode(layer_idx):
+    aie_ops.decode.gemv_ffn_up_gate(aie_buffers.W_ffn_gate_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.ffn_gate)  # Gate projection
+    aie_ops.decode.gemv_ffn_up_gate(aie_buffers.W_ffn_up_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.ffn_up)  # Up projection
+    aie_ops.decode.ffn_silu(aie_buffers.decode.ffn_gate, aie_buffers.decode.ffn_gate)  # SiLU activation
+    aie_ops.decode.eltwise_mul_ffn(aie_buffers.decode.ffn_gate, aie_buffers.decode.ffn_up, aie_buffers.decode.ffn_hidden)  # Gate application (eltwise mul)
+    aie_ops.decode.gemv_ffn_down(aie_buffers.W_ffn_down_decode[layer_idx], aie_buffers.decode.ffn_hidden, aie_buffers.decode.ffn_output)  # Down projection
+
+
+# Main
+# ##########################################################################
 
 def llama_forward_pass(
     config,
@@ -1051,9 +962,6 @@ def llama_forward_pass(
         state.num_preceding_tokens += 1
         return ret
 
-
-# Main
-# ##########################################################################
 
 def main():
     global aie_ops, aie_buffers
