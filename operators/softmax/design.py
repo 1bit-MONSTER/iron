@@ -7,7 +7,7 @@ import numpy as np
 import argparse
 import sys
 
-from aie.iron import Kernel, ObjectFifo, Program, Runtime, Worker
+from aie.iron import Kernel, ObjectFifo, Program, Runtime, Worker, Buffer, WorkerRuntimeBarrier
 from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1, NPU2
 from aie.helpers.taplib.tap import TensorAccessPattern
@@ -15,15 +15,17 @@ from aie.helpers.dialects.ext.scf import _for as range_
 from ml_dtypes import bfloat16
 
 
-def softmax(dev, num_elements, num_columns, num_channels, trace_size, tile_size):
+def softmax(dev, num_elements, num_aie_columns, num_channels, trace_size, tile_size, rtp_vector_size=None):
     per_tile_elements = tile_size
-    n = per_tile_elements * num_columns
+    if rtp_vector_size is None:
+        rtp_vector_size = per_tile_elements
+    n = per_tile_elements * num_aie_columns
     if num_elements % n != 0:
         raise ValueError(
             f"Number of elements ({num_elements}) must be a multiple of {n}."
         )
     N_div_n = num_elements // n
-    chunk = num_elements // num_columns // num_channels  # For offset calculation
+    chunk = num_elements // num_aie_columns // num_channels  # For offset calculation
     dtype = bfloat16
 
     # Define tensor types
@@ -33,27 +35,47 @@ def softmax(dev, num_elements, num_columns, num_channels, trace_size, tile_size)
     # AIE-array data movement with object fifos
     of_in1s = [
         ObjectFifo(tile_ty, name=f"in1_{i}_{j}")
-        for i in range(num_columns)
+        for i in range(num_aie_columns)
         for j in range(num_channels)
     ]
     of_outs = [
         ObjectFifo(tile_ty, name=f"out_{i}_{j}")
-        for i in range(num_columns)
+        for i in range(num_aie_columns)
         for j in range(num_channels)
     ]
 
     # AIE Core Function declaration
     softmax_kernel = Kernel("softmax_bf16", "softmax.o", [tile_ty, tile_ty, np.int32])
+    mask_kernel = Kernel("mask_bf16", "softmax.o", [tile_ty, np.int32, np.int32])
 
     # Define a task that will run on a compute tile
-    def core_body(of_in1, of_out, softmax_kernel):
+    def core_body(of_in1, of_out, softmax_kernel, mask_kernel, rtp, barrier):
         # Number of sub-vector "tile" iterations
+        barrier.wait_for_value(1)
+        vector_size = rtp[0]
         for _ in range_(N_div_n):
             elem_in1 = of_in1.acquire(1)
             elem_out = of_out.acquire(1)
+            mask_kernel(elem_in1, vector_size, per_tile_elements)
             softmax_kernel(elem_in1, elem_out, per_tile_elements)
             of_in1.release(1)
             of_out.release(1)
+    
+    rtps = [
+        Buffer(
+            np.ndarray[(1,), np.dtype[np.int32]],
+            name=f"rtp_{i}_{j}",
+            use_write_rtp=True,
+        )
+        for i in range(num_aie_columns)
+        for j in range(num_channels)
+    ]
+
+    barriers = [
+        WorkerRuntimeBarrier()
+        for i in range(num_aie_columns)
+        for j in range(num_channels)
+    ]
 
     # Create a worker to run the task on a compute tile
     my_workers = [
@@ -63,9 +85,12 @@ def softmax(dev, num_elements, num_columns, num_channels, trace_size, tile_size)
                 of_in1s[i * num_channels + j].cons(),
                 of_outs[i * num_channels + j].prod(),
                 softmax_kernel,
+                mask_kernel,
+                rtps[i * num_channels + j],
+                barriers[i * num_channels + j]
             ],
         )
-        for i in range(num_columns)
+        for i in range(num_aie_columns)
         for j in range(num_channels)
     ]
 
@@ -81,7 +106,7 @@ def softmax(dev, num_elements, num_columns, num_channels, trace_size, tile_size)
             [1, 1, 1, chunk],
             [0, 0, 0, 1],
         )
-        for i in range(num_columns)
+        for i in range(num_aie_columns)
         for j in range(num_channels)
     ]
 
@@ -90,11 +115,21 @@ def softmax(dev, num_elements, num_columns, num_channels, trace_size, tile_size)
     with rt.sequence(tensor_ty, tensor_ty) as (A, C):
         rt.start(*my_workers)
 
+        # Set run-time parameter for actual vector size (remainder is considered padding and ignored by the computation)
+        def set_rtps(*args):
+            for rtp in args:
+                rtp[0] = rtp_vector_size
+
+        rt.inline_ops(set_rtps, rtps)
+        
+        for i in range(num_aie_columns * num_channels):
+            rt.set_barrier(barriers[i], 1)
+
         # Initialize a group for parallel drain tasks, with fill resources free'd when drains complete.
         tg = rt.task_group()
 
         # Fill the input objectFIFOs with data
-        for i in range(num_columns):
+        for i in range(num_aie_columns):
             for j in range(num_channels):
                 rt.fill(
                     of_in1s[i * num_channels + j].prod(),
@@ -103,7 +138,7 @@ def softmax(dev, num_elements, num_columns, num_channels, trace_size, tile_size)
                     task_group=tg,
                 )
         # Drain the output objectFIFOs with data
-        for i in range(num_columns):
+        for i in range(num_aie_columns):
             for j in range(num_channels):
                 rt.drain(
                     of_outs[i * num_channels + j].cons(),

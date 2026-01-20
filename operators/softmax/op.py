@@ -16,7 +16,7 @@ from operators.common import (
 class AIESoftmax(SingleMLIRSourceOperator):
     """AIE-accelerated Softmax operation"""
 
-    def __init__(self, rows: int, cols: int, num_aie_columns=1, num_channels=1, context=None):
+    def __init__(self, rows: int, cols: int, num_aie_columns=1, num_channels=1, rtp_vector_size=None, context=None):
         assert rows % 16 == 0, "rows must be multiple of 16"
         assert cols % 16 == 0, "cols must be multiple of 16"
         assert (rows * cols) % (num_aie_columns * cols) == 0, "size must be multiple of num_aie_columns * tile_size"
@@ -26,11 +26,15 @@ class AIESoftmax(SingleMLIRSourceOperator):
         self.size = rows * cols
         self.num_aie_columns = num_aie_columns
         self.num_channels = num_channels
+        self.rtp_vector_size = rtp_vector_size
         
         SingleMLIRSourceOperator.__init__(self, context=context)
 
     def get_operator_name(self):
-        return f"softmax_{self.num_aie_columns}col_{self.num_channels}ch_{self.size}_{self.cols}t"
+        name = f"softmax_{self.num_aie_columns}col_{self.num_channels}ch_{self.size}_{self.cols}t"
+        if self.rtp_vector_size is not None:
+            name += f"_{self.rtp_vector_size}rtp"
+        return name
 
     def get_mlir_artifact(self):
         operator_dir = Path(__file__).parent
@@ -45,6 +49,7 @@ class AIESoftmax(SingleMLIRSourceOperator):
                 self.num_channels,
                 0,  # trace_size
                 self.cols,
+                self.rtp_vector_size,
             ],
         )
 

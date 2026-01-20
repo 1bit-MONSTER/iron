@@ -199,21 +199,37 @@ class AIELlamaOperators:
         ).compile().get_callable()
         
         # Softmax operators for attention weights
-        self.prefill.softmax = AIESoftmax(
+        self.prefill.softmax_compilable = AIESoftmax(
             rows=config.n_heads * prompt_len,
             cols=prompt_len,
             num_aie_columns=8,
             num_channels=1,
+            rtp_vector_size=prompt_len,  # Compile with max size
             context=self.context
-        ).compile().get_callable()
+        ).compile()
         
-        self.decode.softmax = AIESoftmax(
+        self.prefill.softmax = PatchableSingleXclbinCallable(
+            xclbin_path=self.prefill.softmax_compilable.xclbin_artifact.path,
+            kernel_name=self.prefill.softmax_compilable.xclbin_artifact.kernel_name,
+            insts_bin_path=self.prefill.softmax_compilable.insts_artifact.path,
+            args_spec=self.prefill.softmax_compilable.get_arg_spec()
+        )
+        
+        self.decode.softmax_compilable = AIESoftmax(
             rows=config.n_heads,
             cols=prompt_len,
             num_aie_columns=1,
             num_channels=1,
+            rtp_vector_size=prompt_len,  # Compile with max size
             context=self.context
-        ).compile().get_callable()
+        ).compile()
+        
+        self.decode.softmax = PatchableSingleXclbinCallable(
+            xclbin_path=self.decode.softmax_compilable.xclbin_artifact.path,
+            kernel_name=self.decode.softmax_compilable.xclbin_artifact.kernel_name,
+            insts_bin_path=self.decode.softmax_compilable.insts_artifact.path,
+            args_spec=self.decode.softmax_compilable.get_arg_spec()
+        )
         
         # RoPE operators
         # For queries: (seq_len, num_heads * head_dim) = (seq_len, 2048)
@@ -456,8 +472,9 @@ class AIEDecodeBuffers:
         scale_factor = 1.0 / math.sqrt(head_dim)
         self.attn_scale_factor = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
         self.attn_scale_factor.view_as_torch().fill_(scale_factor)
-        self.attn_scale_factor.to("npu")        # Attention weights buffer (output of softmax)
+        self.attn_scale_factor.to("npu") # Attention weights buffer (output of softmax)
         self.attn_weights = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
+
 class AIELlamaBuffers:
     def __init__(self, config, prompt_len):
         # Vector of the current token(s) being processed through the pipeline
@@ -716,13 +733,8 @@ def grouped_query_attention_forward_decode(
     aie_ops.decode.gemv_attn_scores(aie_buffers.decode.attn_scores_keys, aie_buffers.decode.queries, aie_buffers.decode.attn_scores)
     # Apply scaling on NPU
     aie_ops.decode.attn_scale(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_scale_factor, aie_buffers.decode.attn_scores)
-    aie_buffers.decode.attn_scores.to("cpu")
-    # Pad unused regions with -inf so they don't affect softmax FIXME: need to do this on NPU
-    scores_buf = aie_buffers.decode.attn_scores.view_as_torch()
-    scores_buf[:, context_len:] = float('-inf')
-    aie_buffers.decode.attn_scores.to("npu")
     
-    # Step 7: Softmax on NPU
+    # Step 7: Softmax on NPU (patched once at beginning of decode pass)
     aie_ops.decode.softmax(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_weights)
     aie_buffers.decode.attn_weights.to("cpu")
     attention_weights = aie_buffers.decode.attn_weights.view_as_torch()[:, :context_len].unsqueeze(-2)  # (n_heads, 1, context_len)
@@ -866,6 +878,11 @@ def llama_forward_pass_prefill(
     num_preceding_tokens = state.attn_keys_caches[0].shape[2]
     angles_slice = config.angles[num_preceding_tokens : num_preceding_tokens + seq_len]
     aie_buffers.prefill.rope_angles.view_as_torch()[:seq_len, :] = angles_slice
+    
+    # Patch softmax operator once for this prefill pass with the context length
+    context_len = num_preceding_tokens + seq_len
+    softmax_patches = {8: (context_len, 0xFFFFFFFF)}
+    aie_ops.prefill.softmax.patch(softmax_patches)
 
     # Step 2: Token embedding
     tok_emb_weight = config.weights['model.embed_tokens.weight']
@@ -927,6 +944,10 @@ def llama_forward_pass_decode(
         56: (offset_val, 0xFFFFFFFF),
     }
     aie_ops.decode.strided_copy_cache.patch(strided_copy_patches)
+    
+    # Patch softmax operator for actual context length
+    softmax_patches = {8: (context_len, 0xFFFFFFFF)}
+    aie_ops.decode.softmax.patch(softmax_patches)
 
     # Step 1: RoPE angles
     angles_slice = config.angles[num_preceding_tokens : num_preceding_tokens + seq_len]
