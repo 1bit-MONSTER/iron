@@ -145,6 +145,12 @@ def my_matvec(dev, cols, M, K, m_input, m_output=None, num_batches=1, kernel_arc
 
     # Every column gets the entirety of the vector B, no TAP needed.
     # This design assumes that all of B fits on the cores.
+    B_tap = TensorAccessPattern(
+        tensor_dims=L3_B_ty.__args__[0],
+        offset=0,
+        sizes=[1, 1, 1, num_batches * K],
+        strides=[0, 0, 0, 1],
+    )
 
     # Collection pattern for the output vector C: each AIE core writes back its contiguous chunk of rows.
     C_taps = [
@@ -166,7 +172,7 @@ def my_matvec(dev, cols, M, K, m_input, m_output=None, num_batches=1, kernel_arc
         tg_b = rt.task_group()
         for col in range(cols):
             # Simple linear transfer of B, includes all batches in sequence
-            rt.fill(B_L3L1_fifos[col].prod(), B, task_group=tg_b)
+            rt.fill(B_L3L1_fifos[col].prod(), B, B_tap, task_group=tg_b)
         for batch in range(num_batches):
             tg_ac = rt.task_group()
             for col in range(cols):
