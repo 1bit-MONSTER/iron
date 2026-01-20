@@ -29,6 +29,7 @@ from operators.elementwise_mul.op import AIEElementwiseMul
 from operators.silu.op import AIESiLU
 from operators.rope.op import AIERope
 from operators.strided_copy.op import AIEStridedCopy
+from operators.repeat.op import AIERepeat
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -94,7 +95,6 @@ class AIELlamaOperators:
             tile_k=64,
             tile_n=64,
             b_col_maj=True,
-            use_static_weight=True,
             separate_c_tiles=True,
             context=self.context
         ).compile()
@@ -103,7 +103,6 @@ class AIELlamaOperators:
             M=config.vocab_size,
             K=config.emb_dim,
             num_aie_columns=8,
-            use_static_weight=True,
             tile_size_input=4,
             tile_size_output=32,
             context=self.context
@@ -120,7 +119,6 @@ class AIELlamaOperators:
             tile_k=64,
             tile_n=64,
             b_col_maj=False,  # exceeds stride dimensions otherwise; just transpose weights
-            use_static_weight=True,
             context=self.context
         ).compile().get_callable()
         
@@ -133,7 +131,6 @@ class AIELlamaOperators:
             tile_k=64,
             tile_n=64,
             b_col_maj=False,  # exceeds stride dimensions otherwise; just transpose weights
-            use_static_weight=True,
             context=self.context
         ).compile().get_callable()
         
@@ -238,9 +235,16 @@ class AIELlamaOperators:
             insts_bin_path=self.decode.strided_copy_cache_compilable.insts_artifact.path,
             args_spec=self.decode.strided_copy_cache_compilable.get_arg_spec()
         )
-        
-        # Store head_dim for patching
-        self.head_dim = config.head_dim
+
+        # Repeat interleave for keys: (n_kv_groups, context_len, head_dim) -> (n_heads, context_len, head_dim)
+        # Compile with max context length, then patch at runtime for actual context_len
+        self.decode.attn_repeat_interleave = AIERepeat(
+            rows=config.n_kv_groups,
+            cols=prompt_len * config.head_dim,  # Max context length
+            repeat=config.n_heads // config.n_kv_groups,
+            transfer_size=config.head_dim,
+            context=self.context
+        ).compile().get_callable()
         
         # Attention projection operators
         # Query projection: (seq_len, emb_dim) -> (seq_len, n_heads * head_dim)
@@ -253,7 +257,6 @@ class AIELlamaOperators:
             tile_k=64,
             tile_n=64,
             b_col_maj=False,
-            use_static_weight=True,
             context=self.context
         ).compile().get_callable()
         
@@ -276,7 +279,6 @@ class AIELlamaOperators:
             tile_k=64,
             tile_n=64,
             b_col_maj=False,
-            use_static_weight=True,
             context=self.context
         ).compile().get_callable()
         
@@ -299,7 +301,6 @@ class AIELlamaOperators:
             tile_k=64,
             tile_n=64,
             b_col_maj=False,
-            use_static_weight=True,
             context=self.context
         ).compile().get_callable()
         
@@ -323,7 +324,6 @@ class AIELlamaOperators:
             tile_k=64,
             tile_n=64,
             b_col_maj=False,
-            use_static_weight=False,
             context=self.context
         ).compile().get_callable()
         
@@ -338,7 +338,6 @@ class AIELlamaOperators:
             num_batches=config.n_heads,
             context=self.context
         ).compile().get_callable()
-        
 
 
 # Allocate buffers shared with NPU
@@ -394,7 +393,7 @@ class AIEPrefillBuffers:
         ]
 
 class AIEDecodeBuffers:
-    def __init__(self, emb_dim, hidden_dim, n_heads, n_kv_groups, head_dim):
+    def __init__(self, emb_dim, hidden_dim, n_heads, n_kv_groups, head_dim, max_context_len):
         self.x = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
         self.x_norm = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
         self.attn_output = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
@@ -409,22 +408,23 @@ class AIEDecodeBuffers:
         self.values = AIEBuffer(shape=(1, n_kv_groups * head_dim), dtype=ml_dtypes.bfloat16)
         self.rope_angles = AIEBuffer(shape=(1, head_dim), dtype=ml_dtypes.bfloat16)
         # Attention score computation buffers (batched)
-        self.attn_scores_keys = AIEBuffer(shape=(n_heads, emb_dim, head_dim), dtype=ml_dtypes.bfloat16)  # Max context length
-        self.attn_scores = AIEBuffer(shape=(n_heads, emb_dim, 1), dtype=ml_dtypes.bfloat16)
+        self.attn_scores_keys = AIEBuffer(shape=(n_heads, max_context_len, head_dim), dtype=ml_dtypes.bfloat16)  # Max context length
+        self.attn_scores_values = AIEBuffer(shape=(n_heads, max_context_len, head_dim), dtype=ml_dtypes.bfloat16)  # Max context length
+        self.attn_scores = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
 
 class AIELlamaBuffers:
     def __init__(self, config, prompt_len):
         # Vector of the current token(s) being processed through the pipeline
         self.prefill = AIEPrefillBuffers(prompt_len, config.emb_dim, config.hidden_dim, config.n_heads, config.n_kv_groups, config.head_dim)
-        self.decode = AIEDecodeBuffers(config.emb_dim, config.hidden_dim, config.n_heads, config.n_kv_groups, config.head_dim)
+        self.decode = AIEDecodeBuffers(config.emb_dim, config.hidden_dim, config.n_heads, config.n_kv_groups, config.head_dim, prompt_len)
 
         # Per-layer KV cache buffers on NPU (used by strided copy for transpose and concatenate)
         self.keys_cache = [
-            AIEBuffer(shape=(config.n_kv_groups, config.emb_dim, config.head_dim), dtype=ml_dtypes.bfloat16)
+            AIEBuffer(shape=(config.n_kv_groups, prompt_len, config.head_dim), dtype=ml_dtypes.bfloat16)
             for _ in range(config.n_layers)
         ]
         self.values_cache = [
-            AIEBuffer(shape=(config.n_kv_groups, config.emb_dim, config.head_dim), dtype=ml_dtypes.bfloat16)
+            AIEBuffer(shape=(config.n_kv_groups, prompt_len, config.head_dim), dtype=ml_dtypes.bfloat16)
             for _ in range(config.n_layers)
         ]
 
@@ -624,8 +624,7 @@ def grouped_query_attention_forward_prefill(
 def grouped_query_attention_forward_decode(
     config,
     x, 
-    keys_cache,
-    values_cache,
+    num_preceding_tokens,
     layer_idx,
     mask=None,
 ):
@@ -648,49 +647,38 @@ def grouped_query_attention_forward_decode(
     
     # Step 3: Update cache using strided copy on NPU (transpose and concatenate)
     # Cache is already on NPU from prefill initialization or previous decode iteration
-    num_preceding_tokens = keys_cache.shape[2]
     context_len = num_preceding_tokens + seq_len
     
     # Transpose and append new keys/values to this layer's cache on NPU
     aie_ops.decode.strided_copy_cache(aie_buffers.decode.keys, aie_buffers.keys_cache[layer_idx])
     aie_ops.decode.strided_copy_cache(aie_buffers.decode.values, aie_buffers.values_cache[layer_idx])
-    aie_buffers.keys_cache[layer_idx].to("cpu")
-    aie_buffers.values_cache[layer_idx].to("cpu")
-    keys = aie_buffers.keys_cache[layer_idx].view_as_torch()[:, :context_len, :].unsqueeze(0)  # (batch, n_kv_groups, context_len, head_dim)
-    values = aie_buffers.values_cache[layer_idx].view_as_torch()[:, :context_len, :].unsqueeze(0)  # (batch, n_kv_groups, context_len, head_dim)
-    keys_cache = keys
-    values_cache = values
     
-    # Step 4: Repeat keys and values for grouped attention
+    # Step 4: Repeat keys and values for grouped attention using AIERepeat on NPU
     group_size = config.n_heads // config.n_kv_groups
-    keys = keys.repeat_interleave(group_size, dim=1)
-    values = values.repeat_interleave(group_size, dim=1)
-    context_len = keys.shape[2]
+    aie_ops.decode.attn_repeat_interleave(aie_buffers.keys_cache[layer_idx], aie_buffers.decode.attn_scores_keys)
+    aie_ops.decode.attn_repeat_interleave(aie_buffers.values_cache[layer_idx], aie_buffers.decode.attn_scores_values)
     
     # Step 5: Compute attention scores
-    aie_buffers.decode.attn_scores_keys.view_as_torch()[:, :context_len, :] = keys.squeeze(0)[:, :context_len, :]
+    # Copy repeated keys from keys_repeated buffer to attn_scores_keys for GEMV
     aie_ops.decode.gemv_attn_scores(aie_buffers.decode.attn_scores_keys, aie_buffers.decode.queries, aie_buffers.decode.attn_scores)
     aie_buffers.decode.attn_scores.to("cpu")
-    scores = aie_buffers.decode.attn_scores.view_as_torch()[:, :context_len, 0].unsqueeze(0).unsqueeze(2)
+    scores = aie_buffers.decode.attn_scores.view_as_torch()[:, :context_len]
     
     # Normalize
     scores = scores / math.sqrt(config.head_dim)
     
-    # Step 6: Apply mask
-    if mask is not None:
-        scores = scores.masked_fill(mask, float('-inf'))
-    
     # Step 7: Softmax
-    attention_weights = torch.nn.functional.softmax(scores, dim=-1)
+    attention_weights = torch.nn.functional.softmax(scores, dim=-1).unsqueeze(-2)  # (n_heads, 1, context_len)
     
     # Step 8: Compute attention output
+    values = aie_buffers.decode.attn_scores_values.to("cpu").view_as_torch()[:, :context_len, :]  # (n_heads, context_len, head_dim)
     context = torch.matmul(attention_weights, values)
     
     # Step 9: Concatenate heads and project
     context = context.transpose(1, 2).contiguous().view(batch, seq_len, -1)
     output = torch.nn.functional.linear(context, config.weights[f'model.layers.{layer_idx}.self_attn.o_proj.weight'])
     
-    return output, keys_cache, values_cache
+    return output, None, None
 
 
 def swiglu_ffn_forward_prefill(layer_idx):
@@ -773,9 +761,8 @@ def transformer_block_forward_prefill(
 def transformer_block_forward_decode(
     config,
     seq_len,
+    num_preceding_tokens,
     layer_idx,
-    attn_keys_cache,
-    attn_values_cache,
     attn_mask
 ):
     # Step 1: RMS normalization
@@ -787,8 +774,7 @@ def transformer_block_forward_decode(
     attn_output, attn_keys, attn_values = grouped_query_attention_forward_decode(
         config,
         x_norm,
-        attn_keys_cache,
-        attn_values_cache,
+        num_preceding_tokens,
         layer_idx,
         attn_mask,
     )
@@ -868,22 +854,24 @@ def llama_forward_pass_prefill(
 
 def llama_forward_pass_decode(
     config,
-    state
+    state,
 ):
     batch, seq_len = state.token_ids.shape
 
-    # Patch strided copy operators once for all layers with current cache offset
-    num_preceding_tokens = state.attn_keys_caches[0].shape[2]
+    # Patch operators once for all layers with current context length
+    num_preceding_tokens = state.num_preceding_tokens
+    context_len = num_preceding_tokens + seq_len
+    
+    # Patch strided copy operator for cache offset
     output_offset = num_preceding_tokens * config.head_dim
     offset_val = output_offset * 2  # Multiply by 2 for bfloat16 byte offset
-    patches = {
+    strided_copy_patches = {
         39: (offset_val, 0xFFFFFFFF),
         56: (offset_val, 0xFFFFFFFF),
     }
-    aie_ops.decode.strided_copy_cache.patch(patches)
+    aie_ops.decode.strided_copy_cache.patch(strided_copy_patches)
 
     # Step 1: RoPE angles
-    num_preceding_tokens = state.attn_keys_caches[0].shape[2]
     angles_slice = config.angles[num_preceding_tokens : num_preceding_tokens + seq_len]
     aie_buffers.decode.rope_angles.view_as_torch()[:] = angles_slice
 
@@ -901,9 +889,8 @@ def llama_forward_pass_decode(
         state.attn_keys_caches[layer_idx], state.attn_values_caches[layer_idx] = transformer_block_forward_decode(
             config,
             seq_len,
+            num_preceding_tokens,
             layer_idx,
-            state.attn_keys_caches[layer_idx],
-            state.attn_values_caches[layer_idx],
             attn_mask=attn_mask,
         )
 
@@ -924,9 +911,13 @@ def llama_forward_pass(
 ):
     batch, seq_len = state.token_ids.shape
     if seq_len > 1:
-        return llama_forward_pass_prefill(config, state)
+        ret = llama_forward_pass_prefill(config, state)
+        state.num_preceding_tokens = state.token_ids.shape[1]
+        return ret
     else:
-        return llama_forward_pass_decode(config, state)
+        ret = llama_forward_pass_decode(config, state)
+        state.num_preceding_tokens += 1
+        return ret
 
 
 # Main

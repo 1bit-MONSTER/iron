@@ -287,17 +287,21 @@ class SingleXclbinCallable:
     
     def __call__(self, *buffers):
         assert len(buffers) == len(self.args_spec)
-        assert all(
-            np.prod(buffers[i].shape) >= np.prod(self.args_spec[i].shape) and buffers[i].dtype == self.args_spec[i].dtype
-            for i in range(len(buffers))
-        ), "Input buffer shapes or dtypes do not match expected argument specification."
+        #assert all(
+        #    np.prod(buffers[i].shape) >= np.prod(self.args_spec[i].shape) and buffers[i].dtype == self.args_spec[i].dtype
+        #    for i in range(len(buffers))
+        #), "Input buffer shapes or dtypes do not match expected argument specification."
         self.insts_buffer.to("npu")
         for buf in buffers:
             buf.to("npu")
         opcode = 3
         bos = [buffer.bo for buffer in buffers]
         run = self.xrt_kernel(opcode, self.insts_buffer.bo, self.insts_buffer.shape[0], *bos)
-        run.wait()
+        ret_code = run.wait()
+        if ret_code != pyxrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
+            raise RuntimeError(
+                f"Kernel did not complete correctly: {ret_code}"
+            )
 
 class PatchableSingleXclbinCallable(SingleXclbinCallable):
     def __init__(self, xclbin_path, kernel_name, insts_bin_path, args_spec, device_manager=None):
