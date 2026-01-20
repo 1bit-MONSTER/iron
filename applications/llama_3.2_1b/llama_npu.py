@@ -31,6 +31,7 @@ from operators.rope.op import AIERope
 from operators.strided_copy.op import AIEStridedCopy
 from operators.repeat.op import AIERepeat
 from operators.softmax.op import AIESoftmax
+from operators.transpose.op import AIETranspose
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -388,6 +389,29 @@ class AIELlamaOperators:
             num_batches=config.n_heads,
             context=self.context
         ).compile().get_callable()
+        
+        # Transpose values from (max_context_len, head_dim) to (head_dim, max_context_len) per head
+        self.decode.transpose_values = AIETranspose(
+            M=prompt_len,
+            N=config.head_dim,
+            num_aie_columns=2,
+            num_channels=1,
+            m=256,
+            n=32,
+            s=8,
+            context=self.context
+        ).compile().get_callable()
+        
+        # GEMV for attention context: (head_dim, max_context_len) @ (max_context_len,) = (head_dim,) per head
+        self.decode.gemv_attn_context = AIEGEMV(
+            M=config.head_dim,
+            K=prompt_len,  # max possible context length
+            num_aie_columns=8,
+            tile_size_input=4,
+            tile_size_output=4,
+            num_batches=config.n_heads,
+            context=self.context
+        ).compile().get_callable()
 
 
 # Allocate buffers shared with NPU
@@ -465,14 +489,33 @@ class AIEDecodeBuffers:
         self.values = AIEBuffer(shape=(1, n_kv_groups * head_dim), dtype=ml_dtypes.bfloat16)
         self.rope_angles = AIEBuffer(shape=(1, head_dim), dtype=ml_dtypes.bfloat16)
         # Attention score computation buffers (batched)
-        self.attn_scores_keys = AIEBuffer(shape=(n_heads, max_context_len, head_dim), dtype=ml_dtypes.bfloat16)  # Max context length
-        self.attn_scores_values = AIEBuffer(shape=(n_heads, max_context_len, head_dim), dtype=ml_dtypes.bfloat16)  # Max context length
+        self.attn_scores_keys = AIEBuffer(shape=(n_heads, max_context_len, head_dim), dtype=ml_dtypes.bfloat16)
+        self.attn_scores_values = AIEBuffer(shape=(n_heads, max_context_len, head_dim), dtype=ml_dtypes.bfloat16)
+        self.attn_scores_values_transposed = AIEBuffer(shape=(n_heads, head_dim, max_context_len), dtype=ml_dtypes.bfloat16)
+        # Create per-head subbuffers for transpose operations (to avoid allocating in hot path)
+        self.attn_scores_values_per_head = [
+            self.attn_scores_values.subbuffer(
+                length=max_context_len * head_dim,
+                offset=h * max_context_len * head_dim,
+                shape=(max_context_len, head_dim)
+            )
+            for h in range(n_heads)
+        ]
+        self.attn_scores_values_transposed_per_head = [
+            self.attn_scores_values_transposed.subbuffer(
+                length=head_dim * max_context_len,
+                offset=h * head_dim * max_context_len,
+                shape=(head_dim, max_context_len)
+            )
+            for h in range(n_heads)
+        ]
+        self.attn_context = AIEBuffer(shape=(n_heads, head_dim), dtype=ml_dtypes.bfloat16)
         self.attn_scores = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
         # Attention score scaling buffer (pre-initialized with 1/sqrt(head_dim))
         scale_factor = 1.0 / math.sqrt(head_dim)
         self.attn_scale_factor = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
-        self.attn_scale_factor.view_as_torch().fill_(scale_factor)
-        self.attn_scale_factor.to("npu") # Attention weights buffer (output of softmax)
+        self.attn_scale_factor.view_as_torch()[:] = scale_factor
+        self.attn_scale_factor.to("npu")
         self.attn_weights = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
 
 class AIELlamaBuffers:
@@ -736,15 +779,26 @@ def grouped_query_attention_forward_decode(
     
     # Step 7: Softmax on NPU (patched once at beginning of decode pass)
     aie_ops.decode.softmax(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_weights)
-    aie_buffers.decode.attn_weights.to("cpu")
-    attention_weights = aie_buffers.decode.attn_weights.view_as_torch()[:, :context_len].unsqueeze(-2)  # (n_heads, 1, context_len)
     
-    # Step 8: Compute attention output
-    values = aie_buffers.decode.attn_scores_values.to("cpu").view_as_torch()[:, :context_len, :]  # (n_heads, context_len, head_dim)
-    context = torch.matmul(attention_weights, values)
+    # Step 8: Compute attention output on NPU
+    # Transpose values: (max_context_len, head_dim) -> (head_dim, max_context_len) for each head
+    for h in range(config.n_heads):
+        aie_ops.decode.transpose_values(
+            aie_buffers.decode.attn_scores_values_per_head[h],
+            aie_buffers.decode.attn_scores_values_transposed_per_head[h]
+        )
+    
+    # GEMV: (n_heads, head_dim, max_context_len) @ (n_heads, max_context_len) -> (n_heads, head_dim)
+    aie_ops.decode.gemv_attn_context(aie_buffers.decode.attn_scores_values_transposed, aie_buffers.decode.attn_weights, aie_buffers.decode.attn_context)
+    
+    # Read context from NPU
+    aie_buffers.decode.attn_context.to("cpu")
+    context = aie_buffers.decode.attn_context.view_as_torch().unsqueeze(1)  # (n_heads, 1, head_dim)
     
     # Step 9: Concatenate heads and project
+    # (n_heads, 1, head_dim) -> (n_heads, head_dim, 1) -> (1, 1, n_heads * head_dim)
     context = context.transpose(1, 2).contiguous().view(batch, seq_len, -1)
+    # (1, 1, n_heads * head_dim) @ (emb_dim, n_heads * head_dim)^T -> (1, 1, emb_dim)
     output = torch.nn.functional.linear(context, config.weights[f'model.layers.{layer_idx}.self_attn.o_proj.weight'])
     
     return output, None, None
