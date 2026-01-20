@@ -30,6 +30,7 @@ from operators.silu.op import AIESiLU
 from operators.rope.op import AIERope
 from operators.strided_copy.op import AIEStridedCopy
 from operators.repeat.op import AIERepeat
+from operators.softmax.op import AIESoftmax
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -178,6 +179,39 @@ class AIELlamaOperators:
             size=config.hidden_dim,
             tile_size=config.hidden_dim // 8,
             num_aie_columns=8,
+            context=self.context
+        ).compile().get_callable()
+        
+        # Attention score scaling operators
+        # FIXME: Using elementwise mul is very wasteful (of bandwidth) here since it's the same scalar factor for all values; need a kernel that allows scalar multiplication of a vector
+        self.prefill.attn_scale = AIEElementwiseMul(
+            size=config.n_heads * prompt_len * prompt_len,
+            tile_size=prompt_len,
+            num_aie_columns=8,
+            context=self.context
+        ).compile().get_callable()
+        
+        self.decode.attn_scale = AIEElementwiseMul(
+            size=config.n_heads * prompt_len,
+            tile_size=prompt_len // 8,
+            num_aie_columns=8,
+            context=self.context
+        ).compile().get_callable()
+        
+        # Softmax operators for attention weights
+        self.prefill.softmax = AIESoftmax(
+            rows=config.n_heads * prompt_len,
+            cols=prompt_len,
+            num_aie_columns=8,
+            num_channels=1,
+            context=self.context
+        ).compile().get_callable()
+        
+        self.decode.softmax = AIESoftmax(
+            rows=config.n_heads,
+            cols=prompt_len,
+            num_aie_columns=1,
+            num_channels=1,
             context=self.context
         ).compile().get_callable()
         
@@ -391,6 +425,13 @@ class AIEPrefillBuffers:
             )
             for h in range(n_heads)
         ]
+        # Attention score scaling buffer (pre-initialized with 1/sqrt(head_dim))
+        scale_factor = 1.0 / math.sqrt(head_dim)
+        self.attn_scale_factor = AIEBuffer(shape=(n_heads * prompt_len, prompt_len), dtype=ml_dtypes.bfloat16)
+        self.attn_scale_factor.view_as_torch()[:] = scale_factor
+        self.attn_scale_factor.to("npu")
+        # Attention weights buffer (output of softmax)
+        self.attn_weights = AIEBuffer(shape=(n_heads * prompt_len, prompt_len), dtype=ml_dtypes.bfloat16)
 
 class AIEDecodeBuffers:
     def __init__(self, emb_dim, hidden_dim, n_heads, n_kv_groups, head_dim, max_context_len):
@@ -411,7 +452,12 @@ class AIEDecodeBuffers:
         self.attn_scores_keys = AIEBuffer(shape=(n_heads, max_context_len, head_dim), dtype=ml_dtypes.bfloat16)  # Max context length
         self.attn_scores_values = AIEBuffer(shape=(n_heads, max_context_len, head_dim), dtype=ml_dtypes.bfloat16)  # Max context length
         self.attn_scores = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
-
+        # Attention score scaling buffer (pre-initialized with 1/sqrt(head_dim))
+        scale_factor = 1.0 / math.sqrt(head_dim)
+        self.attn_scale_factor = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
+        self.attn_scale_factor.view_as_torch().fill_(scale_factor)
+        self.attn_scale_factor.to("npu")        # Attention weights buffer (output of softmax)
+        self.attn_weights = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
 class AIELlamaBuffers:
     def __init__(self, config, prompt_len):
         # Vector of the current token(s) being processed through the pipeline
@@ -590,14 +636,12 @@ def grouped_query_attention_forward_prefill(
             aie_buffers.prefill.attn_scores_per_head[h]
         )
     
-    # Read back all results at once from parent buffer
+    # Read back all results at once from parent buffer and apply scaling on NPU
+    aie_ops.prefill.attn_scale(aie_buffers.prefill.attn_scores, aie_buffers.prefill.attn_scale_factor, aie_buffers.prefill.attn_scores)
     aie_buffers.prefill.attn_scores.to("cpu")
     # Buffer is (n_heads * max_seq_len, max_seq_len), view as (n_heads, max_seq_len, max_seq_len) then slice
     max_seq_len = aie_buffers.prefill.attn_scores.shape[0] // config.n_heads
     scores = aie_buffers.prefill.attn_scores.view_as_torch().view(config.n_heads, max_seq_len, max_seq_len).unsqueeze(0)[:, :, :seq_len, :context_len]
-    
-    # Apply scaling
-    scores = scores / math.sqrt(config.head_dim)
     
     # Step 7: Apply mask
     # This ensures causality, so that tokens in the future cannot attend to tokens in the past.
@@ -605,7 +649,16 @@ def grouped_query_attention_forward_prefill(
         scores = scores.masked_fill(mask, float('-inf'))
     
     # Step 8: Apply softmax to squeeze scores into probabilities (0, 1)
-    attention_weights = torch.nn.functional.softmax(scores, dim=-1)
+    # Write scores back to NPU buffer for softmax, handling variable seq_len and context_len
+    scores_buf = aie_buffers.prefill.attn_scores.view_as_torch().view(config.n_heads, max_seq_len, max_seq_len)
+    scores_buf[:, :seq_len, :context_len] = scores.squeeze(0)
+    # Pad unused regions with -inf so they don't affect softmax
+    scores_buf[:, :seq_len, context_len:] = float('-inf')
+    scores_buf[:, seq_len:, :] = float('-inf')
+    aie_buffers.prefill.attn_scores.to("npu")
+    aie_ops.prefill.softmax(aie_buffers.prefill.attn_scores, aie_buffers.prefill.attn_weights)
+    aie_buffers.prefill.attn_weights.to("cpu")
+    attention_weights = aie_buffers.prefill.attn_weights.view_as_torch().view(config.n_heads, max_seq_len, max_seq_len).unsqueeze(0)[:, :, :seq_len, :context_len]
     
     # Step 9: Compute attention output
     # (batch, num_heads, seq_len, seq_len) @ (batch, num_heads, seq_len, head_dim)
@@ -661,14 +714,18 @@ def grouped_query_attention_forward_decode(
     # Step 5: Compute attention scores
     # Copy repeated keys from keys_repeated buffer to attn_scores_keys for GEMV
     aie_ops.decode.gemv_attn_scores(aie_buffers.decode.attn_scores_keys, aie_buffers.decode.queries, aie_buffers.decode.attn_scores)
+    # Apply scaling on NPU
+    aie_ops.decode.attn_scale(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_scale_factor, aie_buffers.decode.attn_scores)
     aie_buffers.decode.attn_scores.to("cpu")
-    scores = aie_buffers.decode.attn_scores.view_as_torch()[:, :context_len]
+    # Pad unused regions with -inf so they don't affect softmax FIXME: need to do this on NPU
+    scores_buf = aie_buffers.decode.attn_scores.view_as_torch()
+    scores_buf[:, context_len:] = float('-inf')
+    aie_buffers.decode.attn_scores.to("npu")
     
-    # Normalize
-    scores = scores / math.sqrt(config.head_dim)
-    
-    # Step 7: Softmax
-    attention_weights = torch.nn.functional.softmax(scores, dim=-1).unsqueeze(-2)  # (n_heads, 1, context_len)
+    # Step 7: Softmax on NPU
+    aie_ops.decode.softmax(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_weights)
+    aie_buffers.decode.attn_weights.to("cpu")
+    attention_weights = aie_buffers.decode.attn_weights.view_as_torch()[:, :context_len].unsqueeze(-2)  # (n_heads, 1, context_len)
     
     # Step 8: Compute attention output
     values = aie_buffers.decode.attn_scores_values.to("cpu").view_as_torch()[:, :context_len, :]  # (n_heads, context_len, head_dim)
