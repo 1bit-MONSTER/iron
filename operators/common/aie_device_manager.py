@@ -19,6 +19,7 @@ class AIEDeviceManager:
     """Singleton manager for AIE XRT resources"""
 
     _instance = None
+    _initialized = False
 
     def __new__(cls):
         if cls._instance is None:
@@ -26,6 +27,11 @@ class AIEDeviceManager:
         return cls._instance
 
     def __init__(self):
+        # Only initialize once
+        if AIEDeviceManager._initialized:
+            return
+        AIEDeviceManager._initialized = True
+        
         self.device = pyxrt.device(0)
         self.device_type = detect_npu_device()
         self.contexts = {}  # xclbin_path -> (context, xclbin)
