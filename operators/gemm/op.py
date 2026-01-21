@@ -86,7 +86,7 @@ class AIEGEMM(SingleMLIRSourceOperator):
         use_scalar = self.gemm_args.get("use_scalar", False)
         round_conv_even = self.gemm_args.get("round_conv_even", True)
         separate_c_tiles = self.gemm_args.get("separate_c_tiles", False)
-        return PythonGeneratedMLIRArtifact.new(
+        return PythonGeneratedMLIRArtifact(
             f"{operator_name}.mlir",
             import_path=operator_dir / "design.py",
             callback_fn="my_matmul",
@@ -140,19 +140,19 @@ class AIEGEMM(SingleMLIRSourceOperator):
         if self.c_col_maj:
             kernel_flags.append("-DC_COL_MAJ")
         return [
-            KernelObjectArtifact.new(
+            KernelObjectArtifact(
                 f"gemm_{self.tile_m}x{self.tile_k}x{self.tile_n}_{int(self.b_col_maj)}_{int(self.c_col_maj)}.o",
                 extra_flags=kernel_flags,
-                depends=[
-                    SourceArtifact.new(
+                dependencies=[
+                    SourceArtifact(
                         base_dir / "aie_kernels" / "aie2p" / "mm.cc"
                     )
                 ],
             ),
-            KernelObjectArtifact.new(
+            KernelObjectArtifact(
                 "convert_copy.o",
                 [
-                    SourceArtifact.new(
+                    SourceArtifact(
                         base_dir
                         / "aie_kernels"
                         / "generic"

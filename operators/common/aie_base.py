@@ -61,50 +61,31 @@ class AIEOperatorBase(ABC):
             AIEOperatorBase._default_context = AIEContext()
         return AIEOperatorBase._default_context
 
-    def compile(self, dry_run=None):
+    def compile(self, dry_run=False):
         """
         Set up the operator and compile any necessary artifacts.
         Subclasses are expected to overwrite set_up(); they may register any artifacts that they need to be compiled there.
         """
         context = self.context
         self.set_up_artifacts()
-        self._move_artifact_paths()
-        work_list = comp.get_work_list(self.artifacts)
         compilation_rules = [
-            comp.GenerateMLIRFromPythonCompilationRule(dry_run=dry_run),
+            comp.GenerateMLIRFromPythonCompilationRule(),
             comp.PeanoCompilationRule(
-                context.peano_dir, context.mlir_aie_dir, dry_run=dry_run
+                context.peano_dir, context.mlir_aie_dir
             ),
-            comp.ArchiveCompilationRule(context.peano_dir, dry_run=dry_run),
-            comp.AieccCompilationRule(
+            comp.ArchiveCompilationRule(context.peano_dir),
+            comp.AieccXclbinInstsCompilationRule(
                 context.build_dir,
                 context.peano_dir,
                 context.mlir_aie_dir,
-                dry_run=dry_run,
             ),
         ]
-        if work_list:
-            logging.info(
-                f"Compiling {len(work_list)} new artifacts for AIE operator {self.__class__.__name__}: {', '.join(str(artifact.path.name) for artifact in work_list)}"
-            )
-        comp.compile(compilation_rules, work_list)
+        artifacts = comp.CompilationArtifactGraph(self.artifacts)
+        comp.compile(compilation_rules, artifacts, context.build_dir, dry_run=dry_run)
         return self
 
     def add_artifacts(self, artifacts):
         self.artifacts.extend(artifacts)
-
-    def _move_artifact_paths(self):
-        """Make all artifacts paths point into the build directory (source artifacts into the ironclad source directory). This doesn't phyisically move files; this function is called before artifact generation."""
-        context = self.context
-        todo = self.artifacts.copy()
-        while todo:
-            artifact = todo[0]
-            todo.pop(0)
-            if isinstance(artifact, comp.SourceArtifact):
-                artifact.set_path(context.base_dir / artifact.path)
-            else:
-                artifact.set_path(context.build_dir / artifact.path)
-            todo.extend(artifact.depends)
 
 
 def sync_to_device(bos):
@@ -147,17 +128,20 @@ class SingleMLIRSourceOperator(AIEOperatorBase, ABC):
         mlir_artifact = self.get_mlir_artifact()
         kernel_deps_inputs = self.get_kernel_artifacts()
         kernel_deps = [
-                KernelArchiveArtifact.new(
+                KernelArchiveArtifact(
                 self.get_kernel_archive_name(),
-                depends=kernel_deps_inputs,
+                dependencies=kernel_deps_inputs,
             )
         ] if kernel_deps_inputs else []
-        xclbin_artifact = XclbinArtifact.new(
+        xclbin_artifact = XclbinArtifact(
             f"{operator_name}.xclbin",
-            depends=[mlir_artifact] + kernel_deps,
+            mlir_input=mlir_artifact,
+            dependencies=[mlir_artifact] + kernel_deps,
         )
-        insts_artifact = InstsBinArtifact.new(
-            f"{operator_name}.bin", depends=[mlir_artifact]
+        insts_artifact = InstsBinArtifact(
+            f"{operator_name}.bin", 
+            mlir_input=mlir_artifact,
+            dependencies=[mlir_artifact]
         )
         return xclbin_artifact, insts_artifact
     
@@ -169,9 +153,9 @@ class SingleMLIRSourceOperator(AIEOperatorBase, ABC):
     
     def get_callable(self):
         return SingleXclbinCallable(
-            xclbin_path=self.xclbin_artifact.path,
+            xclbin_path=self.xclbin_artifact.filename,
             kernel_name=self.xclbin_artifact.kernel_name,
-            insts_bin_path=self.insts_artifact.path,
+            insts_bin_path=self.insts_artifact.filename,
             args_spec=self.get_arg_spec()
         )
     

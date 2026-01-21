@@ -43,7 +43,7 @@ class AIEMemCopy(AIEOperatorBase):
         xclbin_base_name = f"mem_copy_{self.num_cores}_cores_{self.num_channels}_chans_tile_{self.tile_size}_{self.bypass_str}"
 
         # Generate MLIR for xclbin (using dummy size)
-        mlir_artifact = PythonGeneratedMLIRArtifact.new(
+        mlir_artifact = PythonGeneratedMLIRArtifact(
             f"{xclbin_base_name}.mlir",
             import_path=operator_dir / "design.py",
             callback_fn="my_mem_copy",
@@ -60,10 +60,10 @@ class AIEMemCopy(AIEOperatorBase):
 
         # Build kernel only if not bypass mode
         if not self.bypass:
-            kernel_artifact = KernelObjectArtifact.new(
+            kernel_artifact = KernelObjectArtifact(
                 "mem_copy.o",
-                depends=[
-                    SourceArtifact.new(
+                dependencies=[
+                    SourceArtifact(
                         self.context.base_dir
                         / "aie_kernels"
                         / "generic"
@@ -71,20 +71,20 @@ class AIEMemCopy(AIEOperatorBase):
                     )
                 ],
             )
-            xclbin_depends = [mlir_artifact, kernel_artifact]
+            xclbin_dependencies = [mlir_artifact, kernel_artifact]
         else:
-            xclbin_depends = [mlir_artifact]
+            xclbin_dependencies = [mlir_artifact]
 
-        xclbin_artifact = XclbinArtifact.new(
+        xclbin_artifact = XclbinArtifact(
             f"{xclbin_base_name}.xclbin",
-            depends=xclbin_depends,
+            dependencies=xclbin_dependencies,
             extra_flags=["--dynamic-objFifos"],
         )
 
         insts_file_name = f"mem_copy_{self.num_cores}_cores_{self.num_channels}_chans_{self.size}_tile_{self.tile_size}_{self.bypass_str}"
-        insts_artifact = InstsBinArtifact.new(
+        insts_artifact = InstsBinArtifact(
             f"{insts_file_name}.bin",
-            depends=[mlir_artifact],
+            dependencies=[mlir_artifact],
             extra_flags=["--dynamic-objFifos"],
         )
 

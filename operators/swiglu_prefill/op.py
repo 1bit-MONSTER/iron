@@ -98,7 +98,7 @@ class AIESwiGLUPrefill(AIEOperatorBase):
             "--xclbin-kernel-id=0x902",
         ]
         silu_xclbin.kernel_name = "swiglu_silu"
-        silu_xclbin.depends += [gemm_1_xclbin]
+        silu_xclbin.dependencies += [gemm_1_xclbin]
         artifacts.append(silu_insts)
 
         eltwise_mul = AIEElementwiseMul(
@@ -119,7 +119,7 @@ class AIESwiGLUPrefill(AIEOperatorBase):
             "--xclbin-kernel-id=0x903",
         ]
         eltwise_mul_xclbin.kernel_name = "swiglu_eltwise_mul"
-        eltwise_mul_xclbin.depends += [silu_xclbin]
+        eltwise_mul_xclbin.dependencies += [silu_xclbin]
         artifacts.append(eltwise_mul_insts)
 
         gemm_2 = AIEGEMM(
@@ -137,7 +137,7 @@ class AIESwiGLUPrefill(AIEOperatorBase):
             "--xclbin-kernel-id=0x904",
         ]
         gemm_2_xclbin.kernel_name = "swiglu_gemm_2"
-        gemm_2_xclbin.depends += [eltwise_mul_xclbin]
+        gemm_2_xclbin.dependencies += [eltwise_mul_xclbin]
         artifacts.append(gemm_2_xclbin)
         artifacts.append(gemm_2_insts)
 

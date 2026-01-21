@@ -328,7 +328,7 @@ class FusedMLIROperator(SingleMLIRSourceOperator):
             filename = self.get_operator_name() + "_fused.mlir"
             with open(filename, "w") as f:
                 f.write(str(ctx.module))
-        src_artifact = SourceArtifact.new(Path(filename))
+        src_artifact = SourceArtifact(Path(filename))
         src_artifact.fake_available = True
         return src_artifact
 
@@ -365,10 +365,10 @@ swiglu_fused_op = FusedMLIROperator(
         "ffn_output"
     ]
 )
-swiglu_fused = swiglu_fused_op.compile().get_callable()
+#swiglu_fused = swiglu_fused_op.compile().get_callable()
 
-def run_autofused():
-    swiglu_fused()
+#def run_autofused():
+#    swiglu_fused()
 
 # CPU
 # ---
@@ -391,6 +391,6 @@ def run_cpu():
 # Main
 # ---
 
-print(run_autofused())
+#print(run_autofused())
 print(run_separate_xclbins())
 print(run_cpu())

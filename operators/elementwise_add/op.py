@@ -44,7 +44,7 @@ class AIEElementwiseAdd(SingleMLIRSourceOperator):
 
     def get_mlir_artifact(self):
         operator_dir = Path(__file__).parent
-        return PythonGeneratedMLIRArtifact.new(
+        return PythonGeneratedMLIRArtifact(
             f"{self.get_operator_name()}.mlir",
             import_path=operator_dir / "design.py",
             callback_fn="my_eltwise_add",
@@ -60,10 +60,10 @@ class AIEElementwiseAdd(SingleMLIRSourceOperator):
 
     def get_kernel_artifacts(self):
         return [
-            KernelObjectArtifact.new(
+            KernelObjectArtifact(
                 f"add.o",
-                depends=[
-                    SourceArtifact.new(
+                dependencies=[
+                    SourceArtifact(
                         self.context.base_dir / "aie_kernels" / "generic" / "add.cc"
                     )
                 ],

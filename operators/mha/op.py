@@ -83,7 +83,7 @@ class AIEMHA(AIEOperatorBase):
             "zero_scalar_bf16": "zero_scalar_bf16_rowmaj",
         }
 
-        mlir_artifact = PythonGeneratedMLIRArtifact.new(
+        mlir_artifact = PythonGeneratedMLIRArtifact(
             f"{file_name_base}.mlir",
             import_path=operator_dir / "design.py",
             callback_fn="fused_mha",
@@ -102,35 +102,35 @@ class AIEMHA(AIEOperatorBase):
             },
         )
 
-        xclbin_artifact = XclbinArtifact.new(
+        xclbin_artifact = XclbinArtifact(
             f"mha.xclbin",
-            depends=[
+            dependencies=[
                 mlir_artifact,
-                KernelArchiveArtifact.new(
+                KernelArchiveArtifact(
                     f"mha_kernels.a",
-                    depends=[
-                        KernelObjectArtifact.new(
+                    dependencies=[
+                        KernelObjectArtifact(
                             f"mha_mm.o",
                             extra_flags=mm_defines_colmaj,
-                            depends=[SourceArtifact.new(mm_source)],
+                            dependencies=[SourceArtifact(mm_source)],
                         ),
-                        KernelObjectArtifact.new(
+                        KernelObjectArtifact(
                             f"mha_mm_rowmaj.o",
                             extra_flags=mm_defines_rowmaj,
-                            depends=[SourceArtifact.new(mm_source)],
+                            dependencies=[SourceArtifact(mm_source)],
                             rename_symbols=mm_rename_symbols,
                         ),
-                        KernelObjectArtifact.new(
+                        KernelObjectArtifact(
                             "mha_softmax.o",
-                            depends=[SourceArtifact.new(softmax_source)],
+                            dependencies=[SourceArtifact(softmax_source)],
                         ),
-                        KernelObjectArtifact.new(
-                            "mha_mha.o", depends=[SourceArtifact.new(mha_source)]
+                        KernelObjectArtifact(
+                            "mha_mha.o", dependencies=[SourceArtifact(mha_source)]
                         ),
-                        KernelObjectArtifact.new(
+                        KernelObjectArtifact(
                             "mha_passThrough.o",
                             extra_flags=["-DBIT_WIDTH=16"],
-                            depends=[SourceArtifact.new(passthrough_source)],
+                            dependencies=[SourceArtifact(passthrough_source)],
                         ),
                     ],
                 ),
@@ -138,8 +138,8 @@ class AIEMHA(AIEOperatorBase):
             extra_flags=["--dynamic-objFifos"],
         )
 
-        insts_artifact = InstsBinArtifact.new(
-            f"mha.bin", depends=[mlir_artifact], extra_flags=["--dynamic-objFifos"]
+        insts_artifact = InstsBinArtifact(
+            f"mha.bin", dependencies=[mlir_artifact], extra_flags=["--dynamic-objFifos"]
         )
 
         self.xclbin_artifact = xclbin_artifact

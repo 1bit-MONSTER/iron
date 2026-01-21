@@ -42,7 +42,7 @@ class AIETanh(AIEOperatorBase):
         operator_dir = Path(__file__).parent
         file_name_base = f"tanh_{self.num_columns}c_{self.num_channels}ch_{self.size}_{self.tile_size}t"
 
-        mlir_artifact = PythonGeneratedMLIRArtifact.new(
+        mlir_artifact = PythonGeneratedMLIRArtifact(
             f"{file_name_base}.mlir",
             import_path=operator_dir / "design.py",
             callback_fn="my_tanh",
@@ -56,14 +56,14 @@ class AIETanh(AIEOperatorBase):
             ],
         )
 
-        xclbin_artifact = XclbinArtifact.new(
+        xclbin_artifact = XclbinArtifact(
             f"{file_name_base}.xclbin",
-            depends=[
+            dependencies=[
                 mlir_artifact,
-                KernelObjectArtifact.new(
+                KernelObjectArtifact(
                     f"tanh.o",
-                    depends=[
-                        SourceArtifact.new(
+                    dependencies=[
+                        SourceArtifact(
                             self.context.base_dir / "aie_kernels" / "aie2p" / "tanh.cc"
                         )
                     ],
@@ -71,8 +71,8 @@ class AIETanh(AIEOperatorBase):
             ],
         )
 
-        insts_artifact = InstsBinArtifact.new(
-            f"{file_name_base}.bin", depends=[mlir_artifact]
+        insts_artifact = InstsBinArtifact(
+            f"{file_name_base}.bin", dependencies=[mlir_artifact]
         )
 
         self.xclbin_artifact = xclbin_artifact
