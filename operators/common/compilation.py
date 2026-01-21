@@ -40,102 +40,151 @@ from contextlib import nullcontext
 from aie.extras.context import mlir_mod_ctx
 
 
+# Global Functions
+# ##########################################################################
+
+
+def plan(rules, graph: CompilationArtifactGraph):
+    if all(artifact.is_available() for artifact in graph):
+        return []  # Everything has been compiled
+    for rule in rules:
+        if rule.matches(graph):
+            commands, new_graph = rule.compile(graph)
+            break
+    else:
+        raise RuntimeError(
+            f"No matching rule to compile target(s): {', '.join(artifact.filename for artifact in graph)}"
+        )
+    return [(rule, commands, graph)] + plan(rules, new_graph)
+
+
+def execute(plan):
+    for rule, commands, _ in plan:
+        logging.debug(f"Executing rule: {rule.__class__.__name__}")
+        for command in commands:
+            logging.debug(f"  Executing command: {command}")
+            success = command.run()
+            if not success:
+                raise RuntimeError(f"Command failed: {command}")
+
+
+def compile(rules, artifacts):
+    plan_steps = plan(rules, artifacts)
+    print(plan_steps)
+    execute(plan_steps)
+
+
+# Compilation Artifact Graph
+# ##########################################################################
+
+
+class CompilationArtifactGraph:
+    def __init__(self, artifacts=None):
+        self.artifacts = artifacts if artifacts is not None else []
+    
+    def __iter__(self):
+        return iter(self.artifacts)
+    
+    def dfs(self):
+        return self._traverse(True)
+    
+    def bfs(self):
+        return self._traverse(False)
+    
+    def _traverse(self, dfs):
+        visited = set()
+        todo = self.artifacts.copy()
+        while todo:
+            artifact = todo.pop() if dfs else todo.pop(0)
+            if artifact in visited:
+                continue
+            visited.add(artifact)
+            todo.extend(artifact.dependencies)
+            yield artifact
+
+    def copy(self):
+        return CompilationArtifactGraph(artifacts=self.artifacts.copy())
+    
+    def replace(self, old_artifact, new_artifact):
+        for i, artifact in enumerate(self.artifacts):
+            if artifact == old_artifact:
+                self.artifacts[i] = new_artifact
+            else:
+                artifact.dependencies.replace(old_artifact, new_artifact)
+        return self
+    
+    def populate_availability_from_filesystem(self):
+        for artifact in self.artifacts:
+            artifact.available = artifact.is_available_in_filesystem()
+        
+    def get_worklist(self, kind):
+        """Return a list of artifacts of the given kind that can be built in the next step (dependencies available)."""
+        return [
+            artifact
+            for artifact in self.artifacts.bfs()
+            if isinstance(artifact, kind) 
+            and not artifact.is_available() 
+            and artifact.dependencies_available()
+        ]
+
+
 # Compilation Artifacts
-# --------------------------------------------------------------------------
+# ##########################################################################
 
 
 class CompilationArtifact(ABC):
-    _instances = {}
-
-    @classmethod
-    def new(cls, path, *args, **kwargs):
-        """Uniques artifacts based on absolute file path; any two artifacts with the same absolute path will be represented by the same object."""
-        path = Path(path)
-        abs_path = path.absolute()
-        if abs_path not in cls._instances:
-            cls._instances[abs_path] = None
-            instance = cls(path, *args, **kwargs)
-            cls._instances[abs_path] = instance
-        else:
-            assert (
-                type(cls._instances[abs_path]) == cls
-            ), f"Artifact with path {abs_path} is already registered with a different type"
-        return cls._instances[abs_path]
-
-    def __init__(self, path, depends=None):
-        abs_path = path.absolute()
-        assert (
-            abs_path in self._instances
-        ), "do not construct artifact objects directly; call the get() class method instead for uniquing"
-        self.path: Path = path
-        self.depends: list[CompilationArtifact] = depends if depends is not None else []
-        self.users: list[CompilationArtifact] = (
-            []
-        )  # List of ancestor artifacts that depend on this artifact
-        for dependency in self.depends:
-            dependency.users.append(self)
-        self.fake_available = False
+    def __init__(self, filename, dependencies=None, available=False):
+        self.filename = filename
+        self.dependencies: CompilationArtifactGraph = CompilationArtifactGraph(artifacts=dependencies if dependencies is not None else [])
+        self.available = available
+        return self
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(path={self.path}, depends={self.depends})"
-
-    def set_path(self, new_path):
-        old_abs_path = self.path.absolute()
-        new_path = Path(new_path)
-        abs_path = new_path.absolute()
-        self.path = new_path
-        del CompilationArtifact._instances[old_abs_path]
-        CompilationArtifact._instances[abs_path] = self
+        return f"{self.__class__.__name__}({self.filename})"
 
     def is_available(self):
-        if self.fake_available:
-            return True
-        if not self.path.exists():
+        """'Conceptual' availability: during a dry-run or in the planning stage, available may be True even if the underlying file does not exist yet."""
+        # If any of our dependencies' dependencies are outdated, this artifact is also outdated
+        return self.available and self.dependencies_available()
+    
+    def dependencies_available(self):
+        return all(d.is_available() for d in self.dependencies)
+    
+    def is_available_in_filesystem(self):
+        """'Real' availability: checks if the underlying file exists and is up-to-date with respect to dependencies."""
+        if not os.path.exists(self.filename):
             return False
-        for dependency in self.depends:
-            # If any of our dependencies' dependencies are outdated, this artifact is also outdated
-            if not dependency.is_available():
-                return False
-            # If any of our direct dependencies are newer than this artifact, this artifact is invalid
-            if dependency.is_newer_than(os.path.getmtime(str(self.path))):
+        file_mtime = os.path.getmtime(self.filename)
+        for dependency in self.dependencies:
+            if not dependency.is_available_in_filesystem() or os.path.getmtime(dependency.filename) > file_mtime:
                 return False
         return True
 
-    def is_newer_than(self, time):
-        if self.fake_available:
-            return True
-        return os.path.getmtime(str(self.path)) > time
-
-    def delete(self):
-        for user in self.users:
-            user.depends.remove(self)
-        del self._instances[self.path.absolute()]
-        return self.users
-
 
 class SourceArtifact(CompilationArtifact):
+    """Artifact representing a source file that does not need to be generated, is assumed to be there."""
     pass
 
 
 class XclbinArtifact(CompilationArtifact):
     def __init__(
-        self, path, depends, kernel_name="MLIR_AIE", extra_flags=None, xclbin_input=None
+        self, filename, dependencies, kernel_name="MLIR_AIE", extra_flags=None, xclbin_input=None
     ):
-        super().__init__(path, depends)
+        super().__init__(filename, dependencies)
         self.kernel_name = kernel_name
         self.extra_flags = extra_flags if extra_flags is not None else []
         self.xclbin_input = xclbin_input
 
 
 class InstsBinArtifact(CompilationArtifact):
-    def __init__(self, path, depends, extra_flags=None):
-        super().__init__(path, depends)
+    def __init__(self, filename, dependencies, extra_flags=None):
+        super().__init__(filename, dependencies)
         self.extra_flags = extra_flags if extra_flags is not None else []
 
 
 class KernelObjectArtifact(CompilationArtifact):
-    def __init__(self, path, depends, extra_flags=None, rename_symbols=None):
-        super().__init__(path, depends)
+    def __init__(self, filename, dependencies, extra_flags=None, rename_symbols=None):
+        super().__init__(filename, dependencies)
         self.extra_flags = extra_flags if extra_flags is not None else []
         self.rename_symbols = rename_symbols if rename_symbols is not None else {}
 
@@ -147,212 +196,166 @@ class KernelArchiveArtifact(CompilationArtifact):
 class PythonGeneratedMLIRArtifact(CompilationArtifact):
     def __init__(
         self,
-        path,
+        filename,
         import_path,
         callback_fn,
         callback_args=None,
         callback_kwargs=None,
         requires_context=False,
     ):
-        self.import_path = import_path
         self.callback_fn = callback_fn
         self.callback_args = callback_args if callback_args is not None else []
         self.callback_kwargs = callback_kwargs if callback_kwargs is not None else {}
         self.requires_context = requires_context
-        super().__init__(path)
+        super().__init__(filename, dependencies=[])
 
-    def is_available(self):
-        if self.fake_available:
-            return True
-        is_available = super().is_available()
-        if is_available:
-            # Force regeneration if the Python source is changed
-            return os.path.getmtime(str(self.path)) >= os.path.getmtime(
-                self.import_path
-            )
-        return is_available
+
+# Compilation Command
+# ##########################################################################
+
+
+class CompilationCommand(ABC):
+    """An abstraction for anything that can be executed to physically produce artifacts."""
+    @abstractmethod
+    def run(self) -> bool:
+        pass
+    
+    @abstractmethod
+    def __repr__(self):
+        pass
+
+
+class ShellCompilationCommand(CompilationCommand):
+    def __init__(self, command: list[str], cwd=None, env='copy'):
+        self.command = command
+        self.cwd = cwd
+        if env == 'copy':
+            env = os.environ.copy()
+        self.env = env
+
+    def run(self) -> bool:
+        result = subprocess.run(
+            self.command,
+            capture_output=True,
+            text=True,
+            cwd=self.cwd,
+            env=self.env,
+        )
+        return 0 == result.returncode
+
+    def __repr__(self):
+        return f"Shell({self.command})"
+
+
+class PythonCallbackCompilationCommand(CompilationCommand):
+    def __init__(self, callback):
+        self.callback = callback
+
+    def run(self) -> bool:
+        return bool(self.callback())
+
+    def __repr__(self):
+        return f"PythonCallback({self.callback})"
 
 
 # Compilation Rules
-# --------------------------------------------------------------------------
+# ##########################################################################
 
 
 class CompilationRule(ABC):
-    def __init__(self, dry_run=None):
-        self.dry_run = dry_run
+    """A compilation rule is applied to a artifact graph, producing compilation commands and a transformed artifact graph."""
 
     @abstractmethod
-    def matches(self, artifact: list[CompilationArtifact]) -> bool:
+    def matches(self, artifact: CompilationArtifactGraph) -> bool:
+        """Return true if this rule can be applied to any artifact in the artifact graph."""
         pass
-
+    
     @abstractmethod
     def compile(
-        self, artifacts: list[CompilationArtifact]
-    ) -> list[CompilationArtifact]:
+        self, artifacts: CompilationArtifactGraph
+    ) -> list[CompilationCommand]:
+        """Apply this rule to the artifact graph, returning compilation commands. This should modify the artifact graph in-place to reflect the newly generated artifacts."""
         pass
 
 
 class GenerateMLIRFromPythonCompilationRule(CompilationRule):
-    def matches(self, artifacts):
+    def matches(self, graph):
         return any(
             isinstance(artifact, PythonGeneratedMLIRArtifact)
-            and len(artifact.depends) == 0
-            for artifact in artifacts
+            and len(artifact.dependencies) == 1
+            and isinstance(artifact.dependencies[0], SourceArtifact)
+            and artifact.dependencies_available()
+            for artifact in graph.bfs(only_unavailable=True)
         )
 
-    def compile(self, artifacts):
+    def compile(self, graph):
         """Generate MLIR from a Python callback that uses the MLIR bindings"""
-        for i, artifact in enumerate(artifacts):
+        commands = []
+        for i, artifact in enumerate(graph.bfs(only_unavailable=True)):
             if not isinstance(artifact, PythonGeneratedMLIRArtifact):
                 continue
-            if not all(dependency.is_available() for dependency in artifact.depends):
-                continue
+            assert len(artifact.dependencies) == 1 and isinstance(artifact.dependencies[0], SourceArtifact), "PythonGeneratedMLIRArtifact must depend on exactly one SourceArtifact"
+            import_path = Path(artifact.dependencies[0].filename)
+            new_artifact = SourceArtifact.new(artifact.filename)
+            callback = lambda: self.generate_mlir(new_artifact, import_path, artifact.callback_fn, artifact.callback_args, artifact.callback_kwargs, artifact.requires_context)
+            commands.append(PythonCallbackCompilationCommand(callback))
+            new_artifact.available = True
+            graph.replace(artifact, new_artifact)
+        return commands
+    
+    @staticmethod 
+    def generate_mlir(output_artifact, import_path, callback_fn, callback_args=None, callback_kwargs=None, requires_context=False):
+        # Import the Python source file
+        spec = importlib.util.spec_from_file_location(
+            Path(import_path).name, import_path
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        # We only initiate an MLIR context if requested; otherwise, it is expected that the callback creates the context
+        ctx_callback = lambda: (
+            mlir_mod_ctx() if requires_context else nullcontext()
+        )
+        with ctx_callback() as ctx:
+            callback_function = getattr(module, callback_fn)
+            mlir_code = callback_function(
+                *callback_args, **callback_kwargs
+            )
+        # Stringify the generated MLIR
+        if requires_context:
+            mlir_code = str(ctx.module)
+        else:
+            mlir_code = str(mlir_code)
 
-            if self.dry_run is None:
-                # Import the Python source file
-                spec = importlib.util.spec_from_file_location(
-                    Path(artifact.import_path).name, artifact.import_path
-                )
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-                # We only initiate an MLIR context if requested; otherwise, it is expected that the callback creates the context
-                ctx_callback = lambda: (
-                    mlir_mod_ctx() if artifact.requires_context else nullcontext()
-                )
-                with ctx_callback() as ctx:
-                    callback_function = getattr(module, artifact.callback_fn)
-                    mlir_code = callback_function(
-                        *artifact.callback_args, **artifact.callback_kwargs
-                    )
-                # Stringify the generated MLIR
-                if artifact.requires_context:
-                    mlir_code = str(ctx.module)
-                else:
-                    mlir_code = str(mlir_code)
-
-                with open(artifact.path, "w") as f:
-                    f.write(mlir_code)
-
-            # Now that the artifact is generated, replace this artifact with the MLIR source code file
-            old_users = artifact.delete()
-            new_artifact = SourceArtifact.new(artifact.path)
-            for user in old_users:
-                user.depends.append(new_artifact)
-            if self.dry_run is not None:
-                python_cmd = ""
-                # Import the Python source file
-                python_cmd += (
-                    "import sys; sys.path.append("
-                    f'"{Path(artifact.import_path).parent}"'
-                    "); "
-                )
-                python_cmd += f"from {Path(artifact.import_path).stem} import {artifact.callback_fn}; "
-
-                # Check if we need to import device classes
-                # Device classes have __module__ == 'abc' but need to be imported from aie.iron.device
-                device_classes = set()
-                for arg in artifact.callback_args:
-                    obj_module = type(arg).__module__
-                    obj_class = type(arg).__name__
-                    if obj_module == "abc" and (
-                        obj_class.startswith("NPU") or obj_class.startswith("XCVC")
-                    ):
-                        device_classes.add(obj_class)
-                for v in artifact.callback_kwargs.values():
-                    obj_module = type(v).__module__
-                    obj_class = type(v).__name__
-                    if obj_module == "abc" and (
-                        obj_class.startswith("NPU") or obj_class.startswith("XCVC")
-                    ):
-                        device_classes.add(obj_class)
-
-                if device_classes:
-                    python_cmd += f"from aie.iron.device import {', '.join(sorted(device_classes))}; "
-
-                if artifact.requires_context:
-                    python_cmd += "from aie.extras.context import mlir_mod_ctx; "
-                    python_cmd += "with mlir_mod_ctx() as ctx: "
-                python_cmd += f"mlir_code = {artifact.callback_fn}({', '.join(map(GenerateMLIRFromPythonCompilationRule._repr_for_codegen, artifact.callback_args))}, {', '.join(f'{k}={_repr_for_codegen(v)}' for k, v in artifact.callback_kwargs.items())}); "
-                if artifact.requires_context:
-                    python_cmd += "print(str(ctx.module))"
-                else:
-                    python_cmd += "print(str(mlir_code))"
-                self.dry_run.append(f"python3 -c '{python_cmd}' > {artifact.path}")
-                new_artifact.fake_available = True
-            artifacts[i] = new_artifact
-            logging.debug(f"Created MLIR source string for {artifact.path.name}")
-
-        return artifacts
-
-    @staticmethod
-    def _repr_for_codegen(obj):
-        """Convert an object to its string representation for code generation.
-
-        Handles special cases like device classes that need to be instantiated
-        rather than using their default repr().
-        """
-        # Check if this is a device class from aie.iron.device
-        # These classes have __module__ == 'abc' but are imported from aie.iron.device
-        obj_module = type(obj).__module__
-        obj_class = type(obj).__name__
-
-        # Check for known device class patterns (NPU1, NPU2, XCVC1902, etc.)
-        # These are imported from aie.iron.device but have __module__ == 'abc'
-        if obj_module == "abc" and (
-            obj_class.startswith("NPU") or obj_class.startswith("XCVC")
-        ):
-            # For device classes, generate instantiation code
-            return f"{obj_class}()"
-
-        # Default to repr() for other types
-        return repr(obj)
+        with open(output_artifact.filename, "w") as f:
+            f.write(mlir_code)
 
 
-class AieccCompilationRule(CompilationRule):
+class AieccXclbinInstsCompilationRule(CompilationRule):
     def __init__(self, build_dir, peano_dir, mlir_aie_dir, *args, **kwargs):
         self.build_dir = build_dir
         self.aiecc_path = Path(mlir_aie_dir) / "bin" / "aiecc.py"
         self.peano_dir = peano_dir
         super().__init__(*args, **kwargs)
 
-    def matches(self, artifacts):
-        return any(
-            isinstance(artifact, (XclbinArtifact, InstsBinArtifact))
-            and all(dependency.is_available() for dependency in artifact.depends)
-            for artifact in artifacts
-        )
+    def matches(self, graph):
+        return any(graph.get_worklist((XclbinArtifact, InstsBinArtifact)))
 
-    def compile(self, artifacts):
+    def compile(self, graph):
         # If there are both xclbin and insts.bin targets based on the same source MLIR code, we can combine them into one single `aiecc.py` invocation.
         mlir_sources = set()
         mlir_sources_to_xclbins = {}
-        mlir_sources_to_insts_bins = {}
-        for artifact in artifacts:
-            if not isinstance(artifact, (XclbinArtifact, InstsBinArtifact)):
-                continue
-            if not all(dependency.is_available() for dependency in artifact.depends):
-                continue
-            mlir_dependencies = [
-                d
-                for d in artifact.depends
-                if isinstance(d, (SourceArtifact, PythonGeneratedMLIRArtifact))
-            ]
-            if len(mlir_dependencies) != 1:
-                raise RuntimeError(
-                    f"Expected exactly one dependency of {artifact.path} to be SourceArtifact or PythonGeneratedMLIRArtifact, got: {', '.join(str(dep.path) for dep in artifact.depends)}"
-                )
-            mlir_dependency = mlir_dependencies[0]
-            mlir_sources.add(mlir_dependency)
+        mlir_sources_to_insts = {}
+        worklist = graph.get_worklist((XclbinArtifact, InstsBinArtifact))
+        for artifact in worklist:
+            mlir_dependency = artifact.mlir_input
             if isinstance(artifact, XclbinArtifact):
                 mlir_sources_to_xclbins.setdefault(mlir_dependency, []).append(artifact)
             elif isinstance(artifact, InstsBinArtifact):
-                mlir_sources_to_insts_bins.setdefault(mlir_dependency, []).append(
-                    artifact
-                )
+                mlir_sources_to_insts.setdefault(mlir_dependency, []).append(artifact)
 
+        commands = []
         # Now we know for each mlir source if we need to generate an xclbin, an insts.bin or both for it
         for mlir_source in mlir_sources:
-            # Build aiecc command using Peano
             compile_cmd = [
                 "python",
                 str(self.aiecc_path),
@@ -364,68 +367,45 @@ class AieccCompilationRule(CompilationRule):
                 "--dynamic-objFifos",
             ]
             do_compile_xclbin = mlir_source in mlir_sources_to_xclbins
-            do_compile_insts_bin = mlir_source in mlir_sources_to_insts_bins
+            do_compile_insts_bin = mlir_source in mlir_sources_to_insts
             if do_compile_xclbin:
                 first_xclbin = mlir_sources_to_xclbins[mlir_source][
                     0
-                ]  # FIXME: this does not handle the case of multiple xclbins with different kernel names or flags from the same MLIR
+                ]  # TODO: this does not handle the case of multiple xclbins with different kernel names or flags from the same MLIR
                 compile_cmd += first_xclbin.extra_flags + [
                     "--aie-generate-xclbin",
-                    "--xclbin-name=" + str(first_xclbin.path),
+                    "--xclbin-name=" + first_xclbin.filename,
                     "--xclbin-kernel-name=" + first_xclbin.kernel_name,
                 ]
                 if first_xclbin.xclbin_input is not None:
                     compile_cmd += [
-                        "--xclbin-input=" + str(first_xclbin.xclbin_input.path)
+                        "--xclbin-input=" + first_xclbin.xclbin_input.filename
                     ]
             if do_compile_insts_bin:
-                first_insts_bin = mlir_sources_to_insts_bins[mlir_source][
+                first_insts_bin = mlir_sources_to_insts[mlir_source][
                     0
-                ]  # FIXME: this does not handle the case of multiple insts.bins with different flags from the same MLIR
+                ]  # TODO: this does not handle the case of multiple insts.bins with different flags from the same MLIR
                 if not do_compile_xclbin:
                     compile_cmd += ["--no-compile"]
                 compile_cmd += first_insts_bin.extra_flags + [
                     "--aie-generate-npu",
-                    "--npu-insts-name=" + str(first_insts_bin.path),
+                    "--npu-insts-name=" + first_insts_bin.filename,
                 ]
-            compile_cmd += [str(mlir_source.path)]
+            compile_cmd += [mlir_source.filename]
 
-            env = os.environ.copy()
-            logging.debug(f"Compiling MLIR with command: {' '.join(compile_cmd)}")
-            if not self.dry_run:
-                result = subprocess.run(
-                    compile_cmd,
-                    cwd=str(self.build_dir),
-                    capture_output=True,
-                    text=True,
-                    timeout=300,
-                    env=env,
-                )
-                if result.returncode == 0:
-                    logging.debug(
-                        f"Successfully compiled {mlir_source.path} to {', '.join([str(first_xclbin.path)] if do_compile_xclbin else [] + [str(first_insts_bin.path)] if do_compile_insts_bin else [])}"
-                    )
-                else:
-                    raise RuntimeError(
-                        f"MLIR compilation for {mlir_source.path} failed: {result.stderr}"
-                    )
+            ShellCompilationCommand(compile_cmd, cwd=str(self.build_dir))
 
-                # There may be multiple targets that require an xclbin/insts.bin from the same MLIR with different names; copy them
-                for sources_to in [mlir_sources_to_xclbins, mlir_sources_to_insts_bins]:
-                    if sources_to.get(mlir_source, [])[1:]:
-                        copy_src = sources_to[mlir_source][0]
-                        for copy_dest in sources_to[mlir_source][1:]:
-                            shutil.copy(copy_src.path, copy_dest.path)
+            # There may be multiple targets that require an xclbin/insts.bin from the same MLIR with different names; copy them
+            for sources_to in [mlir_sources_to_xclbins, mlir_sources_to_insts]:
+                if sources_to.get(mlir_source, [])[1:]:
+                    copy_src = sources_to[mlir_source][0]
+                    for copy_dest in sources_to[mlir_source][1:]:
+                        shutil.copy(copy_src.filename, copy_dest.filename)
+        
+        # Update graph
+        for artifact in worklist:
+            artifact.available = True
 
-            else:
-                for sources_to in [mlir_sources_to_xclbins, mlir_sources_to_insts_bins]:
-                    for artifact in sources_to.get(mlir_source, []):
-                        self.dry_run.append(
-                            f"pushd {str(self.build_dir)} && {' '.join(compile_cmd)} && popd"
-                        )
-                        artifact.fake_available = True
-
-        # With the newly generated files, is_available() should now return True on the Xclbin and InstsBin targets
         return artifacts
 
 
@@ -440,7 +420,7 @@ class PeanoCompilationRule(CompilationRule):
             isinstance(artifact, KernelObjectArtifact)
             and all(
                 isinstance(dependency, SourceArtifact) and dependency.is_available()
-                for dependency in artifact.depends
+                for dependency in artifact.dependencies
             )
             for artifact in artifacts
         )
@@ -453,11 +433,11 @@ class PeanoCompilationRule(CompilationRule):
             if not isinstance(artifact, KernelObjectArtifact):
                 continue
 
-            if len(artifact.depends) != 1:
+            if len(artifact.dependencies) != 1:
                 raise RuntimeError(
                     "Expected exactly one dependency (the C source code) for KernelObjectArtifact"
                 )
-            source_file = artifact.depends[0]
+            source_file = artifact.dependencies[0]
             if not isinstance(source_file, SourceArtifact):
                 raise RuntimeError(
                     "Expected KernelObject dependency to be a C source file"
@@ -477,7 +457,7 @@ class PeanoCompilationRule(CompilationRule):
                     f"-I{str(include_path)}",
                 ]
                 + artifact.extra_flags
-                + ["-c", str(source_file.path), "-o", str(artifact.path)]
+                + ["-c", source_file.filename, "-o", artifact.filename]
             )
             logging.debug(f"Running compilation command: {' '.join(cmd)}")
 
@@ -485,7 +465,7 @@ class PeanoCompilationRule(CompilationRule):
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 if result.returncode != 0:
                     raise RuntimeError(f"Compilation failed: {result.stderr}")
-                logging.debug(f"Successfully compiled: {artifact.path.name}")
+                logging.debug(f"Successfully compiled: {artifact.filename}")
             else:
                 artifact.fake_available = True
                 self.dry_run.append(" ".join(cmd))
@@ -505,13 +485,13 @@ class PeanoCompilationRule(CompilationRule):
                 "--redefine-sym",
                 f"{old_sym}={new_sym}",
             ]
-        cmd += [str(artifact.path)]
+        cmd += [artifact.filename]
 
         logging.debug(f"Running renaming command: {' '.join(cmd)}")
         if self.dry_run is None:
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
-                logging.info(f"Successfully renamed symbols in: {artifact.path.name}")
+                logging.info(f"Successfully renamed symbols in: {artifact.filename}")
             else:
                 raise RuntimeError(f"Symbol renaming failed: {result.stderr}")
         else:
@@ -526,7 +506,7 @@ class ArchiveCompilationRule(CompilationRule):
 
     def matches(self, artifacts):
         return any(
-            isinstance(artifact, KernelArchiveArtifact) and len(artifact.depends) > 0
+            isinstance(artifact, KernelArchiveArtifact) and len(artifact.dependencies) > 0
             for artifact in artifacts
         )
 
@@ -537,10 +517,10 @@ class ArchiveCompilationRule(CompilationRule):
                 continue
 
             # Get archive filename from method
-            archive_path = str(artifact.path)
+            archive_path = artifact.filename
             object_files = [
-                str(dep.path)
-                for dep in artifact.depends
+                dep.filename
+                for dep in artifact.dependencies
                 if isinstance(dep, KernelObjectArtifact)
             ]
 
@@ -573,59 +553,3 @@ class ArchiveCompilationRule(CompilationRule):
                 self.dry_run.append(" ".join(cmd))
 
         return artifacts
-
-
-# Global Functions
-# --------------------------------------------------------------------------
-
-
-def apply_rules(rules, artifacts):
-    for rule in rules:
-        if rule.matches(artifacts):
-            logging.debug(f"Applying rule: {rule.__class__.__name__}")
-            artifacts = rule.compile(artifacts)
-            break
-    else:
-        # None of the rules matched
-        return False, artifacts
-
-    return True, artifacts
-
-
-def compile(rules, artifacts):
-    # While some artifacts remain to be compiled (not all are available)
-    while not all(artifact.is_available() for artifact in artifacts):
-        remaining = [artifact for artifact in artifacts if not artifact.is_available()]
-        success, artifacts = apply_rules(rules, remaining)
-        if not success:
-            raise RuntimeError(
-                f"No matching rule to compile target(s): {', '.join(str(artifact.path.name) for artifact in artifacts if not artifact.is_available())}"
-            )
-    return artifacts
-
-
-def get_work_list(artifacts):
-    """
-    Return a flattened artifact creation worklist in reverse topological order from dependencies.
-    The returned list will start with leaf nodes (artifacts with no dependencies), and any following artifacts will only contain artifacts from earlier in the list.
-    """
-    work_list = []
-    todo = list(artifacts)
-    visited = set()
-
-    def dfs_visit(artifact):
-        if artifact in visited:
-            # Thanks to uniquing of artifact objects, this avoids duplicate creation of the same artifacts
-            return
-        visited.add(artifact)
-        # First visit all dependencies, so put leaves first (post-order) ...
-        for dep in artifact.depends:
-            dfs_visit(dep)
-        #  ... then put parent
-        if not artifact.is_available():
-            work_list.append(artifact)
-
-    for artifact in todo:
-        dfs_visit(artifact)
-
-    return work_list
