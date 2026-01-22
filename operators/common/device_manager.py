@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Dict, Optional, Any
 import pyxrt
-from aie.iron.hostruntime.config import detect_npu_device
+from aie.utils.hostruntime.xrtruntime.hostruntime import XRTHostRuntime
 from aie.iron.device import NPU1, NPU2
 
 
@@ -33,7 +33,7 @@ class AIEDeviceManager:
         AIEDeviceManager._initialized = True
         
         self.device = pyxrt.device(0)
-        self.device_type = detect_npu_device()
+        self.device_type = XRTHostRuntime().device()
         self.contexts = {}  # xclbin_path -> (context, xclbin)
         self.kernels = {}  # (xclbin_path, kernel_name) -> kernel
 
