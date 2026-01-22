@@ -132,7 +132,7 @@ def rope(
 
     # Runtime operations to move data to/from the AIE-array
     rt = Runtime()
-    with rt.sequence(tensor_ty, tensor_ty, tensor_ty) as (A, B, C):
+    with rt.sequence(tensor_ty, angle_ty, tensor_ty) as (A, B, C):
         rt.start(*my_workers)
 
         # Initialize a group for parallel drain tasks, with fill resources free'd when drains complete.

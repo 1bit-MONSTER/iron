@@ -226,6 +226,64 @@ class AIELlamaOperators:
         ).compile()
         self.decode.post_attn_fused = self.decode.post_attn_fused_op.get_callable()
         
+        # Fused operator for attention projections + RoPE (decode)
+        gemv_attn_query_op = AIEGEMV(
+            M=config.n_heads * config.head_dim,
+            K=config.emb_dim,
+            num_aie_columns=8,
+            tile_size_input=4,
+            tile_size_output=config.head_dim // 2,
+            context=elf_ctx
+        )
+        
+        gemv_attn_key_value_op = AIEGEMV(
+            M=config.n_kv_groups * config.head_dim,
+            K=config.emb_dim,
+            num_aie_columns=8,
+            tile_size_input=4,
+            tile_size_output=config.head_dim // 2,
+            context=elf_ctx
+        )
+        
+        rope_queries_op = AIERope(
+            rows=1 * config.n_heads,
+            cols=config.head_dim,
+            angle_rows=1,
+            context=elf_ctx
+        )
+        
+        rope_keys_op = AIERope(
+            rows=1 * config.n_kv_groups,
+            cols=config.head_dim,
+            angle_rows=1,
+            context=elf_ctx
+        )
+        
+        self.decode.attn_proj_rope_fused_op = FusedMLIROperator(
+            "attn_proj_rope_decode",
+            [
+                (gemv_attn_query_op, "W_attn_query", "x_norm", "queries"),
+                (gemv_attn_key_value_op, "W_attn_key", "x_norm", "keys"),
+                (gemv_attn_key_value_op, "W_attn_value", "x_norm", "values"),
+                (rope_queries_op, "queries", "rope_angles", "queries"),
+                (rope_keys_op, "keys", "rope_angles", "keys"),
+            ],
+            input_args=[
+                "W_attn_query",
+                "W_attn_key",
+                "W_attn_value",
+                "x_norm",
+                "rope_angles"
+            ],
+            output_args=[
+                "queries",
+                "keys",
+                "values"
+            ],
+            context=elf_ctx
+        ).compile()
+        self.decode.attn_proj_rope_fused = self.decode.attn_proj_rope_fused_op.get_callable()
+        
         # Attention score scaling operators
         # FIXME: Using elementwise mul is very wasteful (of bandwidth) here since it's the same scalar factor for all values; need a kernel that allows scalar multiplication of a vector
         self.prefill.attn_scale = AIEElementwiseMul(
@@ -951,14 +1009,25 @@ def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_i
     context_len = num_preceding_tokens + 1
     group_size = config.n_heads // config.n_kv_groups
 
-    # Step 1: Linear projections - write directly to queries/keys/values buffers
-    aie_ops.decode.gemv_attn_query(aie_buffers.W_attn_query_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.queries)
-    aie_ops.decode.gemv_attn_key_value(aie_buffers.W_attn_key_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.keys)
-    aie_ops.decode.gemv_attn_key_value(aie_buffers.W_attn_value_decode[layer_idx], aie_buffers.decode.x_norm, aie_buffers.decode.values)
+    # Step 1-2: Fused attention projections + RoPE
+    fused_op = aie_ops.decode.attn_proj_rope_fused
+    fused_op.input_buffer.view_as_torch().to("cpu")[:] = 0
+    fused_op.output_buffer.view_as_torch().to("cpu")[:] = 0
+    fused_op.scratch_buffer.view_as_torch().to("cpu")[:] = 0
+    fused_op.get_buffer("W_attn_query").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_query_decode[layer_idx].to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("W_attn_key").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_key_decode[layer_idx].to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("W_attn_value").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_value_decode[layer_idx].to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("x_norm").to("cpu").view_as_torch()[:] = aie_buffers.decode.x_norm.to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("rope_angles").to("cpu").view_as_torch()[:] = aie_buffers.decode.rope_angles.to("cpu").view_as_torch().flatten()
     
-    # Step 2: Apply RoPE - use same buffers for input and output
-    aie_ops.decode.rope_queries(aie_buffers.decode.queries, aie_buffers.decode.rope_angles, aie_buffers.decode.queries)
-    aie_ops.decode.rope_keys(aie_buffers.decode.keys, aie_buffers.decode.rope_angles, aie_buffers.decode.keys)
+    fused_op()
+    
+    aie_buffers.decode.queries.to("cpu").view_as_torch().view(-1)[:] = fused_op.get_buffer("queries").to("cpu").view_as_torch().flatten()
+    aie_buffers.decode.keys.to("cpu").view_as_torch().view(-1)[:] = fused_op.get_buffer("keys").to("cpu").view_as_torch().flatten()
+    aie_buffers.decode.values.to("cpu").view_as_torch().view(-1)[:] = fused_op.get_buffer("values").to("cpu").view_as_torch().flatten()
+    aie_buffers.decode.queries.to("npu")
+    aie_buffers.decode.keys.to("npu")
+    aie_buffers.decode.values.to("npu")
     
     # Step 3: Update cache using strided copy on NPU (transpose and concatenate)
     # Cache is already on NPU from prefill initialization or previous decode iteration
