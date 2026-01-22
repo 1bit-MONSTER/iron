@@ -122,11 +122,11 @@ def setup_autofused():
     swiglu_fused = swiglu_fused_op.compile().get_callable()
 
 def run_autofused():
-    swiglu_fused.get_buffer("x_norm").view_as_torch()[:] = buf_x_norm.view_as_torch()
-    swiglu_fused.get_buffer("W_ffn_gate").view_as_torch()[:] = buf_W_ffn_gate.view_as_torch()
-    swiglu_fused.get_buffer("W_ffn_up").view_as_torch()[:] = buf_W_ffn_up.view_as_torch()
-    swiglu_fused.get_buffer("W_ffn_down").view_as_torch()[:] = buf_W_ffn_down.view_as_torch()
-    swiglu_fused.get_buffer("ffn_output").view_as_torch()[:] = buf_ffn_output.view_as_torch()
+    swiglu_fused.get_buffer("x_norm").view_as_torch()[:] = buf_x_norm.view_as_torch().flatten()
+    swiglu_fused.get_buffer("W_ffn_gate").view_as_torch()[:] = buf_W_ffn_gate.view_as_torch().flatten()
+    swiglu_fused.get_buffer("W_ffn_up").view_as_torch()[:] = buf_W_ffn_up.view_as_torch().flatten()
+    swiglu_fused.get_buffer("W_ffn_down").view_as_torch()[:] = buf_W_ffn_down.view_as_torch().flatten()
+    swiglu_fused.get_buffer("ffn_output").view_as_torch()[:] = buf_ffn_output.view_as_torch().flatten()
     swiglu_fused()
     return swiglu_fused.get_buffer("ffn_output").view_as_torch()
 

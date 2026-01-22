@@ -129,25 +129,19 @@ class FusedMLIROperator(AIEOperatorBase):
 
 class FullELFCallable:
     def __init__(self, op, device_name="main", sequence_name="sequence", device_manager=None):
-        # std::string kernelName = "main:sequence";
-        # xrt::elf ctx_elf{"aie.elf"};
-        # xrt::hw_context context = xrt::hw_context(device, ctx_elf);
-        # auto kernel = xrt::ext::kernel(context, kernelName);
         self.device_manager = device_manager or AIEDeviceManager()
         self.xrt_elf = pyxrt.elf(op.artifacts[0].filename)
         self.xrt_module = pyxrt.module(self.xrt_elf)
-        #self.xrt_context = self.xrt_module.get_hw_context()
-        self.xrt_context = pyxrt.hw_context(self.device_manager.device, self.xrt_module.get_cfg_uuid())
-        self.xrt_kernel = pyxrt.kernel(self.xrt_context, f"{device_name}:{sequence_name}")
+        self.xrt_context = pyxrt.hw_context(self.device_manager.device, self.xrt_elf)
+        self.xrt_kernel = pyxrt.ext.kernel(self.xrt_context, f"{device_name}:{sequence_name}")
     
     def __call__(self, *args):
-        pass
-        #run = pyxrt.run(self.xrt_kernel)
-        #for i, arg in enumerate(args):
-        #    assert isinstance(arg, pyxrt.bo), f"Argument {i} is not a pyxrt.bo"
-        #    run.set_arg(i, arg)
-        #run.start()
-        #run.wait2()
+        run = pyxrt.run(self.xrt_kernel)
+        for i, arg in enumerate(args):
+            assert isinstance(arg, pyxrt.bo), f"Argument {i} is not a pyxrt.bo"
+            run.set_arg(i, arg)
+        run.start()
+        run.wait2()
 
 class FusedFullELFCallable(FullELFCallable):
     def __init__(self, op, device_manager=None):
@@ -223,7 +217,7 @@ class FusedFullELFCallable(FullELFCallable):
         self.output_buffer.to("npu")
         self.scratch_buffer.to("npu")
         super().__call__(
-            self.input_buffer.xrt_bo if self.input_buffer else None,
-            self.output_buffer.xrt_bo if self.output_buffer else None,
-            self.scratch_buffer.xrt_bo if self.scratch_buffer else None,
+            self.input_buffer.bo if self.input_buffer else None,
+            self.output_buffer.bo if self.output_buffer else None,
+            self.scratch_buffer.bo if self.scratch_buffer else None,
         )
