@@ -121,13 +121,19 @@ def fuse_mlir(artifact):
                 }
                 
                 # Execute operations in runlist order
+                configure_op = None
+                last_op_name = None
                 for op_name, *buffer_names in artifact.runlist:
                     expected_arg_types = sequence_arg_types[op_name]
 
-                    # Configure Op
-                    configure_sym_ref_attr = ir.FlatSymbolRefAttr.get(op_name)
-                    configure_op = aiex.ConfigureOp(configure_sym_ref_attr) # TODO: optimization -- if previous op was in the same device, skip reconfiguration
-                    configure_body = configure_op.body.blocks.append()
+                    # Avoid reconfiguring altogether if the same op is called multiple times consecutively
+                    if configure_op is None or op_name != last_op_name:
+                        # Configure Op
+                        configure_sym_ref_attr = ir.FlatSymbolRefAttr.get(op_name)
+                        configure_op = aiex.ConfigureOp(configure_sym_ref_attr) # TODO: optimization -- if previous op was in the same device, skip reconfiguration
+                        configure_body = configure_op.body.blocks.append()
+                        last_op_name = op_name
+                    
                     with ir.InsertionPoint(configure_body):
                         
                         # For each buffer, add subview and reinterpret_cast ops

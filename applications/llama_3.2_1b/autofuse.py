@@ -32,7 +32,7 @@ hidden_dim = 8192
 gemv_ffn_up_gate_op = AIEGEMV(
     M=hidden_dim,
     K=emb_dim,
-    num_aie_columns=1,
+    num_aie_columns=8,
     tile_size_input=4,
     tile_size_output=hidden_dim // 8,
 )
@@ -40,7 +40,7 @@ gemv_ffn_up_gate_op = AIEGEMV(
 gemv_ffn_down_op = AIEGEMV(
     M=emb_dim,
     K=hidden_dim,
-    num_aie_columns=1,
+    num_aie_columns=8,
     tile_size_input=1,
     tile_size_output=emb_dim // 8,
 )
@@ -48,13 +48,13 @@ gemv_ffn_down_op = AIEGEMV(
 silu_ffn_op = AIESiLU(
     size=hidden_dim,
     tile_size=hidden_dim // 8,
-    num_aie_columns=1,
+    num_aie_columns=8,
 )
 
 eltwise_mul_ffn_op = AIEElementwiseMul(
     size=hidden_dim,
     tile_size=hidden_dim // 8,
-    num_aie_columns=1,
+    num_aie_columns=8,
 )
 
 
