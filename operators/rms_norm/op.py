@@ -70,7 +70,7 @@ class AIERMSNorm(SingleMLIRSourceOperator):
                 0,
             ],
             callback_kwargs={
-                "archive_name": f"{self.get_operator_name()}.a",
+                "kernel_archive": f"{self.get_operator_name()}.a",
             }
         )
 

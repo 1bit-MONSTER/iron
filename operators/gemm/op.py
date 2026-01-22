@@ -108,7 +108,6 @@ class AIEGEMM(SingleMLIRSourceOperator):
                 "prio_accuracy": prio_accuracy,
                 "separate_c_tiles": int(separate_c_tiles),
                 "trace_size": 0,
-                "archive": self.get_kernel_archive_name(),
                 "generate_taps": False,
             },
             requires_context=False,
@@ -162,11 +161,6 @@ class AIEGEMM(SingleMLIRSourceOperator):
             )
         ]
     
-    def get_kernel_archive_name(self):
-        return (
-            f"gemm_{self.tile_m}x{self.tile_k}x{self.tile_n}_{int(self.b_col_maj)}_{int(self.c_col_maj)}.a"
-        )
-
     def get_arg_spec(self):
         return [
             AIERuntimeArgSpec("in", (self.M, self.K)),  # input A

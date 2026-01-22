@@ -11,11 +11,11 @@ from aie.iron import Kernel, ObjectFifo, Program, Runtime, Worker, Buffer, Worke
 from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1, NPU2
 from aie.helpers.taplib.tap import TensorAccessPattern
-from aie.helpers.dialects.ext.scf import _for as range_
+from aie.helpers.dialects.scf import _for as range_
 from ml_dtypes import bfloat16
 
 
-def softmax(dev, num_elements, num_aie_columns, num_channels, trace_size, tile_size, rtp_vector_size=None):
+def softmax(dev, num_elements, num_aie_columns, num_channels, trace_size, tile_size, rtp_vector_size=None, kernel_archive="softmax.a", func_prefix=""):
     per_tile_elements = tile_size
     if rtp_vector_size is None:
         rtp_vector_size = per_tile_elements
@@ -45,8 +45,8 @@ def softmax(dev, num_elements, num_aie_columns, num_channels, trace_size, tile_s
     ]
 
     # AIE Core Function declaration
-    softmax_kernel = Kernel("softmax_bf16", "softmax.o", [tile_ty, tile_ty, np.int32])
-    mask_kernel = Kernel("mask_bf16", "softmax.o", [tile_ty, np.int32, np.int32])
+    softmax_kernel = Kernel(f"{func_prefix}softmax_bf16", kernel_archive, [tile_ty, tile_ty, np.int32])
+    mask_kernel = Kernel(f"{func_prefix}mask_bf16", kernel_archive, [tile_ty, np.int32, np.int32])
 
     # Define a task that will run on a compute tile
     def core_body(of_in1, of_out, softmax_kernel, mask_kernel, rtp, barrier):

@@ -13,12 +13,12 @@ import time
 repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(repo_root))
 
-from operators.common.aie_context import AIEContext
+from operators.common.context import AIEContext
 from operators.common import (
     AIEBuffer
 )
 from operators.common.utils import torch_to_numpy, numpy_to_torch
-from operators.common.aie_base import PatchableSingleXclbinCallable
+from operators.common.base import PatchableSingleXclbinCallable
 from operators import (
     AIERMSNorm,
     AIEGEMM,
@@ -212,9 +212,9 @@ class AIELlamaOperators:
         ).compile()
         
         self.decode.softmax = PatchableSingleXclbinCallable(
-            xclbin_path=self.decode.softmax_compilable.xclbin_artifact.path,
+            xclbin_path=self.decode.softmax_compilable.xclbin_artifact.filename,
             kernel_name=self.decode.softmax_compilable.xclbin_artifact.kernel_name,
-            insts_bin_path=self.decode.softmax_compilable.insts_artifact.path,
+            insts_bin_path=self.decode.softmax_compilable.insts_artifact.filename,
             args_spec=self.decode.softmax_compilable.get_arg_spec()
         )
         
@@ -267,9 +267,9 @@ class AIELlamaOperators:
         
         # Create patchable callable for runtime offset updates
         self.decode.strided_copy_cache = PatchableSingleXclbinCallable(
-            xclbin_path=self.decode.strided_copy_cache_compilable.xclbin_artifact.path,
+            xclbin_path=self.decode.strided_copy_cache_compilable.xclbin_artifact.filename,
             kernel_name=self.decode.strided_copy_cache_compilable.xclbin_artifact.kernel_name,
-            insts_bin_path=self.decode.strided_copy_cache_compilable.insts_artifact.path,
+            insts_bin_path=self.decode.strided_copy_cache_compilable.insts_artifact.filename,
             args_spec=self.decode.strided_copy_cache_compilable.get_arg_spec()
         )
 

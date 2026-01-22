@@ -57,7 +57,6 @@ class AIERope(SingleMLIRSourceOperator):
                 self.num_aie_columns,
                 0,
                 self.method_type,
-                self.get_kernel_archive_name(),
             ],
         )
 

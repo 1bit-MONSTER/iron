@@ -286,5 +286,5 @@ class PatchableSingleXclbinCallable(SingleXclbinCallable):
         insts = self.insts_buffer.view_as_np()
         insts[:] = self.baseline_instructions
         for pos, (val, mask) in patches.items():
-            insts[pos] = (insts[pos] & ~mask) | (val & mask)
+            insts[pos] = (np.int64(insts[pos]) & ~mask) | (val & mask)
         self.insts_buffer.to("npu")
