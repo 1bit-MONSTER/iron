@@ -29,7 +29,7 @@ class AIEOperatorBase(ABC):
     """Base class for AIE-accelerated operations"""
 
     def __init__(self, context=None):
-        self.artifacts = (
+        self.artifacts = comp.CompilationArtifactGraph(
             []
         )  # CompilationArtifact objects are uniqued within the context
         if context is None:
@@ -67,12 +67,12 @@ class AIEOperatorBase(ABC):
         Subclasses are expected to overwrite set_up(); they may register any artifacts that they need to be compiled there.
         """
         self.set_up_artifacts()
-        artifacts = comp.CompilationArtifactGraph(self.artifacts)
-        comp.compile(self.context.compilation_rules, artifacts, self.context.build_dir, dry_run=dry_run)
+        comp.compile(self.context.compilation_rules, self.artifacts, self.context.build_dir, dry_run=dry_run)
         return self
 
     def add_artifacts(self, artifacts):
-        self.artifacts.extend(artifacts)
+        for artifact in artifacts:
+            self.artifacts.add(artifact)
 
 
 def sync_to_device(bos):

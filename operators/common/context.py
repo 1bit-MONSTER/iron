@@ -25,7 +25,7 @@ class AIEContext:
         # Disable the XRT runlist sacrifices performance by executing kernels individually as separate xclbin invocations for easier debugging (can tell which part of runlist execution failed)
         self.use_runlist = use_runlist
         self.compilation_rules = [
-            comp.FuseMLIRCompilationRule(),
+            comp.FusePythonGeneratedMLIRCompilationRule(),
             comp.GenerateMLIRFromPythonCompilationRule(),
             comp.PeanoCompilationRule(self.peano_dir, self.mlir_aie_dir),
             comp.ArchiveCompilationRule(self.peano_dir),

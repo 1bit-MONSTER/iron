@@ -189,7 +189,7 @@ def fuse_mlir(artifact):
 # ##########################################################################
 
 
-class FuseMLIRCompilationRule(CompilationRule):
+class FusePythonGeneratedMLIRCompilationRule(CompilationRule):
     """Compilation rule that fuses multiple MLIR modules into one."""
     
     def matches(self, graph):
@@ -199,7 +199,7 @@ class FuseMLIRCompilationRule(CompilationRule):
         commands = []
         worklist = graph.get_worklist(FusedMLIRSource)
         for artifact in worklist:
-            callback = lambda: fuse_mlir(artifact)
+            callback = lambda artifact=artifact: fuse_mlir(artifact)
             commands.append(PythonCallbackCompilationCommand(callback))
             new_artifact = SourceArtifact(artifact.filename)
             new_artifact.available = True

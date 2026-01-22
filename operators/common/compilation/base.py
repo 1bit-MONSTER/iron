@@ -40,7 +40,6 @@ import subprocess
 import importlib.util
 from contextlib import nullcontext
 from aie.extras.context import mlir_mod_ctx
-import copy
 import sys
 
 
@@ -53,18 +52,17 @@ def plan(rules, graph):
         return []  # Everything has been compiled
     for rule in rules:
         if rule.matches(graph):
-            new_graph = graph.copy()
-            commands = rule.compile(new_graph)
+            commands = rule.compile(graph)
             break
     else:
         raise RuntimeError(
             f"No matching rule to compile target(s): {', '.join(artifact.filename for artifact in graph)}"
         )
-    return [(rule, commands, graph)] + plan(rules, new_graph)
+    return [(rule, commands)] + plan(rules, graph)
 
 
-def execute(plan):
-    for rule, commands, _ in plan:
+def execute(plan_steps):
+    for rule, commands in plan_steps:
         logging.debug(f"Applying rule: {rule.__class__.__name__}")
         for command in commands:
             logging.debug(f"  Executing command: {command}")
@@ -82,7 +80,7 @@ def compile(rules, artifacts, build_dir="build", dry_run=False):
     if not dry_run:
         execute(plan_steps)
     else:
-        print("\n".join("\n".join(map(str, cmds)) for _, cmds, _ in plan_steps))
+        print("\n".join("\n".join(map(str, cmds)) for _, cmds in plan_steps))
 
 
 
@@ -135,21 +133,6 @@ class CompilationArtifactGraph:
             todo.extend(artifact.dependencies)
             yield artifact
 
-    def copy(self):
-        artifact_map = {}
-        
-        def copy_artifact(artifact):
-            if artifact in artifact_map:
-                return artifact_map[artifact]
-            new_artifact = copy.copy(artifact)
-            artifact_map[artifact] = new_artifact
-            new_deps = [copy_artifact(dep) for dep in artifact.dependencies]
-            new_artifact.dependencies = CompilationArtifactGraph(artifacts=new_deps)
-            return new_artifact
-        
-        new_artifacts = [copy_artifact(artifact) for artifact in self.artifacts]
-        return CompilationArtifactGraph(artifacts=new_artifacts)
-    
     def replace(self, old_artifact, new_artifact):
         for i, artifact in enumerate(self.artifacts):
             if artifact == old_artifact:
@@ -178,6 +161,9 @@ class CompilationArtifactGraph:
         for artifact in self.bfs():
             if not os.path.isabs(artifact.filename):
                 artifact.filename = str(Path(new_root) / Path(artifact.filename).name)
+    
+    def add(self, artifact):
+        self.artifacts.append(artifact)
 
 
 # Compilation Artifacts
@@ -360,10 +346,9 @@ class GenerateMLIRFromPythonCompilationRule(CompilationRule):
         commands = []
         worklist = graph.get_worklist(PythonGeneratedMLIRArtifact)
         for artifact in worklist:
-            assert len(artifact.dependencies) == 1 and isinstance(artifact.dependencies[0], SourceArtifact), "PythonGeneratedMLIRArtifact must depend on exactly one SourceArtifact"
-            import_path = Path(artifact.dependencies[0].filename)
             new_artifact = SourceArtifact(artifact.filename)
-            callback = lambda: self.generate_mlir(new_artifact, import_path, artifact.callback_fn, artifact.callback_args, artifact.callback_kwargs, artifact.requires_context)
+            # To make Python capture variables in this closure by value, not by reference, use default arguments
+            callback = lambda new_artifact=new_artifact, import_path=artifact.import_path, callback_fn=artifact.callback_fn, callback_args=artifact.callback_args, callback_kwargs=artifact.callback_kwargs, requires_context=artifact.requires_context: self.generate_mlir(new_artifact, import_path, callback_fn, callback_args, callback_kwargs, requires_context)
             commands.append(PythonCallbackCompilationCommand(callback))
             new_artifact.available = True
             graph.replace(artifact, new_artifact)

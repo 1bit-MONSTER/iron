@@ -32,7 +32,7 @@ hidden_dim = 8192
 gemv_ffn_up_gate_op = AIEGEMV(
     M=hidden_dim,
     K=emb_dim,
-    num_aie_columns=8,
+    num_aie_columns=4,
     tile_size_input=4,
     tile_size_output=hidden_dim // 8,
 )
@@ -40,7 +40,7 @@ gemv_ffn_up_gate_op = AIEGEMV(
 gemv_ffn_down_op = AIEGEMV(
     M=emb_dim,
     K=hidden_dim,
-    num_aie_columns=8,
+    num_aie_columns=4,
     tile_size_input=1,
     tile_size_output=emb_dim // 8,
 )
@@ -48,13 +48,13 @@ gemv_ffn_down_op = AIEGEMV(
 silu_ffn_op = AIESiLU(
     size=hidden_dim,
     tile_size=hidden_dim // 8,
-    num_aie_columns=8,
+    num_aie_columns=4,
 )
 
 eltwise_mul_ffn_op = AIEElementwiseMul(
     size=hidden_dim,
     tile_size=hidden_dim // 8,
-    num_aie_columns=8,
+    num_aie_columns=4,
 )
 
 
@@ -63,28 +63,20 @@ eltwise_mul_ffn_op = AIEElementwiseMul(
 
 # Create identity matrix for W_ffn_gate (repeating pattern for hidden_dim x emb_dim)
 # Each row i will pick element i % emb_dim from x_norm
-W_ffn_gate = torch.zeros(hidden_dim, emb_dim, dtype=torch.bfloat16)
-for i in range(hidden_dim):
-    W_ffn_gate[i, i % emb_dim] = 1.0
-
+W_ffn_gate = torch.randn(hidden_dim, emb_dim, dtype=torch.bfloat16)
 W_ffn_up = torch.randn(hidden_dim, emb_dim, dtype=torch.bfloat16)
-
-W_ffn_down = torch.zeros(emb_dim, hidden_dim, dtype=torch.bfloat16)
-for i in range(emb_dim):
-    W_ffn_down[i, i] = 1.0
-
+W_ffn_down = torch.randn(emb_dim, hidden_dim, dtype=torch.bfloat16)
 buf_W_ffn_gate = AIEBuffer.from_torch(W_ffn_gate)
 buf_W_ffn_up = AIEBuffer.from_torch(W_ffn_up)
 buf_W_ffn_down = AIEBuffer.from_torch(W_ffn_down)
 
 # Create x_norm as sequential indices: [0, 1, 2, 3, ..., emb_dim-1]
-x_norm = torch.arange(emb_dim, dtype=torch.bfloat16)
+x_norm = torch.randn(emb_dim, dtype=torch.bfloat16)
 buf_x_norm = AIEBuffer.from_torch(x_norm)
 buf_ffn_gate = AIEBuffer.from_torch(torch.zeros(hidden_dim, dtype=torch.bfloat16))
 buf_ffn_up = AIEBuffer.from_torch(torch.zeros(hidden_dim, dtype=torch.bfloat16))
-ffn_hidden = torch.arange(hidden_dim, dtype=torch.bfloat16)
-buf_ffn_hidden = AIEBuffer.from_torch(ffn_hidden)
-buf_ffn_output = AIEBuffer.from_torch(-1 * torch.arange(emb_dim, dtype=torch.bfloat16)) #torch.zeros(emb_dim, dtype=torch.bfloat16))
+buf_ffn_hidden = AIEBuffer.from_torch(torch.zeros(hidden_dim, dtype=torch.bfloat16))
+buf_ffn_output = AIEBuffer.from_torch(torch.zeros(emb_dim, dtype=torch.bfloat16))
 
 
 # Separate xclbins
@@ -146,7 +138,8 @@ def setup_autofused():
         ],
     )
     swiglu_fused_op.context = ctx
-    swiglu_fused = swiglu_fused_op.compile().get_callable()
+    swiglu_fused_op = swiglu_fused_op.compile()
+    swiglu_fused = swiglu_fused_op.get_callable()
 
     swiglu_fused.get_buffer("x_norm").view_as_torch()[:] = x_norm.flatten()
     swiglu_fused.get_buffer("W_ffn_gate").view_as_torch()[:] = W_ffn_gate.flatten()
