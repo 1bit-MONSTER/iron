@@ -15,7 +15,7 @@ from aie.iron.controlflow import range_
 from aie.helpers.util import np_ndarray_type_get_shape
 
 
-def my_eltwise_mul(dev, num_elements, num_columns, tile_size, trace_size, kernel_archive):
+def my_eltwise_mul(dev, num_elements, num_columns, tile_size, trace_size, kernel_archive, func_prefix=""):
     per_tile_elements = 4096 if tile_size > 4096 else tile_size
     n = per_tile_elements * num_columns
     if num_elements % n != 0:
@@ -37,7 +37,7 @@ def my_eltwise_mul(dev, num_elements, num_columns, tile_size, trace_size, kernel
 
     # AIE Core Function declaration
     eltwise_mul_bf16_vector = Kernel(
-        "eltwise_mul_bf16_vector", kernel_archive, [tile_ty, tile_ty, tile_ty, np.int32]
+        f"{func_prefix}eltwise_mul_bf16_vector", kernel_archive, [tile_ty, tile_ty, tile_ty, np.int32]
     )
 
     # Define a task that will run on a compute tile

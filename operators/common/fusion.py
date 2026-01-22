@@ -30,8 +30,12 @@ class FusedMLIROperator(AIEOperatorBase):
     def get_kernel_artifacts(self):
         """Collect all kernel artifacts from child operators."""
         kernel_artifacts = []
-        for op, *bufs in self.runlist:
-            kernel_artifacts.extend(op.get_kernel_artifacts())
+        unique_ops = set(op for op, *_ in self.runlist)
+        for idx, op in enumerate(unique_ops):
+            objs = op.get_kernel_artifacts()
+            for obj in objs:
+                obj.prefix_symbols = f"op{idx}_"
+            kernel_artifacts.extend(objs)
         return kernel_artifacts
     
     def get_mlir_artifact(self):
@@ -39,16 +43,22 @@ class FusedMLIROperator(AIEOperatorBase):
         operator_mlir_map = {}
         mlir_dependencies = []
         comp_runlist = []
-        
-        for idx, (op, *bufs) in enumerate(self.runlist):
+        op_names = {} # op -> op_name
+
+        unique_operators = set(op for op, *_ in self.runlist)
+        for idx, op in enumerate(unique_operators):
             mlir_artifact = op.get_mlir_artifact()
             if len(op.get_kernel_artifacts()) > 0:
                 # FIXME: currently hard-coding that the design will accept this argument as an input if it uses kernels
                 # Also not handling name collisions of kernels with the same name
                 mlir_artifact.callback_kwargs["kernel_archive"] = self.kernel_archive
-            op_name = f"{op.get_operator_name()}_{idx}"
+                mlir_artifact.callback_kwargs["func_prefix"] = f"op{idx}_"
+            op_name = f"op{idx}_{op.__class__.__name__}"
+            op_names[op] = op_name
             operator_mlir_map[op_name] = mlir_artifact
-            comp_runlist.append((op_name, *bufs))
+        
+        for op, *bufs in self.runlist:
+            comp_runlist.append((op_names[op], *bufs))
         
         # Calculate buffer layout: {buffer_name -> (type, offset, length)}
         self.subbuffer_layout, self.buffer_sizes = self._calculate_buffer_layout()

@@ -248,11 +248,11 @@ class InstsBinArtifact(CompilationArtifact):
 
 
 class KernelObjectArtifact(CompilationArtifact):
-    def __init__(self, filename, dependencies, extra_flags=None, rename_symbols=None):
+    def __init__(self, filename, dependencies, extra_flags=None, rename_symbols=None, prefix_symbols=None):
         super().__init__(filename, dependencies)
         self.extra_flags = extra_flags if extra_flags is not None else []
         self.rename_symbols = rename_symbols if rename_symbols is not None else {}
-
+        self.prefix_symbols = prefix_symbols
 
 class KernelArchiveArtifact(CompilationArtifact):
     pass
@@ -552,6 +552,8 @@ class PeanoCompilationRule(CompilationRule):
             commands.append(ShellCompilationCommand(cmd))
             if artifact.rename_symbols:
                 commands.extend(self._rename_symbols(artifact))
+            if artifact.prefix_symbols:
+                commands.extend(self._prefix_symbols(artifact, artifact.prefix_symbols))
             artifact.available = True
 
         return commands
@@ -567,6 +569,15 @@ class PeanoCompilationRule(CompilationRule):
                 f"{old_sym}={new_sym}",
             ]
         cmd += [artifact.filename]
+        return [ShellCompilationCommand(cmd)]
+    
+    def _prefix_symbols(self, artifact, prefix):
+        objcopy_path = "llvm-objcopy-18"
+        cmd = [
+            objcopy_path,
+            "--prefix-symbols=" + prefix,
+            artifact.filename,
+        ]
         return [ShellCompilationCommand(cmd)]
 
 
@@ -607,6 +618,15 @@ class ArchiveCompilationRule(CompilationRule):
 
             cmd = [str(ar_path), "rcs", archive_path] + object_files
             commands.append(ShellCompilationCommand(cmd))
+            
+            # Check for duplicate symbol definitions in the archive
+            check_cmd = [
+                "sh", "-c",
+                f"nm {archive_path} | grep ' [TDR] ' | awk '{{print $3}}' | sort | uniq -d | "
+                f"if read sym; then echo \"Error: Duplicate symbol in archive: $sym\" >&2; exit 1; fi"
+            ]
+            commands.append(ShellCompilationCommand(check_cmd))
+            
             artifact.available = True
 
         return commands
