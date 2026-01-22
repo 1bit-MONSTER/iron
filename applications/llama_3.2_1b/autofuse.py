@@ -61,17 +61,22 @@ eltwise_mul_ffn_op = AIEElementwiseMul(
 # Buffers
 # ---
 
-# Create identity matrix for W_ffn_gate (repeating pattern for hidden_dim x emb_dim)
-# Each row i will pick element i % emb_dim from x_norm
+x_norm = torch.randn(emb_dim, dtype=torch.bfloat16)
 W_ffn_gate = torch.randn(hidden_dim, emb_dim, dtype=torch.bfloat16)
 W_ffn_up = torch.randn(hidden_dim, emb_dim, dtype=torch.bfloat16)
 W_ffn_down = torch.randn(emb_dim, hidden_dim, dtype=torch.bfloat16)
+
+def init_random():
+    global x_norm, W_ffn_gate, W_ffn_up, W_ffn_down
+    x_norm = torch.randn(emb_dim, dtype=torch.bfloat16)
+    W_ffn_gate = torch.randn(hidden_dim, emb_dim, dtype=torch.bfloat16)
+    W_ffn_up = torch.randn(hidden_dim, emb_dim, dtype=torch.bfloat16)
+    W_ffn_down = torch.randn(emb_dim, hidden_dim, dtype=torch.bfloat16)
+
 buf_W_ffn_gate = AIEBuffer.from_torch(W_ffn_gate)
 buf_W_ffn_up = AIEBuffer.from_torch(W_ffn_up)
 buf_W_ffn_down = AIEBuffer.from_torch(W_ffn_down)
 
-# Create x_norm as sequential indices: [0, 1, 2, 3, ..., emb_dim-1]
-x_norm = torch.randn(emb_dim, dtype=torch.bfloat16)
 buf_x_norm = AIEBuffer.from_torch(x_norm)
 buf_ffn_gate = AIEBuffer.from_torch(torch.zeros(hidden_dim, dtype=torch.bfloat16))
 buf_ffn_up = AIEBuffer.from_torch(torch.zeros(hidden_dim, dtype=torch.bfloat16))
@@ -141,12 +146,20 @@ def setup_autofused():
     swiglu_fused_op = swiglu_fused_op.compile()
     swiglu_fused = swiglu_fused_op.get_callable()
 
+    #swiglu_fused.get_buffer("x_norm").view_as_torch()[:] = x_norm.flatten()
+    #swiglu_fused.get_buffer("W_ffn_gate").view_as_torch()[:] = W_ffn_gate.flatten()
+    #swiglu_fused.get_buffer("W_ffn_up").view_as_torch()[:] = W_ffn_up.flatten()
+    #swiglu_fused.get_buffer("W_ffn_down").view_as_torch()[:] = W_ffn_down.flatten()
+
+def run_autofused():
+    #swiglu_fused.output_buffer.view_as_torch()[:] = 0
+    #swiglu_fused.scratch_buffer.view_as_torch()[:] = 0
+    swiglu_fused.input_buffer.view_as_torch()[:] = 0
     swiglu_fused.get_buffer("x_norm").view_as_torch()[:] = x_norm.flatten()
+    swiglu_fused.get_buffer("W_ffn_gate").view_as_torch()[:] = W_ffn_gate.flatten()
     swiglu_fused.get_buffer("W_ffn_gate").view_as_torch()[:] = W_ffn_gate.flatten()
     swiglu_fused.get_buffer("W_ffn_up").view_as_torch()[:] = W_ffn_up.flatten()
     swiglu_fused.get_buffer("W_ffn_down").view_as_torch()[:] = W_ffn_down.flatten()
-
-def run_autofused():
     swiglu_fused()
     return swiglu_fused.get_buffer("ffn_output").to("cpu").view_as_torch()
 
@@ -165,31 +178,35 @@ def run_cpu():
 # Main
 # ---
 
-iters=100
+iters=10
 
 setup_autofused()
-t_autofused_start = time.time()
+#setup_separate_xclbins()
 for _ in range(iters):
+    init_random()
+
+    t_autofused_start = time.time()
     res_npu = run_autofused()
-t_autofused = time.time() - t_autofused_start
+    print("npu:")
+    print(res_npu)
+    t_autofused = time.time() - t_autofused_start
 
-setup_separate_xclbins()
-t_separate_start = time.time()
-for _ in range(iters):
-    res_npu_s = run_separate_xclbins()
-t_separate = time.time() - t_separate_start
+    #t_separate_start = time.time()
+    #for _ in range(iters):
+    #    res_npu_s = run_separate_xclbins()
+    #t_separate = time.time() - t_separate_start
 
-t_cpu_start = time.time()
-for _ in range(iters):
+    t_cpu_start = time.time()
     res_cpu = run_cpu()
-t_cpu = time.time() - t_cpu_start
+    print("cpu:")
+    print(res_cpu)
+    #assert(torch.allclose(res_npu[-1], res_cpu[-1], atol=0.7, rtol=0.07))
+    t_cpu = time.time() - t_cpu_start
 
-print(res_npu_s)
-print(res_npu)
-print(res_cpu)
+    #print(res_npu_s)
 
 
-print(f"Separate xclbins time: {t_separate/iters:.6f} seconds")
+#print(f"Separate xclbins time: {t_separate/iters:.6f} seconds")
 print(f"Autofused time:        {t_autofused/iters:.6f} seconds")
 print(f"CPU time:              {t_cpu/iters:.6f} seconds")
 assert(torch.allclose(res_npu[-1], res_cpu[-1], atol=0.7, rtol=0.07))
