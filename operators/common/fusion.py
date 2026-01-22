@@ -30,8 +30,11 @@ class FusedMLIROperator(AIEOperatorBase):
     def get_kernel_artifacts(self):
         """Collect all kernel artifacts from child operators."""
         kernel_artifacts = []
-        unique_ops = set(op for op, *_ in self.runlist)
-        for idx, op in enumerate(unique_ops):
+        unique_operators = []
+        for op, *_ in self.runlist:
+            if op not in unique_operators:
+                unique_operators.append(op)
+        for idx, op in enumerate(unique_operators):
             objs = op.get_kernel_artifacts()
             for obj in objs:
                 obj.prefix_symbols = f"op{idx}_"
@@ -45,7 +48,10 @@ class FusedMLIROperator(AIEOperatorBase):
         comp_runlist = []
         op_names = {} # op -> op_name
 
-        unique_operators = set(op for op, *_ in self.runlist)
+        unique_operators = []
+        for op, *_ in self.runlist:
+            if op not in unique_operators:
+                unique_operators.append(op)
         for idx, op in enumerate(unique_operators):
             mlir_artifact = op.get_mlir_artifact()
             if len(op.get_kernel_artifacts()) > 0:
