@@ -4,29 +4,31 @@
 """
 This file implements a simple Python-based build system. You specify what you
 want to compile (*artifacts*) through subclasses of `CompilationArtifact`.
-Each artifact can have a list of depenencies of other artifacts that it relies
-on. Each artifact corresponds to exactly one file. If a file with a matching
-name already exists, and all its dependencies are built and older than the file,
-then the existing file will be reused.
-
-For each file name, artifacts are singletons. You create artifacts by calling
-the `new` class method of the appropriate class. This ensures that artifact
-objects are uniqued, i.e., calling `new` twice with the same file name will
-return the same object.
+Multiple `CompilationArtifacts` form a `CompilationArtifactGraph`. Each artifact
+can have a list (subgraph) of depenencies of other artifacts that it relies on. 
+Each artifact corresponds to exactly one file.
 
 There is a special artifact for source files that do not need to get generated,
 `SourceArtifact`. It is likely that in your compilation dependency graph,
 the leaf nodes will be `SourceArtifact`s.
 
 You specify how to generate (compile) an artifact through *rules*, which are
-expressed as subclasses of `CompilationRule`. This class requires you to
-implement two methods: `matches` and `compile`. During compilation, we will
-call `matches` on the set of remaining artifacts to see if the given rule is
-able to produce any of the artifacts not available yet. If this function
-returns `True`, we will call `compile` on the rule to generate the artifact.
-`compile` returns a new list of artifacts, which may be the same one as
-before; however, if `matches()==True`, at least one of the artifacts in the
-list must be made available after calling `compile()`.
+expressed as subclasses of `CompilationRule`. Rules must implement two methods:
+`matches` and `compile`. If a rule `matches` to an artifact graph, it can be 
+applied. Applying a rule is done by calling `compile`; this transforms the 
+artifact graph (in the simplest case, marks one of the artifacts as available) 
+and returns a list of compilation commands.
+
+At this point, we can print the compilation commands to the console (dry-run)
+or actually run them to generate the artifacts.
+
+Before starting compilation, you may call 
+`populate_availability_from_filesystem()` -- this will check if any artifacts
+are already available at the given file paths (and ensure that dependencies are
+as old or older than the artifacts that depend on them). This way, you can avoid
+recompiling artifacts that are already up-to-date on disk. If you wish to
+regenerate everything, you can skip this step, but will at a minimum want to
+mark the `SourceArtifact`s as available -- they cannot be generated.
 """
 
 from abc import ABC, abstractmethod
@@ -39,6 +41,7 @@ import importlib.util
 from contextlib import nullcontext
 from aie.extras.context import mlir_mod_ctx
 import copy
+import sys
 
 
 # Global Functions
@@ -214,6 +217,14 @@ class SourceArtifact(CompilationArtifact):
     pass
 
 
+class FullElfArtifact(CompilationArtifact):
+    def __init__(self, filename, mlir_input, dependencies):
+        if mlir_input not in dependencies:
+            dependencies = dependencies + [mlir_input]
+        super().__init__(filename, dependencies)
+        self.mlir_input = mlir_input
+
+
 class XclbinArtifact(CompilationArtifact):
     def __init__(
         self, filename, mlir_input, dependencies, kernel_name="MLIR_AIE", extra_flags=None, xclbin_input=None
@@ -256,6 +267,8 @@ class PythonGeneratedMLIRArtifact(CompilationArtifact):
         callback_args=None,
         callback_kwargs=None,
         requires_context=False,
+        uses_kernel_archive=False,
+        kernel_archive=None
     ):
         self.import_path = import_path
         self.callback_fn = callback_fn
@@ -297,6 +310,9 @@ class ShellCompilationCommand(CompilationCommand):
             cwd=self.cwd,
             env=self.env,
         )
+        if 0 != result.returncode:
+            print(result.stdout)
+            print(result.stderr, file=sys.stderr)
         return 0 == result.returncode
 
     def __repr__(self):
@@ -380,13 +396,44 @@ class GenerateMLIRFromPythonCompilationRule(CompilationRule):
             f.write(mlir_code)
 
 
-class AieccXclbinInstsCompilationRule(CompilationRule):
+class AieccCompilationRule(CompilationRule, ABC):
     def __init__(self, build_dir, peano_dir, mlir_aie_dir, *args, **kwargs):
         self.build_dir = build_dir
         self.aiecc_path = Path(mlir_aie_dir) / "bin" / "aiecc.py"
         self.peano_dir = peano_dir
         super().__init__(*args, **kwargs)
 
+class AieccFullElfCompilationRule(AieccCompilationRule):
+    def matches(self, graph):
+        return any(graph.get_worklist(FullElfArtifact))
+    
+    def compile(self, graph):
+        worklist = graph.get_worklist(FullElfArtifact)
+        commands = []
+        
+        for artifact in worklist:
+            compile_cmd = [
+                "python",
+                str(self.aiecc_path),
+                "--no-compile-host",
+                "--no-xchesscc",
+                "--no-xbridge",
+                "--peano",
+                str(self.peano_dir),
+                "--dynamic-objFifos",
+                "--expand-load-pdis",
+                "--generate-full-elf",
+                "--full-elf-name",
+                artifact.filename,
+                artifact.mlir_input.filename,
+            ]
+            commands.append(ShellCompilationCommand(compile_cmd, cwd=str(self.build_dir)))
+            artifact.available = True
+        
+        return commands
+
+
+class AieccXclbinInstsCompilationRule(AieccCompilationRule):
     def matches(self, graph):
         return any(graph.get_worklist((XclbinArtifact, InstsBinArtifact)))
 

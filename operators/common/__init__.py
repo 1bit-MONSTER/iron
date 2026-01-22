@@ -3,14 +3,14 @@
 
 """Common utilities and base classes for IRON operators."""
 
-from .aie_base import (
+from .base import (
     AIEOperatorBase, 
     SingleMLIRSourceOperator,
     AIEBuffer,
     SingleXclbinCallable,
     AIERuntimeArgSpec,
 )
-from .aie_context import AIEContext
+from .context import AIEContext
 from .compilation import (
     XclbinArtifact,
     InstsBinArtifact,
@@ -19,4 +19,4 @@ from .compilation import (
     SourceArtifact,
     PythonGeneratedMLIRArtifact,
 )
-from .aie_device_manager import AIEDeviceManager
+from .device_manager import AIEDeviceManager

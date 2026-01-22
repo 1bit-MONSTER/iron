@@ -12,8 +12,8 @@ from ml_dtypes import bfloat16
 
 import aie.utils.config
 from . import compilation as comp
-from .aie_context import AIEContext
-from .aie_device_manager import AIEDeviceManager, pyxrt
+from .context import AIEContext
+from .device_manager import AIEDeviceManager, pyxrt
 from .utils import numpy_to_torch, torch_to_numpy
 from .compilation import (
     XclbinArtifact,
@@ -66,22 +66,9 @@ class AIEOperatorBase(ABC):
         Set up the operator and compile any necessary artifacts.
         Subclasses are expected to overwrite set_up(); they may register any artifacts that they need to be compiled there.
         """
-        context = self.context
         self.set_up_artifacts()
-        compilation_rules = [
-            comp.GenerateMLIRFromPythonCompilationRule(),
-            comp.PeanoCompilationRule(
-                context.peano_dir, context.mlir_aie_dir
-            ),
-            comp.ArchiveCompilationRule(context.peano_dir),
-            comp.AieccXclbinInstsCompilationRule(
-                context.build_dir,
-                context.peano_dir,
-                context.mlir_aie_dir,
-            ),
-        ]
         artifacts = comp.CompilationArtifactGraph(self.artifacts)
-        comp.compile(compilation_rules, artifacts, context.build_dir, dry_run=dry_run)
+        comp.compile(self.context.compilation_rules, artifacts, self.context.build_dir, dry_run=dry_run)
         return self
 
     def add_artifacts(self, artifacts):
@@ -106,6 +93,7 @@ def execute_runlist(runlist):
 class SingleMLIRSourceOperator(AIEOperatorBase, ABC):
     """Base class for AIE-accelerated operations"""
     def __init__(self, *args, **kwargs):
+        self.kernel_archive = f"{self.get_operator_name()}_kernels.a"
         AIEOperatorBase.__init__(self, *args, **kwargs)
 
     @abstractmethod
@@ -120,16 +108,17 @@ class SingleMLIRSourceOperator(AIEOperatorBase, ABC):
     def get_kernel_artifacts(self):
         pass
     
-    def get_kernel_archive_name(self):
-        return self.get_operator_name() + ".a"
-    
     def get_artifacts(self):
         operator_name = self.get_operator_name()
         mlir_artifact = self.get_mlir_artifact()
         kernel_deps_inputs = self.get_kernel_artifacts()
+        if len(kernel_deps_inputs) > 0:
+            # FIXME: currently hard-coding that the design will accept this argument as an input if it uses kernels
+            # Also not handling name collisions of kernels with the same name
+            mlir_artifact.callback_kwargs["kernel_archive"] = self.kernel_archive
         kernel_deps = [
                 KernelArchiveArtifact(
-                self.get_kernel_archive_name(),
+                self.kernel_archive,
                 dependencies=kernel_deps_inputs,
             )
         ] if kernel_deps_inputs else []

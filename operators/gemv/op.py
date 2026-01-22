@@ -56,7 +56,7 @@ class AIEGEMV(SingleMLIRSourceOperator):
         SingleMLIRSourceOperator.__init__(self, context=context)
 
     def get_operator_name(self):
-        return f"{self.M}x{self.K}_{self.tile_size_input}tsi_{self.tile_size_output}tso_{self.num_batches}batch_{self.num_aie_columns}col"
+        return f"gemv_{self.M}x{self.K}_{self.tile_size_input}tsi_{self.tile_size_output}tso_{self.num_batches}batch_{self.num_aie_columns}col"
 
     def get_mlir_artifact(self):
         operator_dir = Path(__file__).parent
@@ -73,19 +73,13 @@ class AIEGEMV(SingleMLIRSourceOperator):
                 self.tile_size_input,
                 self.tile_size_output,
                 self.num_batches,
-            ],
-            callback_kwargs={
-                "kernel_archive": self.get_kernel_archive_name(),
-            }
+            ]
         )
     
-    def get_kernel_archive_name(self):
-        return f"mv_{self.K}k.a"
-
     def get_kernel_artifacts(self):
         return [
             KernelObjectArtifact(
-                f"mv_{self.K}k.o",
+                f"gemv_{self.K}k.o",
                 dependencies=[
                     SourceArtifact(
                         self.context.base_dir / "aie_kernels" / "generic" / "mv.cc"

@@ -16,7 +16,7 @@ from aie.helpers.util import np_ndarray_type_get_shape
 
 
 def my_weighted_rms_norm(
-    dev, num_elements, num_columns, num_channels, weight_length, trace_size, archive_name="rms_norm.a"
+    dev, num_elements, num_columns, num_channels, weight_length, trace_size, kernel_archive="rms_norm.a"
 ):
     per_tile_elements = weight_length
     total_cores = num_columns  # For each core that does rms norm, another core will take its output to do eltwise mul
@@ -53,11 +53,11 @@ def my_weighted_rms_norm(
 
     # AIE Core Function declaration
     rms_norm_kernel = Kernel(
-        "rms_norm_bf16_vector", archive_name, [tile_ty, tile_ty, np.int32]
+        "rms_norm_bf16_vector", kernel_archive, [tile_ty, tile_ty, np.int32]
     )
     eltwise_mul_kernel = Kernel(
         "eltwise_mul_bf16_vector",
-        archive_name,
+        kernel_archive,
         [tile_ty, weights_ty, tile_ty, np.int32],
     )
 

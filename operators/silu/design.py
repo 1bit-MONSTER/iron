@@ -15,7 +15,7 @@ from aie.iron.controlflow import range_
 from aie.helpers.util import np_ndarray_type_get_shape
 
 
-def my_silu(dev, size, num_columns, tile_size, trace_size, archive_name):
+def my_silu(dev, size, num_columns, tile_size, trace_size, kernel_archive):
     xfr_dtype = bfloat16
     line_size = 4096 if tile_size > 4096 else tile_size
     line_type = np.ndarray[(line_size,), np.dtype[xfr_dtype]]
@@ -45,7 +45,7 @@ def my_silu(dev, size, num_columns, tile_size, trace_size, archive_name):
     # External, binary kernel definition
     silu_fcn = Kernel(
         "silu_bf16",
-        archive_name,
+        kernel_archive,
         [line_type, line_type, np.int32],
     )
 

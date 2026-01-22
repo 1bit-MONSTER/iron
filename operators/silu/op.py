@@ -40,9 +40,8 @@ class AIESiLU(SingleMLIRSourceOperator):
                 self.size,
                 self.num_aie_columns,
                 self.tile_size,
-                0,
-                self.get_kernel_archive_name(),
-            ],
+                0
+            ]
         )
 
     def get_kernel_artifacts(self):

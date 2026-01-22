@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 import os
 
-from .aie_device_manager import AIEDeviceManager, pyxrt
+from .device_manager import AIEDeviceManager, pyxrt
 from . import compilation as comp
 import aie.utils.config
 
@@ -24,7 +24,14 @@ class AIEContext:
         self.peano_dir = Path(aie.utils.config.peano_install_dir())
         # Disable the XRT runlist sacrifices performance by executing kernels individually as separate xclbin invocations for easier debugging (can tell which part of runlist execution failed)
         self.use_runlist = use_runlist
-        self._runtime_prepared = False
+        self.compilation_rules = [
+            comp.FuseMLIRCompilationRule(),
+            comp.GenerateMLIRFromPythonCompilationRule(),
+            comp.PeanoCompilationRule(self.peano_dir, self.mlir_aie_dir),
+            comp.ArchiveCompilationRule(self.peano_dir),
+            comp.AieccXclbinInstsCompilationRule(self.build_dir, self.peano_dir, self.mlir_aie_dir),
+            comp.AieccFullElfCompilationRule(self.build_dir, self.peano_dir, self.mlir_aie_dir),
+        ]
 
     def register_operator(self, operator):
         """Register an operator with this context"""

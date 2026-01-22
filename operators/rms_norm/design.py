@@ -15,7 +15,7 @@ from aie.iron.controlflow import range_
 from aie.helpers.util import np_ndarray_type_get_shape
 
 
-def my_rms_norm(dev, num_elements, num_columns, num_channels, trace_size, tile_size, archive_name="rms_norm.a"):
+def my_rms_norm(dev, num_elements, num_columns, num_channels, trace_size, tile_size, kernel_archive="rms_norm.a"):
     per_tile_elements = 8192 if tile_size > 8192 else tile_size
     n = per_tile_elements * num_columns
     if num_elements % n != 0:
@@ -46,7 +46,7 @@ def my_rms_norm(dev, num_elements, num_columns, num_channels, trace_size, tile_s
 
     # AIE Core Function declaration
     rms_norm_kernel = Kernel(
-        "rms_norm_bf16_vector", archive_name, [tile_ty, tile_ty, np.int32]
+        "rms_norm_bf16_vector", kernel_archive, [tile_ty, tile_ty, np.int32]
     )
 
     # Define a task that will run on a compute tile
