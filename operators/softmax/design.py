@@ -15,7 +15,7 @@ from aie.helpers.dialects.scf import _for as range_
 from ml_dtypes import bfloat16
 
 
-def softmax(dev, num_elements, num_aie_columns, num_channels, trace_size, tile_size, rtp_vector_size=None, kernel_archive="softmax.a", func_prefix=""):
+def softmax(dev, num_elements, num_aie_columns, num_channels, trace_size, tile_size, rtp_vector_size=None, mask_patch_value=0, kernel_archive="softmax.a", func_prefix=""):
     per_tile_elements = tile_size
     if rtp_vector_size is None:
         rtp_vector_size = per_tile_elements
@@ -118,7 +118,9 @@ def softmax(dev, num_elements, num_aie_columns, num_channels, trace_size, tile_s
         # Set run-time parameter for actual vector size (remainder is considered padding and ignored by the computation)
         def set_rtps(*args):
             for rtp in args:
-                rtp[0] = rtp_vector_size
+                rtp[0] = (
+                    rtp_vector_size if not mask_patch_value else mask_patch_value
+                )
 
         rt.inline_ops(set_rtps, rtps)
         

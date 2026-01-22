@@ -17,7 +17,7 @@ Strided copy design
 This can be useful for data layout manipulation and data copying such as:
 input[0, :, 0] -> output[:, 0, 0]
 """
-def strided_copy(dev, dtype, input_buffer_size, input_sizes, input_strides, input_offset, output_buffer_size, output_sizes, output_strides, output_offset, transfer_size=None, num_aie_channels=1):
+def strided_copy(dev, dtype, input_buffer_size, input_sizes, input_strides, input_offset, output_buffer_size, output_sizes, output_strides, output_offset, transfer_size=None, num_aie_channels=1, input_offset_patch_marker=0, output_offset_patch_marker=0):
     assert len(input_sizes) == len(input_strides)
     assert len(output_sizes) == len(output_strides)
 
@@ -42,8 +42,11 @@ def strided_copy(dev, dtype, input_buffer_size, input_sizes, input_strides, inpu
 
     input_taps = [
         TensorAccessPattern(
-            tensor_dims=(int(input_buffer_size),),
-            offset=input_offset + c * (input_sizes[input_highest_sz_idx] // num_aie_channels) * input_strides[input_highest_sz_idx],
+            tensor_dims=(int(input_buffer_size + input_offset_patch_marker),),
+            offset=(
+                input_offset_patch_marker if input_offset_patch_marker != 0 else
+                input_offset + c * (input_sizes[input_highest_sz_idx] // num_aie_channels) * input_strides[input_highest_sz_idx]
+            ),
             sizes=(
                 input_sizes[:input_highest_sz_idx]
                 + [input_sizes[input_highest_sz_idx] // num_aie_channels]
@@ -56,8 +59,11 @@ def strided_copy(dev, dtype, input_buffer_size, input_sizes, input_strides, inpu
 
     output_taps = [
         TensorAccessPattern(
-            tensor_dims=(int(output_buffer_size),),
-            offset=output_offset + c * (output_sizes[output_highest_sz_idx] // num_aie_channels) * output_strides[output_highest_sz_idx],
+            tensor_dims=(int(output_buffer_size + output_offset_patch_marker),),
+            offset=(
+                output_offset_patch_marker if output_offset_patch_marker != 0 else
+                output_offset + c * (output_sizes[output_highest_sz_idx] // num_aie_channels) * output_strides[output_highest_sz_idx]
+            ),
             sizes=(
                 output_sizes[:output_highest_sz_idx]
                 + [output_sizes[output_highest_sz_idx] // num_aie_channels]

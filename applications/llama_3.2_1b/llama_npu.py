@@ -347,6 +347,7 @@ class AIELlamaOperators:
             num_aie_columns=1,
             num_channels=1,
             rtp_vector_size=prompt_len,  # Compile with max size
+            mask_patch_value=0xBA5EBA11,  # Magic value for patching
             context=self.context
         ).compile()
         
@@ -356,6 +357,11 @@ class AIELlamaOperators:
             insts_bin_path=self.decode.softmax_compilable.insts_artifact.filename,
             args_spec=self.decode.softmax_compilable.get_arg_spec()
         )
+
+        self.decode.softmax_patch_offsets = [
+            i for i, x in enumerate(self.decode.softmax.insts_buffer.view_as_np())
+            if 0xBA5EBA11 == x
+        ]
         
         # RoPE operators
         # For queries: (seq_len, num_heads * head_dim) = (seq_len, 2048)
@@ -401,7 +407,8 @@ class AIELlamaOperators:
             input_buffer_size=1 * config.n_kv_groups * config.head_dim,
             output_buffer_size=config.n_kv_groups * prompt_len * config.head_dim,
             num_aie_channels=1,
-            context=self.context
+            context=self.context,
+            output_offset_patch_marker=0xDEADBEE0,
         ).compile()
         
         # Create patchable callable for runtime offset updates
@@ -411,6 +418,11 @@ class AIELlamaOperators:
             insts_bin_path=self.decode.strided_copy_cache_compilable.insts_artifact.filename,
             args_spec=self.decode.strided_copy_cache_compilable.get_arg_spec()
         )
+        self.decode.strided_copy_patch_offsets = [
+            i for i, x in enumerate(self.decode.strided_copy_cache.insts_buffer.view_as_np())
+            if (0xDEADBEE0 * 2) & 0xFFFFFFFF == x
+        ]
+        assert len(self.decode.strided_copy_patch_offsets) == 2, "Something else accidentally generated our magic offset"
 
         # Repeat interleave for keys: (n_kv_groups, context_len, head_dim) -> (n_heads, context_len, head_dim)
         # Compile with max context length, then patch at runtime for actual context_len
@@ -979,14 +991,17 @@ def patch_operators_for_decode(config, num_preceding_tokens):
     # Patch strided copy operator for cache offset
     output_offset = num_preceding_tokens * config.head_dim
     offset_val = output_offset * 2  # Multiply by 2 for bfloat16 byte offset
-    strided_copy_patches = {
-        39: (offset_val, 0xFFFFFFFF),
-        56: (offset_val, 0xFFFFFFFF),
+    strided_copy_patches = { 
+        i: (offset_val, 0xFFFFFFFF)
+        for i in aie_ops.decode.strided_copy_patch_offsets
     }
     aie_ops.decode.strided_copy_cache.patch(strided_copy_patches)
     
     # Patch softmax operator for actual context length
-    softmax_patches = {8: (context_len, 0xFFFFFFFF)}
+    softmax_patches = {
+        i: (context_len, 0xFFFFFFFF)
+        for i in aie_ops.decode.softmax_patch_offsets
+    }
     aie_ops.decode.softmax.patch(softmax_patches)
 
 

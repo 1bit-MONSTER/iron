@@ -16,7 +16,7 @@ from operators.common import (
 class AIESoftmax(SingleMLIRSourceOperator):
     """AIE-accelerated Softmax operation"""
 
-    def __init__(self, rows: int, cols: int, num_aie_columns=1, num_channels=1, rtp_vector_size=None, context=None):
+    def __init__(self, rows: int, cols: int, num_aie_columns=1, num_channels=1, rtp_vector_size=None, mask_patch_value=0, context=None):
         assert rows % 16 == 0, "rows must be multiple of 16"
         assert cols % 16 == 0, "cols must be multiple of 16"
         assert (rows * cols) % (num_aie_columns * cols) == 0, "size must be multiple of num_aie_columns * tile_size"
@@ -27,6 +27,7 @@ class AIESoftmax(SingleMLIRSourceOperator):
         self.num_aie_columns = num_aie_columns
         self.num_channels = num_channels
         self.rtp_vector_size = rtp_vector_size
+        self.mask_patch_value = mask_patch_value
         
         SingleMLIRSourceOperator.__init__(self, context=context)
 
@@ -50,6 +51,7 @@ class AIESoftmax(SingleMLIRSourceOperator):
                 0,  # trace_size
                 self.cols,
                 self.rtp_vector_size,
+                self.mask_patch_value
             ],
         )
 
