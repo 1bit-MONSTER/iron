@@ -424,8 +424,8 @@ class AieccFullElfCompilationRule(AieccCompilationRule):
                 "--expand-load-pdis",
                 "--generate-full-elf",
                 "--full-elf-name",
-                artifact.filename,
-                artifact.mlir_input.filename,
+                os.path.abspath(artifact.filename),
+                os.path.abspath(artifact.mlir_input.filename),
             ]
             commands.append(ShellCompilationCommand(compile_cmd, cwd=str(self.build_dir)))
             artifact.available = True
@@ -472,12 +472,12 @@ class AieccXclbinInstsCompilationRule(AieccCompilationRule):
                 ]  # TODO: this does not handle the case of multiple xclbins with different kernel names or flags from the same MLIR
                 compile_cmd += first_xclbin.extra_flags + [
                     "--aie-generate-xclbin",
-                    "--xclbin-name=" + first_xclbin.filename,
+                    "--xclbin-name=" + os.path.abspath(first_xclbin.filename),
                     "--xclbin-kernel-name=" + first_xclbin.kernel_name,
                 ]
                 if first_xclbin.xclbin_input is not None:
                     compile_cmd += [
-                        "--xclbin-input=" + first_xclbin.xclbin_input.filename
+                        "--xclbin-input=" + os.path.abspath(first_xclbin.xclbin_input.filename)
                     ]
             if do_compile_insts_bin:
                 first_insts_bin = mlir_sources_to_insts[mlir_source][
@@ -487,9 +487,9 @@ class AieccXclbinInstsCompilationRule(AieccCompilationRule):
                     compile_cmd += ["--no-compile"]
                 compile_cmd += first_insts_bin.extra_flags + [
                     "--aie-generate-npu",
-                    "--npu-insts-name=" + first_insts_bin.filename,
+                    "--npu-insts-name=" + os.path.abspath(first_insts_bin.filename),
                 ]
-            compile_cmd += [mlir_source.filename]
+            compile_cmd += [os.path.abspath(mlir_source.filename)]
 
             commands.append(ShellCompilationCommand(compile_cmd, cwd=str(self.build_dir)))
 

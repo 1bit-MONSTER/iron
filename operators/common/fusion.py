@@ -141,7 +141,9 @@ class FullELFCallable:
             assert isinstance(arg, pyxrt.bo), f"Argument {i} is not a pyxrt.bo"
             run.set_arg(i, arg)
         run.start()
-        run.wait2()
+        ret_code = run.wait()
+        if ret_code != pyxrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
+            raise RuntimeError(f"Kernel execution failed with return code {retcode}")
 
 class FusedFullELFCallable(FullELFCallable):
     def __init__(self, op, device_manager=None):
@@ -151,22 +153,22 @@ class FusedFullELFCallable(FullELFCallable):
         self.buffer_sizes = op.buffer_sizes
         
         input_buffer_size, output_buffer_size, scratch_buffer_size = self.buffer_sizes
-        bf16_itemsize = np.dtype(ml_dtypes.bfloat16).itemsize
+        itemsize = np.dtype(ml_dtypes.bfloat16).itemsize
         
         self.input_buffer = AIEBuffer(
-            shape=(input_buffer_size // bf16_itemsize,),
+            shape=(max(input_buffer_size, itemsize) // itemsize,),
             dtype=ml_dtypes.bfloat16
-        ) if input_buffer_size > 0 else None
+        ) 
         
         self.output_buffer = AIEBuffer(
-            shape=(output_buffer_size // bf16_itemsize,),
+            shape=(max(output_buffer_size, itemsize) // itemsize,),
             dtype=ml_dtypes.bfloat16
-        ) if output_buffer_size > 0 else None
+        ) 
         
         self.scratch_buffer = AIEBuffer(
-            shape=(scratch_buffer_size // bf16_itemsize,),
+            shape=(max(scratch_buffer_size, itemsize) // itemsize,),
             dtype=ml_dtypes.bfloat16
-        ) if scratch_buffer_size > 0 else None
+        ) 
         
         self._buffer_cache = {}
     
