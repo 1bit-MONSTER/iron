@@ -153,7 +153,16 @@ class AIELlamaOperators:
         
         elf_ctx = AIEContext(build_dir="build_elf")
         
-        # Fused SwiGLU operator for decode
+        # Fused operator for post-norm + SwiGLU + residual (decode)
+        rms_norm_op = AIERMSNorm(
+            size=config.emb_dim,
+            eps=1e-5,
+            num_aie_columns=1,
+            num_channels=2,
+            tile_size=config.emb_dim,
+            context=elf_ctx
+        )
+        
         gemv_ffn_up_gate_op = AIEGEMV(
             M=config.hidden_dim,
             K=config.emb_dim,
@@ -186,27 +195,36 @@ class AIELlamaOperators:
             context=elf_ctx
         )
         
-        self.decode.swiglu_fused_op = FusedMLIROperator(
-            "swiglu_decode",
+        residual_add_op = AIEElementwiseAdd(
+            size=config.emb_dim,
+            tile_size=config.emb_dim // 8,
+            context=elf_ctx
+        )
+        
+        self.decode.post_attn_fused_op = FusedMLIROperator(
+            "post_attn_decode",
             [
+                (rms_norm_op, "x_pre_norm", "W_norm2", "x_norm"),
                 (gemv_ffn_up_gate_op, "W_ffn_gate", "x_norm", "ffn_gate"),
                 (gemv_ffn_up_gate_op, "W_ffn_up", "x_norm", "ffn_up"),
                 (silu_ffn_op, "ffn_gate", "ffn_gate"),
                 (eltwise_mul_ffn_op, "ffn_gate", "ffn_up", "ffn_hidden"),
                 (gemv_ffn_down_op, "W_ffn_down", "ffn_hidden", "ffn_output"),
+                (residual_add_op, "x_pre_norm", "ffn_output", "x_out"),
             ],
             input_args=[
-                "x_norm",
+                "x_pre_norm",
+                "W_norm2",
                 "W_ffn_gate",
                 "W_ffn_up",
                 "W_ffn_down"
             ],
             output_args=[
-                "ffn_output"
+                "x_out"
             ],
             context=elf_ctx
         ).compile()
-        self.decode.swiglu_fused = self.decode.swiglu_fused_op.get_callable()
+        self.decode.post_attn_fused = self.decode.post_attn_fused_op.get_callable()
         
         # Attention score scaling operators
         # FIXME: Using elementwise mul is very wasteful (of bandwidth) here since it's the same scalar factor for all values; need a kernel that allows scalar multiplication of a vector
@@ -912,9 +930,21 @@ def transformer_block_forward_decode(config, num_preceding_tokens, layer_idx):
     aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_norm1[layer_idx], aie_buffers.decode.x_norm) # Step 1: RMS normalization
     grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_idx) # Step 2: Attention; results stored in attn_output
     aie_ops.decode.residual_add(aie_buffers.decode.x, aie_buffers.decode.attn_output, aie_buffers.decode.x) # Step 3: Residual
-    aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_norm2[layer_idx], aie_buffers.decode.x_norm) # Step 4: Post-norm
-    swiglu_ffn_forward_decode(layer_idx) # Step 5: Feed-forward network
-    aie_ops.decode.residual_add(aie_buffers.decode.x, aie_buffers.decode.ffn_output, aie_buffers.decode.x) # Step 6: Residual
+    
+    # Step 4-6: Fused post-norm + SwiGLU + residual
+    fused_op = aie_ops.decode.post_attn_fused
+    fused_op.input_buffer.view_as_torch().to("cpu")[:] = 0
+    fused_op.output_buffer.view_as_torch().to("cpu")[:] = 0
+    fused_op.scratch_buffer.view_as_torch().to("cpu")[:] = 0
+    fused_op.get_buffer("x_pre_norm").to("cpu").view_as_torch()[:] = aie_buffers.decode.x.to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("W_norm2").to("cpu").view_as_torch()[:] = aie_buffers.W_norm2[layer_idx].to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("W_ffn_gate").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_gate_decode[layer_idx].to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("W_ffn_up").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_up_decode[layer_idx].to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("W_ffn_down").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_down_decode[layer_idx].to("cpu").view_as_torch().flatten()
+    
+    fused_op()
+    
+    aie_buffers.decode.x.to("cpu").view_as_torch()[:] = fused_op.get_buffer("x_out").to("cpu").view_as_torch()[:]
 
 
 def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_idx):
@@ -960,23 +990,6 @@ def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_i
     
     # Step 9: Project on NPU: (emb_dim, n_heads * head_dim) @ (n_heads * head_dim,) -> (emb_dim,)
     aie_ops.decode.gemv_attn_output(aie_buffers.W_attn_output_decode[layer_idx], aie_buffers.decode.attn_context, aie_buffers.decode.attn_output)
-
-
-def swiglu_ffn_forward_decode(layer_idx):
-    # fused
-    # Copy inputs to fused operator's internal buffers
-    fused_op = aie_ops.decode.swiglu_fused
-    fused_op.input_buffer.view_as_torch()[:] = 0
-    fused_op.get_buffer("x_norm").to("cpu").view_as_torch()[:] = aie_buffers.decode.x_norm.to("cpu").view_as_torch().flatten()
-    fused_op.get_buffer("W_ffn_gate").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_gate_decode[layer_idx].to("cpu").view_as_torch().flatten()
-    fused_op.get_buffer("W_ffn_up").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_up_decode[layer_idx].to("cpu").view_as_torch().flatten()
-    fused_op.get_buffer("W_ffn_down").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_down_decode[layer_idx].to("cpu").view_as_torch().flatten()
-    
-    # Execute fused operator
-    fused_op()
-    
-    # Copy output from fused operator's internal buffer to output buffer
-    aie_buffers.decode.ffn_output.to("cpu").view_as_torch()[:] = fused_op.get_buffer("ffn_output").to("cpu").view_as_torch()[:]
 
 
 # Main

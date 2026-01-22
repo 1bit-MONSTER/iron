@@ -37,6 +37,7 @@ class FusedMLIROperator(AIEOperatorBase):
         for idx, op in enumerate(unique_operators):
             objs = op.get_kernel_artifacts()
             for obj in objs:
+                obj.filename = f"op{idx}_{obj.filename}"
                 obj.prefix_symbols = f"op{idx}_"
             kernel_artifacts.extend(objs)
         return kernel_artifacts

@@ -558,12 +558,24 @@ class PeanoCompilationRule(CompilationRule):
     
     def _prefix_symbols(self, artifact, prefix):
         objcopy_path = "llvm-objcopy-18"
-        cmd = [
+        nm_path = "llvm-nm-18"
+        symbol_map_file = artifact.filename + ".symbol_map"
+        
+        # Extract defined symbols and create symbol map
+        nm_cmd = [
+            "sh", "-c",
+            f"{nm_path} --defined-only --extern-only {artifact.filename} | "
+            f"awk '{{print $3 \" {prefix}\" $3}}' > {symbol_map_file}"
+        ]
+        
+        # Apply the renaming using the symbol map
+        objcopy_cmd = [
             objcopy_path,
-            "--prefix-symbols=" + prefix,
+            "--redefine-syms=" + symbol_map_file,
             artifact.filename,
         ]
-        return [ShellCompilationCommand(cmd)]
+        
+        return [ShellCompilationCommand(nm_cmd), ShellCompilationCommand(objcopy_cmd)]
 
 
 class ArchiveCompilationRule(CompilationRule):
