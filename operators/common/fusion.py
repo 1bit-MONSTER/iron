@@ -12,7 +12,7 @@ from .device_manager import AIEDeviceManager
 class FusedMLIROperator(AIEOperatorBase):
     """Operator that fuses multiple SingleMLIRSourceOperators into one."""
     
-    def __init__(self, name, runlist, input_args, output_args, *args, **kwargs):
+    def __init__(self, name, runlist, input_args, output_args, buffer_sizes=None, *args, **kwargs):
         assert all(
             isinstance(op, SingleMLIRSourceOperator) and all(isinstance(buf, str) for buf in bufs)
             for op, *bufs in runlist
@@ -21,6 +21,7 @@ class FusedMLIROperator(AIEOperatorBase):
         self.name = name
         self.input_args = input_args
         self.output_args = output_args
+        self.explicit_buffer_sizes = buffer_sizes or {}  # Optional dict: buffer_name -> size_in_bytes
         self.kernel_archive = "kernels.a"
         super().__init__(*args, **kwargs)
     
@@ -68,7 +69,7 @@ class FusedMLIROperator(AIEOperatorBase):
             comp_runlist.append((op_names[op], *bufs))
         
         # Calculate buffer layout: {buffer_name -> (type, offset, length)}
-        self.subbuffer_layout, self.buffer_sizes = self._calculate_buffer_layout()
+        self.subbuffer_layout, self.buffer_sizes, self.slice_info = self._calculate_buffer_layout()
         
         filename = self.get_operator_name() + "_fused.mlir"
         fused_artifact = comp.FusedMLIRSource(
@@ -76,13 +77,15 @@ class FusedMLIROperator(AIEOperatorBase):
             operator_mlir_map=operator_mlir_map,
             runlist=comp_runlist,
             subbuffer_layout=self.subbuffer_layout,
-            buffer_sizes=self.buffer_sizes
+            buffer_sizes=self.buffer_sizes,
+            slice_info=self.slice_info
         )
         
         return fused_artifact
     
     def _calculate_buffer_layout(self):
-        args = {}
+        args = {}  # base_buffer_name -> args_spec
+        sliced_buffers = {}  # full_buffer_name (with slice) -> (base_name, start, end, args_spec)
         
         # Collect all buffer specs from operators
         for op, *bufs in self.runlist:
@@ -90,36 +93,69 @@ class FusedMLIROperator(AIEOperatorBase):
             assert len(args_specs) == len(bufs), "Number of buffers must match operator argument specification"
             for i, buf_name in enumerate(bufs):
                 args_spec = args_specs[i]
-                if buf_name not in args:
-                    args[buf_name] = args_spec
+                
+                # Parse slice notation: "buffer_name[start:end]"
+                if '[' in buf_name and buf_name.endswith(']'):
+                    base_name = buf_name[:buf_name.index('[')]
+                    slice_part = buf_name[buf_name.index('[')+1:-1]
+                    start, end = map(int, slice_part.split(':'))
+                    sliced_buffers[buf_name] = (base_name, start, end, args_spec)
+                    # Track that base buffer exists (size will be set later)
+                    if base_name not in args and base_name not in self.explicit_buffer_sizes:
+                        raise ValueError(f"Sliced buffer '{buf_name}' requires explicit size for base buffer '{base_name}' in buffer_sizes parameter")
                 else:
-                    assert np.prod(args[buf_name].shape) == np.prod(args_spec.shape), f"Buffer {buf_name} has conflicting sizes between operators"
+                    # Regular buffer (no slice)
+                    if buf_name not in args:
+                        args[buf_name] = args_spec
+                    else:
+                        assert np.prod(args[buf_name].shape) == np.prod(args_spec.shape), f"Buffer {buf_name} has conflicting sizes between operators"
         
-        # Verify all input/output args are present
+        # Verify all input/output args are present (either as regular or sliced buffers)
+        all_buffer_names = set(args.keys()) | set(sliced_buffers.keys())
         for arg in self.input_args:
-            assert arg in args, f"Input argument {arg} not found in runlist buffers"
+            # Check if it's a base buffer name in explicit_buffer_sizes
+            if arg not in all_buffer_names and arg not in self.explicit_buffer_sizes:
+                raise AssertionError(f"Input argument {arg} not found in runlist buffers")
         for arg in self.output_args:
-            assert arg in args, f"Output argument {arg} not found in runlist buffers"
+            if arg not in all_buffer_names and arg not in self.explicit_buffer_sizes:
+                raise AssertionError(f"Output argument {arg} not found in runlist buffers")
         
-        # Determine buffer types
+        # Determine buffer types and create layout
         subbuffer_layout = {}
+        slice_info = {}  # full_buffer_name -> (base_name, start, end)
         
         def add_buffers(buffer_type, args_list):
             offset = 0
             for arg in args_list:
-                arg_spec = args[arg]
-                length = int(np.prod(arg_spec.shape) * np.dtype(arg_spec.dtype).itemsize)
-                subbuffer_layout[arg] = (buffer_type, offset, length)
-                offset += length
-            return offset # == total length
+                if arg in self.explicit_buffer_sizes:
+                    # Explicit size specified - this is a parent buffer for slices
+                    length = self.explicit_buffer_sizes[arg]
+                    subbuffer_layout[arg] = (buffer_type, offset, length)
+                    offset += length
+                elif arg in args:
+                    # Regular buffer with inferred size
+                    arg_spec = args[arg]
+                    length = int(np.prod(arg_spec.shape) * np.dtype(arg_spec.dtype).itemsize)
+                    subbuffer_layout[arg] = (buffer_type, offset, length)
+                    offset += length
+                # Note: sliced buffers are handled separately, not in args_list
+            return offset  # == total length
+        
+        # Add sliced buffer entries to layout (they reference parent buffers)
+        for buf_name, (base_name, start, end, args_spec) in sliced_buffers.items():
+            slice_info[buf_name] = (base_name, start, end)
         
         input_buffer_size = add_buffers('input', self.input_args)
         output_buffer_size = add_buffers('output', self.output_args)
         scratch_args = [arg for arg in args if arg not in self.input_args and arg not in self.output_args]
+        # Also include explicit buffers that are only used for slicing
+        for explicit_buf in self.explicit_buffer_sizes:
+            if explicit_buf not in self.input_args and explicit_buf not in self.output_args and explicit_buf not in scratch_args:
+                scratch_args.append(explicit_buf)
         scratch_buffer_size = add_buffers('scratch', scratch_args)
         
         buffer_sizes = (input_buffer_size, output_buffer_size, scratch_buffer_size)
-        return subbuffer_layout, buffer_sizes
+        return subbuffer_layout, buffer_sizes, slice_info
     
     def set_up_artifacts(self):
         operator_name = self.get_operator_name()
@@ -168,6 +204,7 @@ class FusedFullELFCallable(FullELFCallable):
 
         self.subbuffer_layout = op.subbuffer_layout
         self.buffer_sizes = op.buffer_sizes
+        self.slice_info = op.slice_info
         
         input_buffer_size, output_buffer_size, scratch_buffer_size = self.buffer_sizes
         itemsize = np.dtype(ml_dtypes.bfloat16).itemsize
@@ -194,7 +231,27 @@ class FusedFullELFCallable(FullELFCallable):
         if buffer_name in self._buffer_cache:
             return self._buffer_cache[buffer_name]
         
-        # Look up buffer information
+        bf16_itemsize = np.dtype(ml_dtypes.bfloat16).itemsize
+        
+        # Check if this is a sliced buffer
+        if buffer_name in self.slice_info:
+            base_name, start, end = self.slice_info[buffer_name]
+            # Get the parent buffer
+            parent_buffer = self.get_buffer(base_name)
+            # Create subbuffer from parent
+            start_elements = start // bf16_itemsize
+            length_elements = (end - start) // bf16_itemsize
+            sub_buffer = parent_buffer.subbuffer(
+                length=length_elements,
+                offset=start_elements,
+                shape=(length_elements,),
+                dtype=ml_dtypes.bfloat16
+            )
+            # Cache and return
+            self._buffer_cache[buffer_name] = sub_buffer
+            return sub_buffer
+        
+        # Look up buffer information for regular buffers
         if buffer_name not in self.subbuffer_layout:
             raise KeyError(f"Buffer '{buffer_name}' not found in buffer layout")
         
@@ -214,7 +271,6 @@ class FusedFullELFCallable(FullELFCallable):
             raise RuntimeError(f"Main buffer for type '{buf_type}' is not allocated")
         
         # Convert byte offset/length to element offset/length
-        bf16_itemsize = np.dtype(ml_dtypes.bfloat16).itemsize
         offset_elements = offset // bf16_itemsize
         length_elements = length // bf16_itemsize
         

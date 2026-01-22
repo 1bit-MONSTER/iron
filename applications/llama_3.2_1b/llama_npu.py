@@ -284,8 +284,46 @@ class AIELlamaOperators:
         ).compile()
         self.decode.attn_proj_rope_fused = self.decode.attn_proj_rope_fused_op.get_callable()
         
+        # Fused transpose for all attention heads (decode)
+        transpose_values_op = AIETranspose(
+            M=prompt_len,
+            N=config.head_dim,
+            num_aie_columns=2,
+            num_channels=1,
+            m=256,
+            n=32,
+            s=8,
+            context=elf_ctx
+        )
+        
+        # Calculate buffer size for all heads' values
+        values_per_head_buffer_size = prompt_len * config.head_dim * 2  # * 2 for bfloat16
+        values_buffer_size = config.n_heads * values_per_head_buffer_size
+        
+        # Build runlist with sliced buffers for each head
+        transpose_runlist = [
+            (transpose_values_op,
+                f"values_all[{h * values_per_head_buffer_size}:{(h + 1) * values_per_head_buffer_size}]",
+                f"values_transposed_all[{h * values_per_head_buffer_size}:{(h + 1) * values_per_head_buffer_size}]"
+            )
+            for h in range(config.n_heads)
+        ]
+        
+        self.decode.transpose_values_fused_op = FusedMLIROperator(
+            "transpose_values_decode",
+            transpose_runlist,
+            input_args=["values_all"],
+            output_args=["values_transposed_all"],
+            buffer_sizes={
+                "values_all": values_buffer_size,
+                "values_transposed_all": values_buffer_size
+            },
+            context=elf_ctx
+        ).compile()
+        self.decode.transpose_values_fused = self.decode.transpose_values_fused_op.get_callable()
+        
         # Attention score scaling operators
-        # FIXME: Using elementwise mul is very wasteful (of bandwidth) here since it's the same scalar factor for all values; need a kernel that allows scalar multiplication of a vector
+        # FIXME: Using elementwise mul is very wasteful (of bandwidth) here since it's the same scalar factor for all values; need a kernel that allows scalar multiplication of a vector; maybe use AXPY
         self.prefill.attn_scale = AIEElementwiseMul(
             size=config.n_heads * prompt_len * prompt_len,
             tile_size=prompt_len,
@@ -1048,12 +1086,19 @@ def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_i
     aie_ops.decode.softmax(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_weights)
     
     # Step 8: Compute attention output on NPU
-    # Transpose values: (max_context_len, head_dim) -> (head_dim, max_context_len) for each head
-    for h in range(config.n_heads):
-        aie_ops.decode.transpose_values(
-            aie_buffers.decode.attn_scores_values_per_head[h],
-            aie_buffers.decode.attn_scores_values_transposed_per_head[h]
-        )
+    # Transpose values: (max_context_len, head_dim) -> (head_dim, max_context_len) for each head using fused operator
+    fused_transpose = aie_ops.decode.transpose_values_fused
+    fused_transpose.input_buffer.view_as_torch().to("cpu")[:] = 0
+    fused_transpose.output_buffer.view_as_torch().to("cpu")[:] = 0
+    fused_transpose.scratch_buffer.view_as_torch().to("cpu")[:] = 0
+    fused_transpose.get_buffer("values_all").to("cpu").view_as_torch()[:] = aie_buffers.decode.attn_scores_values.to("cpu").view_as_torch().flatten()
+    
+    fused_transpose()
+    
+    # Reshape flat output to match expected 3D shape (n_heads, head_dim, max_context_len)
+    aie_buffers.decode.attn_scores_values_transposed.to("cpu").view_as_torch().flatten()[:] =  fused_transpose.get_buffer("values_transposed_all").to("cpu").view_as_torch().flatten()
+    aie_buffers.decode.attn_scores_values_transposed.to("npu")
+    
     # GEMV: (n_heads, head_dim, max_context_len) @ (n_heads, max_context_len) -> (n_heads, head_dim)
     aie_ops.decode.gemv_attn_context(aie_buffers.decode.attn_scores_values_transposed, aie_buffers.decode.attn_weights, aie_buffers.decode.attn_context)
     

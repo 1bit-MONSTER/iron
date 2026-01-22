@@ -28,13 +28,14 @@ from . import (
 
 
 class FusedMLIRSource(CompilationArtifact):
-    def __init__(self, filename, operator_mlir_map, runlist, subbuffer_layout, buffer_sizes):
+    def __init__(self, filename, operator_mlir_map, runlist, subbuffer_layout, buffer_sizes, slice_info=None):
         dependencies = list(operator_mlir_map.values())
         super().__init__(filename, dependencies)
         self.operator_mlir_map = operator_mlir_map
         self.runlist = runlist
         self.subbuffer_layout = subbuffer_layout
         self.buffer_sizes = buffer_sizes
+        self.slice_info = slice_info or {}
 
 
 # Helper Functions
@@ -139,7 +140,17 @@ def fuse_mlir(artifact):
                         # For each buffer, add subview and reinterpret_cast ops
                         buffer_ssa_values = []
                         for idx, buf_name in enumerate(buffer_names):
-                            buf_type, offset, length = artifact.subbuffer_layout[buf_name]
+                            # Check if this is a sliced buffer
+                            if buf_name in artifact.slice_info:
+                                base_name, start, end = artifact.slice_info[buf_name]
+                                # Get parent buffer info
+                                buf_type, parent_offset, parent_length = artifact.subbuffer_layout[base_name]
+                                # Calculate actual offset and length for slice
+                                offset = parent_offset + start
+                                length = end - start
+                            else:
+                                # Regular buffer
+                                buf_type, offset, length = artifact.subbuffer_layout[buf_name]
                             
                             # Subview Op
                             consolidated_buf = consolidated_buffers[buf_type]
