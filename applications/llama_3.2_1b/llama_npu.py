@@ -201,26 +201,33 @@ class AIELlamaOperators:
             context=elf_ctx
         )
         
+        repeat_interleave_op = AIERepeat(
+            rows=config.n_kv_groups,
+            cols=prompt_len * config.head_dim,  # Max context length
+            repeat=config.n_heads // config.n_kv_groups,
+            transfer_size=config.head_dim,
+            context=self.context
+        )
+        
         self.decode.post_attn_fused_op = FusedMLIROperator(
             "post_attn_decode",
             [
-                (rms_norm_op, "x_pre_norm", "W_norm2", "x_norm"),
+                (residual_add_op, "x", "attn_output", "x"),
+                (rms_norm_op, "x", "W_norm2", "x_norm"),
                 (gemv_ffn_up_gate_op, "W_ffn_gate", "x_norm", "ffn_gate"),
                 (gemv_ffn_up_gate_op, "W_ffn_up", "x_norm", "ffn_up"),
                 (silu_ffn_op, "ffn_gate", "ffn_gate"),
                 (eltwise_mul_ffn_op, "ffn_gate", "ffn_up", "ffn_hidden"),
                 (gemv_ffn_down_op, "W_ffn_down", "ffn_hidden", "ffn_output"),
-                (residual_add_op, "x_pre_norm", "ffn_output", "x_out"),
+                (residual_add_op, "x", "ffn_output", "x"),
             ],
             input_args=[
-                "x_pre_norm",
                 "W_norm2",
                 "W_ffn_gate",
                 "W_ffn_up",
                 "W_ffn_down"
             ],
             output_args=[
-                "x_out"
             ],
             context=elf_ctx
         ).compile()
@@ -287,6 +294,8 @@ class AIELlamaOperators:
                 (rope_keys_op, "keys", "rope_angles", "keys"),
                 (strided_copy_cache_op, "keys", "keys_cache"),
                 (strided_copy_cache_op, "values", "values_cache"),
+                (repeat_interleave_op, "keys_cache", "attn_scores_keys"),
+                (repeat_interleave_op, "values_cache", "attn_scores_values"),
             ],
             input_args=[
                 "W_attn_query",
@@ -304,7 +313,7 @@ class AIELlamaOperators:
             ],
             buffer_sizes={
                 "keys_cache": cache_buffer_size,
-                "values_cache": cache_buffer_size
+                "values_cache": cache_buffer_size,
             },
             context=elf_ctx
         ).compile()
@@ -442,16 +451,6 @@ class AIELlamaOperators:
             rows=1 * config.n_kv_groups,
             cols=config.head_dim,
             angle_rows=1,
-            context=self.context
-        ).compile().get_callable()
-        
-        # Repeat interleave for keys: (n_kv_groups, context_len, head_dim) -> (n_heads, context_len, head_dim)
-        # Compile with max context length, then patch at runtime for actual context_len
-        self.decode.attn_repeat_interleave = AIERepeat(
-            rows=config.n_kv_groups,
-            cols=prompt_len * config.head_dim,  # Max context length
-            repeat=config.n_heads // config.n_kv_groups,
-            transfer_size=config.head_dim,
             context=self.context
         ).compile().get_callable()
         
@@ -1067,14 +1066,14 @@ def llama_forward_pass_decode(config, state):
 def transformer_block_forward_decode(config, num_preceding_tokens, layer_idx):
     aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_norm1[layer_idx], aie_buffers.decode.x_norm) # Step 1: RMS normalization
     grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_idx) # Step 2: Attention; results stored in attn_output
-    aie_ops.decode.residual_add(aie_buffers.decode.x, aie_buffers.decode.attn_output, aie_buffers.decode.x) # Step 3: Residual
     
     # Step 4-6: Fused post-norm + SwiGLU + residual
     fused_op = aie_ops.decode.post_attn_fused
     fused_op.input_buffer.view_as_torch().to("cpu")[:] = 0
     fused_op.output_buffer.view_as_torch().to("cpu")[:] = 0
     fused_op.scratch_buffer.view_as_torch().to("cpu")[:] = 0
-    fused_op.get_buffer("x_pre_norm").to("cpu").view_as_torch()[:] = aie_buffers.decode.x.to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("x").to("cpu").view_as_torch()[:] = aie_buffers.decode.x.to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("attn_output").to("cpu").view_as_torch()[:] = aie_buffers.decode.attn_output.to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("W_norm2").to("cpu").view_as_torch()[:] = aie_buffers.W_norm2[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("W_ffn_gate").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_gate_decode[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("W_ffn_up").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_up_decode[layer_idx].to("cpu").view_as_torch().flatten()
@@ -1082,7 +1081,7 @@ def transformer_block_forward_decode(config, num_preceding_tokens, layer_idx):
     
     fused_op()
     
-    aie_buffers.decode.x.to("cpu").view_as_torch()[:] = fused_op.get_buffer("x_out").to("cpu").view_as_torch()[:]
+    aie_buffers.decode.x.to("cpu").view_as_torch()[:] = fused_op.get_buffer("x").to("cpu").view_as_torch()[:]
 
 
 def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_idx):
@@ -1109,13 +1108,11 @@ def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_i
     aie_buffers.decode.values.to("cpu").view_as_torch().view(-1)[:] = fused_op.get_buffer("values").to("cpu").view_as_torch().flatten()
     aie_buffers.keys_cache[layer_idx].to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("keys_cache").to("cpu").view_as_torch().flatten()
     aie_buffers.values_cache[layer_idx].to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("values_cache").to("cpu").view_as_torch().flatten()
+    aie_buffers.decode.attn_scores_keys.to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("attn_scores_keys").to("cpu").view_as_torch().flatten()
+    aie_buffers.decode.attn_scores_values.to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("attn_scores_values").to("cpu").view_as_torch().flatten()
     aie_buffers.decode.queries.to("npu")
     aie_buffers.decode.keys.to("npu")
     aie_buffers.decode.values.to("npu")
-    
-    # Step 4: Repeat keys and values for grouped attention using AIERepeat on NPU
-    aie_ops.decode.attn_repeat_interleave(aie_buffers.keys_cache[layer_idx], aie_buffers.decode.attn_scores_keys)
-    aie_ops.decode.attn_repeat_interleave(aie_buffers.values_cache[layer_idx], aie_buffers.decode.attn_scores_values)
     
     # Step 5: Compute attention scores
     # Copy repeated keys from keys_repeated buffer to attn_scores_keys for GEMV
