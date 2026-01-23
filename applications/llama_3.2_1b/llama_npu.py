@@ -281,6 +281,25 @@ class AIELlamaOperators:
             context=elf_ctx
         )
         
+        # For decode: per head, (1, head_dim) @ (head_dim, max_context_len)
+        # Use GEMV: (max_context_len, head_dim) @ (head_dim,) = (max_context_len,)
+        gemv_attn_scores_op = AIEGEMV(
+            M=prompt_len,  # max possible context length
+            K=config.head_dim,
+            num_aie_columns=8,
+            tile_size_input=4,
+            tile_size_output=prompt_len // 8,
+            num_batches=config.n_heads,
+            context=self.context
+        )
+        
+        attn_scale_op = AIEElementwiseMul(
+            size=config.n_heads * prompt_len,
+            tile_size=prompt_len // 8,
+            num_aie_columns=8,
+            context=self.context
+        )
+        
         # Calculate buffer size for keys/values cache (same size, used as input to strided copy)
         cache_buffer_size = config.n_kv_groups * prompt_len * config.head_dim * 2  # * 2 for bfloat16
         
@@ -296,6 +315,8 @@ class AIELlamaOperators:
                 (strided_copy_cache_op, "values", "values_cache"),
                 (repeat_interleave_op, "keys_cache", "attn_scores_keys"),
                 (repeat_interleave_op, "values_cache", "attn_scores_values"),
+                (gemv_attn_scores_op,  "attn_scores_keys", "queries", "attn_scores"),
+                (attn_scale_op, "attn_scores", "attn_scale_factor", "attn_scores")
             ],
             input_args=[
                 "W_attn_query",
@@ -304,12 +325,14 @@ class AIELlamaOperators:
                 "x_norm",
                 "rope_angles",
                 "keys_cache",
-                "values_cache"
+                "values_cache",
+                "attn_scale_factor"
             ],
             output_args=[
                 "queries",
                 "keys",
-                "values"
+                "values",
+                "attn_scores"
             ],
             buffer_sizes={
                 "keys_cache": cache_buffer_size,
@@ -385,13 +408,6 @@ class AIELlamaOperators:
         self.prefill.attn_scale = AIEElementwiseMul(
             size=config.n_heads * prompt_len * prompt_len,
             tile_size=prompt_len,
-            num_aie_columns=8,
-            context=self.context
-        ).compile().get_callable()
-        
-        self.decode.attn_scale = AIEElementwiseMul(
-            size=config.n_heads * prompt_len,
-            tile_size=prompt_len // 8,
             num_aie_columns=8,
             context=self.context
         ).compile().get_callable()
@@ -523,18 +539,6 @@ class AIELlamaOperators:
             tile_k=64,
             tile_n=64,
             b_col_maj=False,
-            context=self.context
-        ).compile().get_callable()
-        
-        # For decode: per head, (1, head_dim) @ (head_dim, max_context_len)
-        # Use GEMV: (max_context_len, head_dim) @ (head_dim,) = (max_context_len,)
-        self.decode.gemv_attn_scores = AIEGEMV(
-            M=prompt_len,  # max possible context length
-            K=config.head_dim,
-            num_aie_columns=8,
-            tile_size_input=4,
-            tile_size_output=prompt_len // 8,
-            num_batches=config.n_heads,
             context=self.context
         ).compile().get_callable()
         
@@ -1100,6 +1104,7 @@ def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_i
     fused_op.get_buffer("rope_angles").to("cpu").view_as_torch()[:] = aie_buffers.decode.rope_angles.to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("keys_cache").to("cpu").view_as_torch()[:] = aie_buffers.keys_cache[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("values_cache").to("cpu").view_as_torch()[:] = aie_buffers.values_cache[layer_idx].to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("attn_scale_factor").to("cpu").view_as_torch()[:] = aie_buffers.decode.attn_scale_factor.to("cpu").view_as_torch().flatten()
     
     fused_op()
     
@@ -1113,11 +1118,11 @@ def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_i
     aie_buffers.decode.queries.to("npu")
     aie_buffers.decode.keys.to("npu")
     aie_buffers.decode.values.to("npu")
+    aie_buffers.decode.attn_scores.to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("attn_scores").to("cpu").view_as_torch().flatten()
+    aie_buffers.decode.attn_scores.to("npu")
     
     # Step 5: Compute attention scores
     # Copy repeated keys from keys_repeated buffer to attn_scores_keys for GEMV
-    aie_ops.decode.gemv_attn_scores(aie_buffers.decode.attn_scores_keys, aie_buffers.decode.queries, aie_buffers.decode.attn_scores)
-    aie_ops.decode.attn_scale(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_scale_factor, aie_buffers.decode.attn_scores)
     
     # Step 7: Softmax on NPU (patched once at beginning of decode pass)
     aie_ops.decode.softmax(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_weights)
