@@ -151,7 +151,7 @@ class AIELlamaOperators:
             context=self.context
         ).compile().get_callable()
         
-        elf_ctx = AIEContext(build_dir="build_elf")
+        postattn_ctx = AIEContext(build_dir="build_postattn")
         
         # Fused operator for post-norm + SwiGLU + residual (decode)
         rms_norm_op = AIERMSNorm(
@@ -160,7 +160,7 @@ class AIELlamaOperators:
             num_aie_columns=1,
             num_channels=2,
             tile_size=config.emb_dim,
-            context=elf_ctx
+            context=postattn_ctx
         )
         
         gemv_ffn_up_gate_op = AIEGEMV(
@@ -169,7 +169,7 @@ class AIELlamaOperators:
             num_aie_columns=8,
             tile_size_input=4,
             tile_size_output=config.hidden_dim // 8,
-            context=elf_ctx
+            context=postattn_ctx
         )
         
         gemv_ffn_down_op = AIEGEMV(
@@ -178,27 +178,27 @@ class AIELlamaOperators:
             num_aie_columns=8,
             tile_size_input=1,
             tile_size_output=config.emb_dim // 8,
-            context=elf_ctx
+            context=postattn_ctx
         )
         
         silu_ffn_op = AIESiLU(
             size=config.hidden_dim,
             tile_size=config.hidden_dim // 8,
             num_aie_columns=8,
-            context=elf_ctx
+            context=postattn_ctx
         )
         
         eltwise_mul_ffn_op = AIEElementwiseMul(
             size=config.hidden_dim,
             tile_size=config.hidden_dim // 8,
             num_aie_columns=8,
-            context=elf_ctx
+            context=postattn_ctx
         )
         
         residual_add_op = AIEElementwiseAdd(
             size=config.emb_dim,
             tile_size=config.emb_dim // 8,
-            context=elf_ctx
+            context=postattn_ctx
         )
         
         repeat_interleave_op = AIERepeat(
@@ -229,10 +229,12 @@ class AIELlamaOperators:
             ],
             output_args=[
             ],
-            context=elf_ctx
+            context=postattn_ctx
         ).compile()
         self.decode.post_attn_fused = self.decode.post_attn_fused_op.get_callable()
         
+        elf_ctx = AIEContext(build_dir="build_elf")
+
         # Fused operator for attention projections + RoPE (decode)
         gemv_attn_query_op = AIEGEMV(
             M=config.n_heads * config.head_dim,
@@ -300,6 +302,18 @@ class AIELlamaOperators:
             context=self.context
         )
         
+        # Softmax operators for attention weights
+        softmax_magic = 0xBA5EBA11
+        softmax_op = AIESoftmax(
+            rows=config.n_heads,
+            cols=prompt_len,
+            num_aie_columns=1,
+            num_channels=1,
+            rtp_vector_size=prompt_len,  # Compile with max size
+            mask_patch_value=softmax_magic,  # Magic value for patching
+            context=self.context
+        )
+        
         # Calculate buffer size for keys/values cache (same size, used as input to strided copy)
         cache_buffer_size = config.n_kv_groups * prompt_len * config.head_dim * 2  # * 2 for bfloat16
         
@@ -316,7 +330,8 @@ class AIELlamaOperators:
                 (repeat_interleave_op, "keys_cache", "attn_scores_keys"),
                 (repeat_interleave_op, "values_cache", "attn_scores_values"),
                 (gemv_attn_scores_op,  "attn_scores_keys", "queries", "attn_scores"),
-                (attn_scale_op, "attn_scores", "attn_scale_factor", "attn_scores")
+                (attn_scale_op, "attn_scores", "attn_scale_factor", "attn_scores"),
+                (softmax_op, "attn_scores", "attn_weights")
             ],
             input_args=[
                 "W_attn_query",
@@ -341,11 +356,10 @@ class AIELlamaOperators:
             context=elf_ctx
         ).compile()
 
-        elf = load_elf(self.decode.attn_fused_op)
-        self.decode.attn_fused_elf_data = elf
+        self.decode.attn_fused_elf_data = load_elf(self.decode.attn_fused_op)
         
         def get_patch_locs(elf_data, magic):
-            return [i for i, x in enumerate(elf_data) if magic & 0xFFFFFFFF == x ]
+            return [i for i, x in enumerate(elf_data) if magic & 0xFFFFFFFF == x]
 
         # Extract patch offsets for strided_copy operations in fused operator
         _, keys_cache_offs, _ = self.decode.attn_fused_op.get_layout_for_buffer("keys_cache")
@@ -364,6 +378,9 @@ class AIELlamaOperators:
         }
         self.decode.attn_fused_patch_locations = {**keys_patches, **values_patches, **no_offset_patches}
         assert len(self.decode.attn_fused_patch_locations) == 6
+
+        self.decode.softmax_patch_offsets = get_patch_locs(self.decode.attn_fused_elf_data, softmax_magic)
+        assert len(self.decode.softmax_patch_offsets) == 2
         
         # Fused transpose for all attention heads (decode)
         transpose_values_op = AIETranspose(
@@ -411,32 +428,6 @@ class AIELlamaOperators:
             num_aie_columns=8,
             context=self.context
         ).compile().get_callable()
-        
-        # Softmax operators for attention weights
-        # Prefill uses CPU softmax to reduce NPU operator count
-        
-        self.decode.softmax_compilable = AIESoftmax(
-            rows=config.n_heads,
-            cols=prompt_len,
-            num_aie_columns=1,
-            num_channels=1,
-            rtp_vector_size=prompt_len,  # Compile with max size
-            mask_patch_value=0xBA5EBA11,  # Magic value for patching
-            context=self.context
-        ).compile()
-        
-        self.decode.softmax = PatchableSingleXclbinCallable(
-            xclbin_path=self.decode.softmax_compilable.xclbin_artifact.filename,
-            kernel_name=self.decode.softmax_compilable.xclbin_artifact.kernel_name,
-            insts_bin_path=self.decode.softmax_compilable.insts_artifact.filename,
-            args_spec=self.decode.softmax_compilable.get_arg_spec()
-        )
-
-        self.decode.softmax_patch_offsets = [
-            i for i, x in enumerate(self.decode.softmax.insts_buffer.view_as_np())
-            if 0xBA5EBA11 == x
-        ]
-        assert len(self.decode.softmax_patch_offsets) == 1, "Something else accidentally generated our magic mask value"
         
         # RoPE operators
         # For queries: (seq_len, num_heads * head_dim) = (seq_len, 2048)
@@ -1019,20 +1010,18 @@ def patch_operators_for_decode(config, num_preceding_tokens):
         i: (base + offset_val, 0xFFFFFFFF)
         for i, base in aie_ops.decode.attn_fused_patch_locations.items()
     }
+    softmax_patches = {
+        i: (context_len, 0xFFFFFFFF)
+        for i in aie_ops.decode.softmax_patch_offsets
+    }
+    patches = {**strided_copy_patches, **softmax_patches}
     patched_elf_data = aie_ops.decode.attn_fused_elf_data.copy()
-    patch_elf(patched_elf_data, strided_copy_patches)
+    patch_elf(patched_elf_data, patches)
 
     aie_ops.decode.attn_fused = FusedFullELFCallable(
         aie_ops.decode.attn_fused_op,
         elf_data=patched_elf_data
     )
-    
-    # Patch softmax operator for actual context length
-    softmax_patches = {
-        i: (context_len, 0xFFFFFFFF)
-        for i in aie_ops.decode.softmax_patch_offsets
-    }
-    aie_ops.decode.softmax.patch(softmax_patches)
 
 
 def llama_forward_pass_decode(config, state):
@@ -1120,12 +1109,8 @@ def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_i
     aie_buffers.decode.values.to("npu")
     aie_buffers.decode.attn_scores.to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("attn_scores").to("cpu").view_as_torch().flatten()
     aie_buffers.decode.attn_scores.to("npu")
-    
-    # Step 5: Compute attention scores
-    # Copy repeated keys from keys_repeated buffer to attn_scores_keys for GEMV
-    
-    # Step 7: Softmax on NPU (patched once at beginning of decode pass)
-    aie_ops.decode.softmax(aie_buffers.decode.attn_scores, aie_buffers.decode.attn_weights)
+    aie_buffers.decode.attn_weights.to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("attn_weights").to("cpu").view_as_torch().flatten()
+    aie_buffers.decode.attn_weights.to("npu")
     
     # Step 8: Compute attention output on NPU
     # Transpose values: (max_context_len, head_dim) -> (head_dim, max_context_len) for each head using fused operator
