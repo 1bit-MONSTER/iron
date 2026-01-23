@@ -314,25 +314,46 @@ class AIELlamaOperators:
             context=self.context
         )
         
-        # Calculate buffer size for keys/values cache (same size, used as input to strided copy)
+        # Fused transpose for all attention heads (decode)
+        transpose_values_op = AIETranspose(
+            M=prompt_len,
+            N=config.head_dim,
+            num_aie_columns=2,
+            num_channels=1,
+            m=256,
+            n=32,
+            s=8,
+            context=elf_ctx
+        )
+        
         cache_buffer_size = config.n_kv_groups * prompt_len * config.head_dim * 2  # * 2 for bfloat16
+        values_per_head_buffer_size = prompt_len * config.head_dim * 2  # * 2 for bfloat16
+        values_buffer_size = config.n_heads * values_per_head_buffer_size
         
         self.decode.attn_fused_op = FusedMLIROperator(
             "attn_fused_op",
-            [
-                (gemv_attn_query_op, "W_attn_query", "x_norm", "queries"),
-                (gemv_attn_key_value_op, "W_attn_key", "x_norm", "keys"),
-                (gemv_attn_key_value_op, "W_attn_value", "x_norm", "values"),
-                (rope_queries_op, "queries", "rope_angles", "queries"),
-                (rope_keys_op, "keys", "rope_angles", "keys"),
-                (strided_copy_cache_op, "keys", "keys_cache"),
-                (strided_copy_cache_op, "values", "values_cache"),
-                (repeat_interleave_op, "keys_cache", "attn_scores_keys"),
-                (repeat_interleave_op, "values_cache", "attn_scores_values"),
-                (gemv_attn_scores_op,  "attn_scores_keys", "queries", "attn_scores"),
-                (attn_scale_op, "attn_scores", "attn_scale_factor", "attn_scores"),
-                (softmax_op, "attn_scores", "attn_weights")
-            ],
+            (
+                [
+                    (gemv_attn_query_op, "W_attn_query", "x_norm", "queries"),
+                    (gemv_attn_key_value_op, "W_attn_key", "x_norm", "keys"),
+                    (gemv_attn_key_value_op, "W_attn_value", "x_norm", "values"),
+                    (rope_queries_op, "queries", "rope_angles", "queries"),
+                    (rope_keys_op, "keys", "rope_angles", "keys"),
+                    (strided_copy_cache_op, "keys", "keys_cache"),
+                    (strided_copy_cache_op, "values", "values_cache"),
+                    (repeat_interleave_op, "keys_cache", "attn_scores_keys"),
+                    (repeat_interleave_op, "values_cache", "attn_scores_values"),
+                    (gemv_attn_scores_op,  "attn_scores_keys", "queries", "attn_scores"),
+                    (attn_scale_op, "attn_scores", "attn_scale_factor", "attn_scores"),
+                    (softmax_op, "attn_scores", "attn_weights")
+                ] + [
+                    (transpose_values_op,
+                        f"attn_scores_values[{h * values_per_head_buffer_size}:{(h + 1) * values_per_head_buffer_size}]",
+                        f"attn_scores_values_transposed[{h * values_per_head_buffer_size}:{(h + 1) * values_per_head_buffer_size}]"
+                    )
+                    for h in range(config.n_heads)
+                ]
+            ),
             input_args=[
                 "W_attn_query",
                 "W_attn_key",
@@ -352,6 +373,8 @@ class AIELlamaOperators:
             buffer_sizes={
                 "keys_cache": cache_buffer_size,
                 "values_cache": cache_buffer_size,
+                "attn_scores_values": values_buffer_size,
+                "attn_scores_values_transposed": values_buffer_size
             },
             context=elf_ctx
         ).compile()
@@ -381,44 +404,6 @@ class AIELlamaOperators:
 
         self.decode.softmax_patch_offsets = get_patch_locs(self.decode.attn_fused_elf_data, softmax_magic)
         assert len(self.decode.softmax_patch_offsets) == 2
-        
-        # Fused transpose for all attention heads (decode)
-        transpose_values_op = AIETranspose(
-            M=prompt_len,
-            N=config.head_dim,
-            num_aie_columns=2,
-            num_channels=1,
-            m=256,
-            n=32,
-            s=8,
-            context=elf_ctx
-        )
-        
-        # Calculate buffer size for all heads' values
-        values_per_head_buffer_size = prompt_len * config.head_dim * 2  # * 2 for bfloat16
-        values_buffer_size = config.n_heads * values_per_head_buffer_size
-        
-        # Build runlist with sliced buffers for each head
-        transpose_runlist = [
-            (transpose_values_op,
-                f"values_all[{h * values_per_head_buffer_size}:{(h + 1) * values_per_head_buffer_size}]",
-                f"values_transposed_all[{h * values_per_head_buffer_size}:{(h + 1) * values_per_head_buffer_size}]"
-            )
-            for h in range(config.n_heads)
-        ]
-        
-        self.decode.transpose_values_fused_op = FusedMLIROperator(
-            "transpose_values_decode",
-            transpose_runlist,
-            input_args=["values_all"],
-            output_args=["values_transposed_all"],
-            buffer_sizes={
-                "values_all": values_buffer_size,
-                "values_transposed_all": values_buffer_size
-            },
-            context=elf_ctx
-        ).compile()
-        self.decode.transpose_values_fused = self.decode.transpose_values_fused_op.get_callable()
         
         # Attention score scaling operators
         # FIXME: Using elementwise mul is very wasteful (of bandwidth) here since it's the same scalar factor for all values; need a kernel that allows scalar multiplication of a vector; maybe use AXPY
@@ -1111,20 +1096,7 @@ def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_i
     aie_buffers.decode.attn_scores.to("npu")
     aie_buffers.decode.attn_weights.to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("attn_weights").to("cpu").view_as_torch().flatten()
     aie_buffers.decode.attn_weights.to("npu")
-    
-    # Step 8: Compute attention output on NPU
-    # Transpose values: (max_context_len, head_dim) -> (head_dim, max_context_len) for each head using fused operator
-    fused_transpose = aie_ops.decode.transpose_values_fused
-    fused_transpose.input_buffer.view_as_torch().to("cpu")[:] = 0
-    fused_transpose.output_buffer.view_as_torch().to("cpu")[:] = 0
-    fused_transpose.scratch_buffer.view_as_torch().to("cpu")[:] = 0
-    fused_transpose.get_buffer("values_all").to("cpu").view_as_torch()[:] = aie_buffers.decode.attn_scores_values.to("cpu").view_as_torch().flatten()
-    
-    fused_transpose()
-    
-    # Reshape flat output to match expected 3D shape (n_heads, head_dim, max_context_len)
-    aie_buffers.decode.attn_scores_values_transposed.to("cpu").view_as_torch().flatten()[:] =  fused_transpose.get_buffer("values_transposed_all").to("cpu").view_as_torch().flatten()
-    aie_buffers.decode.attn_scores_values_transposed.to("npu")
+    aie_buffers.decode.attn_scores_values_transposed.to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("attn_scores_values_transposed").to("cpu").view_as_torch().flatten()
     
     # GEMV: (n_heads, head_dim, max_context_len) @ (n_heads, max_context_len) -> (n_heads, head_dim)
     aie_ops.decode.gemv_attn_context(aie_buffers.decode.attn_scores_values_transposed, aie_buffers.decode.attn_weights, aie_buffers.decode.attn_context)
