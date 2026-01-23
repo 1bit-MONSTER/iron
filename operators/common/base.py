@@ -239,6 +239,7 @@ class AIEBuffer:
     def from_torch(tensor):
         return AIEBuffer.from_np(torch_to_numpy(tensor))
 
+
 class SingleXclbinCallable:
     def __init__(self, xclbin_path, kernel_name, insts_bin_path, args_spec, device_manager=None):
         self.device_manager = device_manager or AIEDeviceManager()

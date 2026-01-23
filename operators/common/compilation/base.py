@@ -388,6 +388,7 @@ class AieccCompilationRule(CompilationRule, ABC):
         self.peano_dir = peano_dir
         super().__init__(*args, **kwargs)
 
+
 class AieccFullElfCompilationRule(AieccCompilationRule):
     def matches(self, graph):
         return any(graph.get_worklist(FullElfArtifact))

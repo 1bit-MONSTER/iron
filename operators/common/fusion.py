@@ -1,6 +1,7 @@
 import numpy as np
 import ml_dtypes
 import pyxrt
+import ctypes
 from . import compilation as comp
 from .base import AIEOperatorBase, SingleMLIRSourceOperator, AIEBuffer
 from .device_manager import AIEDeviceManager
@@ -176,18 +177,49 @@ class FusedMLIROperator(AIEOperatorBase):
         pass
     
     def get_callable(self):
-        """Return a callable for the fused operator (stub for now)."""
         return FusedFullELFCallable(self)
+
+    def get_layout_for_buffer(self, buffer_name):
+        if buffer_name in self.slice_info:
+            buf_name, start, end = self.slice_info[buffer_name]
+            buf_type, parent_start, parent_end = self.get_layout_for_buffer(buf_name)
+            return buf_type, parent_start + start, parent_start + end
+
+        buf_type, offset, length = self.subbuffer_layout[buffer_name]
+        return buf_type, offset, length
+
+
+def load_elf(op):
+    assert isinstance(op.artifacts[0], comp.FullElfArtifact)
+    elf_data = None
+    with open(op.artifacts[0].filename, 'rb') as f:
+        elf_data = np.frombuffer(f.read(), dtype=np.uint32)
+    return elf_data
+
+
+def patch_elf(elf_data, patches):
+    for i, patch in patches.items():
+        val, mask = patch
+        elf_data[i] = (elf_data[i] & ~mask) | (val & mask)
+    return elf_data
 
 
 class FullELFCallable:
-    def __init__(self, op, device_name="main", sequence_name="sequence", device_manager=None):
+    def __init__(self, elf_data, device_name="main", sequence_name="sequence", device_manager=None):
         self.device_manager = device_manager or AIEDeviceManager()
-        self.xrt_elf = pyxrt.elf(op.artifacts[0].filename)
-        self.xrt_module = pyxrt.module(self.xrt_elf)
-        self.xrt_context = pyxrt.hw_context(self.device_manager.device, self.xrt_elf)
-        self.xrt_kernel = pyxrt.ext.kernel(self.xrt_context, f"{device_name}:{sequence_name}")
-    
+        # Create a PyCapsule from the numpy array pointer for pybind11
+        elf_data_u8 = elf_data.view(dtype=np.uint8)
+        ctypes.pythonapi.PyCapsule_New.restype = ctypes.py_object
+        ctypes.pythonapi.PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+        capsule = ctypes.pythonapi.PyCapsule_New(
+            elf_data_u8.ctypes.data,
+            None,
+            None
+        )
+        xrt_elf = pyxrt.elf(capsule, elf_data.nbytes)
+        xrt_context = pyxrt.hw_context(self.device_manager.device, xrt_elf)
+        self.xrt_kernel = pyxrt.ext.kernel(xrt_context, f"{device_name}:{sequence_name}")
+
     def __call__(self, *args):
         run = pyxrt.run(self.xrt_kernel)
         for i, arg in enumerate(args):
@@ -196,17 +228,17 @@ class FullELFCallable:
         run.start()
         ret_code = run.wait()
         if ret_code != pyxrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
-            raise RuntimeError(f"Kernel execution failed with return code {retcode}")
+            raise RuntimeError(f"Kernel execution failed with return code {ret_code}")
+
 
 class FusedFullELFCallable(FullELFCallable):
-    def __init__(self, op, device_manager=None):
-        super().__init__(op, device_manager=device_manager)
+    def __init__(self, op, elf_data=None, device_manager=None):
+        if elf_data is None:
+            elf_data = load_elf(op)
+        super().__init__(elf_data, device_manager=device_manager)
 
-        self.subbuffer_layout = op.subbuffer_layout
-        self.buffer_sizes = op.buffer_sizes
-        self.slice_info = op.slice_info
-        
-        input_buffer_size, output_buffer_size, scratch_buffer_size = self.buffer_sizes
+        self.op = op
+        input_buffer_size, output_buffer_size, scratch_buffer_size = op.buffer_sizes
         itemsize = np.dtype(ml_dtypes.bfloat16).itemsize
         
         self.input_buffer = AIEBuffer(
@@ -231,31 +263,7 @@ class FusedFullELFCallable(FullELFCallable):
         if buffer_name in self._buffer_cache:
             return self._buffer_cache[buffer_name]
         
-        bf16_itemsize = np.dtype(ml_dtypes.bfloat16).itemsize
-        
-        # Check if this is a sliced buffer
-        if buffer_name in self.slice_info:
-            base_name, start, end = self.slice_info[buffer_name]
-            # Get the parent buffer
-            parent_buffer = self.get_buffer(base_name)
-            # Create subbuffer from parent
-            start_elements = start // bf16_itemsize
-            length_elements = (end - start) // bf16_itemsize
-            sub_buffer = parent_buffer.subbuffer(
-                length=length_elements,
-                offset=start_elements,
-                shape=(length_elements,),
-                dtype=ml_dtypes.bfloat16
-            )
-            # Cache and return
-            self._buffer_cache[buffer_name] = sub_buffer
-            return sub_buffer
-        
-        # Look up buffer information for regular buffers
-        if buffer_name not in self.subbuffer_layout:
-            raise KeyError(f"Buffer '{buffer_name}' not found in buffer layout")
-        
-        buf_type, offset, length = self.subbuffer_layout[buffer_name]
+        buf_type, offset, length = self.op.get_layout_for_buffer(buffer_name)
         
         # Select the appropriate main buffer
         if buf_type == 'input':
@@ -271,11 +279,11 @@ class FusedFullELFCallable(FullELFCallable):
             raise RuntimeError(f"Main buffer for type '{buf_type}' is not allocated")
         
         # Convert byte offset/length to element offset/length
-        offset_elements = offset // bf16_itemsize
-        length_elements = length // bf16_itemsize
+        itemsize = np.dtype(ml_dtypes.bfloat16).itemsize
+        offset_elements = offset // itemsize
+        length_elements = length // itemsize
         
         # Create subbuffer with appropriate shape
-        # For now, use 1D shape; could be enhanced to use actual buffer shapes
         sub_buffer = main_buffer.subbuffer(
             length=length_elements,
             offset=offset_elements,

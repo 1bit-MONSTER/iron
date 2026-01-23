@@ -19,7 +19,7 @@ from operators.common import (
 )
 from operators.common.utils import torch_to_numpy, numpy_to_torch
 from operators.common.base import PatchableSingleXclbinCallable
-from operators.common.fusion import FusedMLIROperator
+from operators.common.fusion import FusedMLIROperator, FusedFullELFCallable, load_elf, patch_elf
 from operators import (
     AIERMSNorm,
     AIEGEMM,
@@ -259,30 +259,79 @@ class AIELlamaOperators:
             context=elf_ctx
         )
         
-        self.decode.attn_proj_rope_fused_op = FusedMLIROperator(
-            "attn_proj_rope_decode",
+        strided_copy_cache_magic = 0xDEADBEE0
+        strided_copy_cache_op = AIEStridedCopy(
+            input_sizes=(config.n_kv_groups, config.head_dim),
+            input_strides=(config.head_dim, 1),
+            input_offset=0,
+            output_sizes=(1, config.n_kv_groups, config.head_dim),
+            output_strides=(0, prompt_len * config.head_dim, 1),
+            output_offset=7 * config.head_dim * 2,  # Will be patched at runtime
+            input_buffer_size=1 * config.n_kv_groups * config.head_dim,
+            output_buffer_size=config.n_kv_groups * prompt_len * config.head_dim,
+            num_aie_channels=1,
+            output_offset_patch_marker=strided_copy_cache_magic,
+            context=elf_ctx
+        )
+        
+        # Calculate buffer size for keys/values cache (same size, used as input to strided copy)
+        cache_buffer_size = config.n_kv_groups * prompt_len * config.head_dim * 2  # * 2 for bfloat16
+        
+        self.decode.attn_fused_op = FusedMLIROperator(
+            "attn_fused_op",
             [
                 (gemv_attn_query_op, "W_attn_query", "x_norm", "queries"),
                 (gemv_attn_key_value_op, "W_attn_key", "x_norm", "keys"),
                 (gemv_attn_key_value_op, "W_attn_value", "x_norm", "values"),
                 (rope_queries_op, "queries", "rope_angles", "queries"),
                 (rope_keys_op, "keys", "rope_angles", "keys"),
+                (strided_copy_cache_op, "keys", "keys_cache"),
+                (strided_copy_cache_op, "values", "values_cache"),
             ],
             input_args=[
                 "W_attn_query",
                 "W_attn_key",
                 "W_attn_value",
                 "x_norm",
-                "rope_angles"
+                "rope_angles",
+                "keys_cache",
+                "values_cache"
             ],
             output_args=[
                 "queries",
                 "keys",
                 "values"
             ],
+            buffer_sizes={
+                "keys_cache": cache_buffer_size,
+                "values_cache": cache_buffer_size
+            },
             context=elf_ctx
         ).compile()
-        self.decode.attn_proj_rope_fused = self.decode.attn_proj_rope_fused_op.get_callable()
+
+        elf = load_elf(self.decode.attn_fused_op)
+        self.decode.attn_fused_elf_data = elf
+        
+        def get_patch_locs(elf_data, magic):
+            return [i for i, x in enumerate(elf_data) if magic & 0xFFFFFFFF == x ]
+
+        # Extract patch offsets for strided_copy operations in fused operator
+        _, keys_cache_offs, _ = self.decode.attn_fused_op.get_layout_for_buffer("keys_cache")
+        _, values_cache_offs, _ = self.decode.attn_fused_op.get_layout_for_buffer("values_cache")
+        keys_patches = {
+            l: keys_cache_offs
+            for l in get_patch_locs(self.decode.attn_fused_elf_data, (keys_cache_offs + strided_copy_cache_magic * 2))
+        }
+        values_patches = {
+            l: values_cache_offs
+            for l in get_patch_locs(self.decode.attn_fused_elf_data, (values_cache_offs + strided_copy_cache_magic * 2))
+        }
+        no_offset_patches = {
+            l: 0
+            for l in get_patch_locs(self.decode.attn_fused_elf_data, (strided_copy_cache_magic * 2))
+        }
+        self.decode.attn_fused_patch_locations = {**keys_patches, **values_patches, **no_offset_patches}
+        assert len(self.decode.attn_fused_patch_locations) == 6
         
         # Fused transpose for all attention heads (decode)
         transpose_values_op = AIETranspose(
@@ -362,6 +411,7 @@ class AIELlamaOperators:
             i for i, x in enumerate(self.decode.softmax.insts_buffer.view_as_np())
             if 0xBA5EBA11 == x
         ]
+        assert len(self.decode.softmax_patch_offsets) == 1, "Something else accidentally generated our magic mask value"
         
         # RoPE operators
         # For queries: (seq_len, num_heads * head_dim) = (seq_len, 2048)
@@ -395,35 +445,6 @@ class AIELlamaOperators:
             context=self.context
         ).compile().get_callable()
         
-        # Strided copy operators for cache update (transpose and concatenate)
-        # Keys: transpose from (1, n_kv_groups, head_dim) to (n_kv_groups, 1, head_dim) and write to cache
-        self.decode.strided_copy_cache_compilable = AIEStridedCopy(
-            input_sizes=(config.n_kv_groups, 1, config.head_dim),
-            input_strides=(config.head_dim, config.n_kv_groups * config.head_dim, 1),
-            input_offset=0,
-            output_sizes=(1, config.n_kv_groups, 1, config.head_dim),
-            output_strides=(0, prompt_len * config.head_dim, config.head_dim, 1),
-            output_offset=0,  # Will be patched at runtime based on cached_prompt_len
-            input_buffer_size=1 * config.n_kv_groups * config.head_dim,
-            output_buffer_size=config.n_kv_groups * prompt_len * config.head_dim,
-            num_aie_channels=1,
-            context=self.context,
-            output_offset_patch_marker=0xDEADBEE0,
-        ).compile()
-        
-        # Create patchable callable for runtime offset updates
-        self.decode.strided_copy_cache = PatchableSingleXclbinCallable(
-            xclbin_path=self.decode.strided_copy_cache_compilable.xclbin_artifact.filename,
-            kernel_name=self.decode.strided_copy_cache_compilable.xclbin_artifact.kernel_name,
-            insts_bin_path=self.decode.strided_copy_cache_compilable.insts_artifact.filename,
-            args_spec=self.decode.strided_copy_cache_compilable.get_arg_spec()
-        )
-        self.decode.strided_copy_patch_offsets = [
-            i for i, x in enumerate(self.decode.strided_copy_cache.insts_buffer.view_as_np())
-            if (0xDEADBEE0 * 2) & 0xFFFFFFFF == x
-        ]
-        assert len(self.decode.strided_copy_patch_offsets) == 2, "Something else accidentally generated our magic offset"
-
         # Repeat interleave for keys: (n_kv_groups, context_len, head_dim) -> (n_heads, context_len, head_dim)
         # Compile with max context length, then patch at runtime for actual context_len
         self.decode.attn_repeat_interleave = AIERepeat(
@@ -988,14 +1009,20 @@ def llama_forward_pass_prefill(
 def patch_operators_for_decode(config, num_preceding_tokens):
     context_len = num_preceding_tokens + 1
     
-    # Patch strided copy operator for cache offset
+    # Patch fused operator for strided copy cache offset
     output_offset = num_preceding_tokens * config.head_dim
     offset_val = output_offset * 2  # Multiply by 2 for bfloat16 byte offset
     strided_copy_patches = { 
-        i: (offset_val, 0xFFFFFFFF)
-        for i in aie_ops.decode.strided_copy_patch_offsets
+        i: (base + offset_val, 0xFFFFFFFF)
+        for i, base in aie_ops.decode.attn_fused_patch_locations.items()
     }
-    aie_ops.decode.strided_copy_cache.patch(strided_copy_patches)
+    patched_elf_data = aie_ops.decode.attn_fused_elf_data.copy()
+    patch_elf(patched_elf_data, strided_copy_patches)
+
+    aie_ops.decode.attn_fused = FusedFullELFCallable(
+        aie_ops.decode.attn_fused_op,
+        elf_data=patched_elf_data
+    )
     
     # Patch softmax operator for actual context length
     softmax_patches = {
@@ -1062,8 +1089,8 @@ def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_i
     context_len = num_preceding_tokens + 1
     group_size = config.n_heads // config.n_kv_groups
 
-    # Step 1-2: Fused attention projections + RoPE
-    fused_op = aie_ops.decode.attn_proj_rope_fused
+    # Step 1-3: Fused attention projections + RoPE + cache update
+    fused_op = aie_ops.decode.attn_fused
     fused_op.input_buffer.view_as_torch().to("cpu")[:] = 0
     fused_op.output_buffer.view_as_torch().to("cpu")[:] = 0
     fused_op.scratch_buffer.view_as_torch().to("cpu")[:] = 0
@@ -1072,21 +1099,19 @@ def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_i
     fused_op.get_buffer("W_attn_value").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_value_decode[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("x_norm").to("cpu").view_as_torch()[:] = aie_buffers.decode.x_norm.to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("rope_angles").to("cpu").view_as_torch()[:] = aie_buffers.decode.rope_angles.to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("keys_cache").to("cpu").view_as_torch()[:] = aie_buffers.keys_cache[layer_idx].to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("values_cache").to("cpu").view_as_torch()[:] = aie_buffers.values_cache[layer_idx].to("cpu").view_as_torch().flatten()
     
     fused_op()
     
     aie_buffers.decode.queries.to("cpu").view_as_torch().view(-1)[:] = fused_op.get_buffer("queries").to("cpu").view_as_torch().flatten()
     aie_buffers.decode.keys.to("cpu").view_as_torch().view(-1)[:] = fused_op.get_buffer("keys").to("cpu").view_as_torch().flatten()
     aie_buffers.decode.values.to("cpu").view_as_torch().view(-1)[:] = fused_op.get_buffer("values").to("cpu").view_as_torch().flatten()
+    aie_buffers.keys_cache[layer_idx].to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("keys_cache").to("cpu").view_as_torch().flatten()
+    aie_buffers.values_cache[layer_idx].to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("values_cache").to("cpu").view_as_torch().flatten()
     aie_buffers.decode.queries.to("npu")
     aie_buffers.decode.keys.to("npu")
     aie_buffers.decode.values.to("npu")
-    
-    # Step 3: Update cache using strided copy on NPU (transpose and concatenate)
-    # Cache is already on NPU from prefill initialization or previous decode iteration
-    # Transpose and append new keys/values to this layer's cache on NPU
-    aie_ops.decode.strided_copy_cache(aie_buffers.decode.keys, aie_buffers.keys_cache[layer_idx])
-    aie_ops.decode.strided_copy_cache(aie_buffers.decode.values, aie_buffers.values_cache[layer_idx])
     
     # Step 4: Repeat keys and values for grouped attention using AIERepeat on NPU
     aie_ops.decode.attn_repeat_interleave(aie_buffers.keys_cache[layer_idx], aie_buffers.decode.attn_scores_keys)
