@@ -336,6 +336,15 @@ class AIELlamaOperators:
             num_batches=config.n_heads,
             context=self.context
         )
+
+        gemv_attn_output_op = AIEGEMV(
+            M=config.emb_dim,
+            K=config.n_heads * config.head_dim,
+            num_aie_columns=8,
+            tile_size_input=4,
+            tile_size_output=config.emb_dim // 8,
+            context=self.context
+        )
         
         cache_buffer_size = config.n_kv_groups * prompt_len * config.head_dim * 2  # * 2 for bfloat16
         values_per_head_buffer_size = prompt_len * config.head_dim * 2  # * 2 for bfloat16
@@ -364,7 +373,8 @@ class AIELlamaOperators:
                     )
                     for h in range(config.n_heads)
                 ] + [
-                    (gemv_attn_context_op, "attn_scores_values_transposed", "attn_weights", "attn_context")
+                    (gemv_attn_context_op, "attn_scores_values_transposed", "attn_weights", "attn_context"),
+                    (gemv_attn_output_op, "W_attn_output_decode", "attn_context", "attn_output")
                 ]
             ),
             input_args=[
@@ -543,15 +553,6 @@ class AIELlamaOperators:
             context=self.context
         ).compile().get_callable()
         
-        # Output projection: (n_heads * head_dim,) @ (emb_dim, n_heads * head_dim)^T -> (emb_dim,)
-        self.decode.gemv_attn_output = AIEGEMV(
-            M=config.emb_dim,
-            K=config.n_heads * config.head_dim,
-            num_aie_columns=8,
-            tile_size_input=4,
-            tile_size_output=config.emb_dim // 8,
-            context=self.context
-        ).compile().get_callable()
 
 
 # Allocate buffers shared with NPU
@@ -1081,15 +1082,13 @@ def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_i
     fused_op.get_buffer("keys_cache").to("cpu").view_as_torch()[:] = aie_buffers.keys_cache[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("values_cache").to("cpu").view_as_torch()[:] = aie_buffers.values_cache[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("attn_scale_factor").to("cpu").view_as_torch()[:] = aie_buffers.decode.attn_scale_factor.to("cpu").view_as_torch().flatten()
-    
+    fused_op.get_buffer("W_attn_output_decode").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_output_decode[layer_idx].to("cpu").view_as_torch().flatten()
+
     fused_op()
     
     aie_buffers.keys_cache[layer_idx].to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("keys_cache").to("cpu").view_as_torch().flatten()
     aie_buffers.values_cache[layer_idx].to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("values_cache").to("cpu").view_as_torch().flatten()
-    aie_buffers.decode.attn_context.to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("attn_context").to("cpu").view_as_torch().flatten()
-    
-    # Step 9: Project on NPU: (emb_dim, n_heads * head_dim) @ (n_heads * head_dim,) -> (emb_dim,)
-    aie_ops.decode.gemv_attn_output(aie_buffers.W_attn_output_decode[layer_idx], aie_buffers.decode.attn_context, aie_buffers.decode.attn_output)
+    aie_buffers.decode.attn_output.to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("attn_output").to("cpu").view_as_torch().flatten()
 
 
 # Main
