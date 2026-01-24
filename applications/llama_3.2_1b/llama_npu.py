@@ -66,14 +66,7 @@ class AIELlamaOperators:
             tile_size=config.emb_dim,
             context=self.context
         ).compile().get_callable()
-        self.decode.rms_norm = AIERMSNorm(
-            size=config.emb_dim,
-            eps=1e-5,
-            num_aie_columns=1,
-            num_channels=2,
-            tile_size=config.emb_dim,
-            context=self.context
-        ).compile().get_callable()
+
 
         # Residual additions
         self.prefill.residual_add = AIEElementwiseAdd(
@@ -150,7 +143,14 @@ class AIELlamaOperators:
             num_aie_columns=8,
             context=self.context
         ).compile().get_callable()
-        
+        self.decode.rms_norm = AIERMSNorm(
+            size=config.emb_dim,
+            eps=1e-5,
+            num_aie_columns=1,
+            num_channels=2,
+            tile_size=config.emb_dim,
+            context=self.context
+        ).compile().get_callable()        
         
         elf_ctx = AIEContext(build_dir="build_elf")
 
@@ -328,6 +328,8 @@ class AIELlamaOperators:
             "attn_fused_op",
             (
                 [
+                    (rms_norm_op, "x", "W_norm1", "x_norm") # Step 1: RMS normalization
+                ] + [
                     # <grouped query attention>
                     (gemv_attn_query_op, "W_attn_query", "x_norm", "queries"),
                     (gemv_attn_key_value_op, "W_attn_key", "x_norm", "keys"),
@@ -365,6 +367,7 @@ class AIELlamaOperators:
                 ]
             ),
             input_args=[
+                "W_norm1",
                 "W_attn_query",
                 "W_attn_key",
                 "W_attn_value",
@@ -1036,17 +1039,15 @@ def llama_forward_pass_decode(config, state):
 
 
 def transformer_block_forward_decode(config, num_preceding_tokens, layer_idx):
-    aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_norm1[layer_idx], aie_buffers.decode.x_norm) # Step 1: RMS normalization
-
     fused_op = aie_ops.decode.attn_fused
     fused_op.input_buffer.view_as_torch().to("cpu")[:] = 0
     fused_op.output_buffer.view_as_torch().to("cpu")[:] = 0
     fused_op.scratch_buffer.view_as_torch().to("cpu")[:] = 0
     fused_op.get_buffer("x").to("cpu").view_as_torch()[:] = aie_buffers.decode.x.to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("W_norm1").to("cpu").view_as_torch()[:] = aie_buffers.W_norm1[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("W_attn_query").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_query_decode[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("W_attn_key").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_key_decode[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("W_attn_value").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_value_decode[layer_idx].to("cpu").view_as_torch().flatten()
-    fused_op.get_buffer("x_norm").to("cpu").view_as_torch()[:] = aie_buffers.decode.x_norm.to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("rope_angles").to("cpu").view_as_torch()[:] = aie_buffers.decode.rope_angles.to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("keys_cache").to("cpu").view_as_torch()[:] = aie_buffers.keys_cache[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("values_cache").to("cpu").view_as_torch()[:] = aie_buffers.values_cache[layer_idx].to("cpu").view_as_torch().flatten()
