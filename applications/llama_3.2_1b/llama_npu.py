@@ -151,87 +151,6 @@ class AIELlamaOperators:
             context=self.context
         ).compile().get_callable()
         
-        postattn_ctx = AIEContext(build_dir="build_postattn")
-        
-        # Fused operator for post-norm + SwiGLU + residual (decode)
-        rms_norm_op = AIERMSNorm(
-            size=config.emb_dim,
-            eps=1e-5,
-            num_aie_columns=1,
-            num_channels=2,
-            tile_size=config.emb_dim,
-            context=postattn_ctx
-        )
-        
-        gemv_ffn_up_gate_op = AIEGEMV(
-            M=config.hidden_dim,
-            K=config.emb_dim,
-            num_aie_columns=8,
-            tile_size_input=4,
-            tile_size_output=config.hidden_dim // 8,
-            context=postattn_ctx
-        )
-        
-        gemv_ffn_down_op = AIEGEMV(
-            M=config.emb_dim,
-            K=config.hidden_dim,
-            num_aie_columns=8,
-            tile_size_input=1,
-            tile_size_output=config.emb_dim // 8,
-            context=postattn_ctx
-        )
-        
-        silu_ffn_op = AIESiLU(
-            size=config.hidden_dim,
-            tile_size=config.hidden_dim // 8,
-            num_aie_columns=8,
-            context=postattn_ctx
-        )
-        
-        eltwise_mul_ffn_op = AIEElementwiseMul(
-            size=config.hidden_dim,
-            tile_size=config.hidden_dim // 8,
-            num_aie_columns=8,
-            context=postattn_ctx
-        )
-        
-        residual_add_op = AIEElementwiseAdd(
-            size=config.emb_dim,
-            tile_size=config.emb_dim // 8,
-            context=postattn_ctx
-        )
-        
-        repeat_interleave_op = AIERepeat(
-            rows=config.n_kv_groups,
-            cols=prompt_len * config.head_dim,  # Max context length
-            repeat=config.n_heads // config.n_kv_groups,
-            transfer_size=config.head_dim,
-            context=self.context
-        )
-        
-        self.decode.post_attn_fused_op = FusedMLIROperator(
-            "post_attn_decode",
-            [
-                (residual_add_op, "x", "attn_output", "x"),
-                (rms_norm_op, "x", "W_norm2", "x_norm"),
-                (gemv_ffn_up_gate_op, "W_ffn_gate", "x_norm", "ffn_gate"),
-                (gemv_ffn_up_gate_op, "W_ffn_up", "x_norm", "ffn_up"),
-                (silu_ffn_op, "ffn_gate", "ffn_gate"),
-                (eltwise_mul_ffn_op, "ffn_gate", "ffn_up", "ffn_hidden"),
-                (gemv_ffn_down_op, "W_ffn_down", "ffn_hidden", "ffn_output"),
-                (residual_add_op, "x", "ffn_output", "x"),
-            ],
-            input_args=[
-                "W_norm2",
-                "W_ffn_gate",
-                "W_ffn_up",
-                "W_ffn_down"
-            ],
-            output_args=[
-            ],
-            context=postattn_ctx
-        ).compile()
-        self.decode.post_attn_fused = self.decode.post_attn_fused_op.get_callable()
         
         elf_ctx = AIEContext(build_dir="build_elf")
 
@@ -292,14 +211,14 @@ class AIELlamaOperators:
             tile_size_input=4,
             tile_size_output=prompt_len // 8,
             num_batches=config.n_heads,
-            context=self.context
+            context=elf_ctx
         )
         
         attn_scale_op = AIEElementwiseMul(
             size=config.n_heads * prompt_len,
             tile_size=prompt_len // 8,
             num_aie_columns=8,
-            context=self.context
+            context=elf_ctx
         )
         
         # Softmax operators for attention weights
@@ -311,7 +230,7 @@ class AIELlamaOperators:
             num_channels=1,
             rtp_vector_size=prompt_len,  # Compile with max size
             mask_patch_value=softmax_magic,  # Magic value for patching
-            context=self.context
+            context=elf_ctx
         )
         
         # Fused transpose for all attention heads (decode)
@@ -334,7 +253,7 @@ class AIELlamaOperators:
             tile_size_input=4,
             tile_size_output=4,
             num_batches=config.n_heads,
-            context=self.context
+            context=elf_ctx
         )
 
         gemv_attn_output_op = AIEGEMV(
@@ -343,7 +262,62 @@ class AIELlamaOperators:
             num_aie_columns=8,
             tile_size_input=4,
             tile_size_output=config.emb_dim // 8,
-            context=self.context
+            context=elf_ctx
+        )
+        
+        rms_norm_op = AIERMSNorm(
+            size=config.emb_dim,
+            eps=1e-5,
+            num_aie_columns=1,
+            num_channels=2,
+            tile_size=config.emb_dim,
+            context=elf_ctx
+        )
+        
+        gemv_ffn_up_gate_op = AIEGEMV(
+            M=config.hidden_dim,
+            K=config.emb_dim,
+            num_aie_columns=8,
+            tile_size_input=4,
+            tile_size_output=config.hidden_dim // 8,
+            context=elf_ctx
+        )
+        
+        gemv_ffn_down_op = AIEGEMV(
+            M=config.emb_dim,
+            K=config.hidden_dim,
+            num_aie_columns=8,
+            tile_size_input=1,
+            tile_size_output=config.emb_dim // 8,
+            context=elf_ctx
+        )
+        
+        silu_ffn_op = AIESiLU(
+            size=config.hidden_dim,
+            tile_size=config.hidden_dim // 8,
+            num_aie_columns=8,
+            context=elf_ctx
+        )
+        
+        eltwise_mul_ffn_op = AIEElementwiseMul(
+            size=config.hidden_dim,
+            tile_size=config.hidden_dim // 8,
+            num_aie_columns=8,
+            context=elf_ctx
+        )
+        
+        residual_add_op = AIEElementwiseAdd(
+            size=config.emb_dim,
+            tile_size=config.emb_dim // 8,
+            context=elf_ctx
+        )
+        
+        repeat_interleave_op = AIERepeat(
+            rows=config.n_kv_groups,
+            cols=prompt_len * config.head_dim,  # Max context length
+            repeat=config.n_heads // config.n_kv_groups,
+            transfer_size=config.head_dim,
+            context=elf_ctx
         )
         
         cache_buffer_size = config.n_kv_groups * prompt_len * config.head_dim * 2  # * 2 for bfloat16
@@ -354,6 +328,7 @@ class AIELlamaOperators:
             "attn_fused_op",
             (
                 [
+                    # <grouped query attention>
                     (gemv_attn_query_op, "W_attn_query", "x_norm", "queries"),
                     (gemv_attn_key_value_op, "W_attn_key", "x_norm", "keys"),
                     (gemv_attn_key_value_op, "W_attn_value", "x_norm", "values"),
@@ -375,6 +350,18 @@ class AIELlamaOperators:
                 ] + [
                     (gemv_attn_context_op, "attn_scores_values_transposed", "attn_weights", "attn_context"),
                     (gemv_attn_output_op, "W_attn_output_decode", "attn_context", "attn_output")
+                    # </grouped query attention>
+                ] + [
+                    # <post attention block>
+                    (residual_add_op, "x", "attn_output", "x"),
+                    (rms_norm_op, "x", "W_norm2", "x_norm"),
+                    (gemv_ffn_up_gate_op, "W_ffn_gate", "x_norm", "ffn_gate"),
+                    (gemv_ffn_up_gate_op, "W_ffn_up", "x_norm", "ffn_up"),
+                    (silu_ffn_op, "ffn_gate", "ffn_gate"),
+                    (eltwise_mul_ffn_op, "ffn_gate", "ffn_up", "ffn_hidden"),
+                    (gemv_ffn_down_op, "W_ffn_down", "ffn_hidden", "ffn_output"),
+                    (residual_add_op, "x", "ffn_output", "x"),
+                    # </post attention block>
                 ]
             ),
             input_args=[
@@ -385,7 +372,11 @@ class AIELlamaOperators:
                 "rope_angles",
                 "keys_cache",
                 "values_cache",
-                "attn_scale_factor"
+                "attn_scale_factor",
+                "W_norm2",
+                "W_ffn_gate",
+                "W_ffn_up",
+                "W_ffn_down"
             ],
             output_args=[
                 "queries",
@@ -1046,34 +1037,12 @@ def llama_forward_pass_decode(config, state):
 
 def transformer_block_forward_decode(config, num_preceding_tokens, layer_idx):
     aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_norm1[layer_idx], aie_buffers.decode.x_norm) # Step 1: RMS normalization
-    grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_idx) # Step 2: Attention; results stored in attn_output
-    
-    # Step 4-6: Fused post-norm + SwiGLU + residual
-    fused_op = aie_ops.decode.post_attn_fused
-    fused_op.input_buffer.view_as_torch().to("cpu")[:] = 0
-    fused_op.output_buffer.view_as_torch().to("cpu")[:] = 0
-    fused_op.scratch_buffer.view_as_torch().to("cpu")[:] = 0
-    fused_op.get_buffer("x").to("cpu").view_as_torch()[:] = aie_buffers.decode.x.to("cpu").view_as_torch().flatten()
-    fused_op.get_buffer("attn_output").to("cpu").view_as_torch()[:] = aie_buffers.decode.attn_output.to("cpu").view_as_torch().flatten()
-    fused_op.get_buffer("W_norm2").to("cpu").view_as_torch()[:] = aie_buffers.W_norm2[layer_idx].to("cpu").view_as_torch().flatten()
-    fused_op.get_buffer("W_ffn_gate").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_gate_decode[layer_idx].to("cpu").view_as_torch().flatten()
-    fused_op.get_buffer("W_ffn_up").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_up_decode[layer_idx].to("cpu").view_as_torch().flatten()
-    fused_op.get_buffer("W_ffn_down").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_down_decode[layer_idx].to("cpu").view_as_torch().flatten()
-    
-    fused_op()
-    
-    aie_buffers.decode.x.to("cpu").view_as_torch()[:] = fused_op.get_buffer("x").to("cpu").view_as_torch()[:]
 
-
-def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_idx):
-    context_len = num_preceding_tokens + 1
-    group_size = config.n_heads // config.n_kv_groups
-
-    # Step 1-3: Fused attention projections + RoPE + cache update
     fused_op = aie_ops.decode.attn_fused
     fused_op.input_buffer.view_as_torch().to("cpu")[:] = 0
     fused_op.output_buffer.view_as_torch().to("cpu")[:] = 0
     fused_op.scratch_buffer.view_as_torch().to("cpu")[:] = 0
+    fused_op.get_buffer("x").to("cpu").view_as_torch()[:] = aie_buffers.decode.x.to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("W_attn_query").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_query_decode[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("W_attn_key").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_key_decode[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("W_attn_value").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_value_decode[layer_idx].to("cpu").view_as_torch().flatten()
@@ -1083,12 +1052,16 @@ def grouped_query_attention_forward_decode(config, num_preceding_tokens, layer_i
     fused_op.get_buffer("values_cache").to("cpu").view_as_torch()[:] = aie_buffers.values_cache[layer_idx].to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("attn_scale_factor").to("cpu").view_as_torch()[:] = aie_buffers.decode.attn_scale_factor.to("cpu").view_as_torch().flatten()
     fused_op.get_buffer("W_attn_output_decode").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_output_decode[layer_idx].to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("W_norm2").to("cpu").view_as_torch()[:] = aie_buffers.W_norm2[layer_idx].to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("W_ffn_gate").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_gate_decode[layer_idx].to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("W_ffn_up").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_up_decode[layer_idx].to("cpu").view_as_torch().flatten()
+    fused_op.get_buffer("W_ffn_down").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_down_decode[layer_idx].to("cpu").view_as_torch().flatten()
 
     fused_op()
     
     aie_buffers.keys_cache[layer_idx].to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("keys_cache").to("cpu").view_as_torch().flatten()
     aie_buffers.values_cache[layer_idx].to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("values_cache").to("cpu").view_as_torch().flatten()
-    aie_buffers.decode.attn_output.to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer("attn_output").to("cpu").view_as_torch().flatten()
+    aie_buffers.decode.x.to("cpu").view_as_torch()[:] = fused_op.get_buffer("x").to("cpu").view_as_torch()[:]
 
 
 # Main
