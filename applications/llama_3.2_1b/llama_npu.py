@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 
+# Next steps for decode performance:
+# [ ] All decode operators operate on 2048-padded buffers; instead, should bin into shorter sequence lengths and call smaller operators
+# [ ] Opportunity to fuse data layout transformations (e.g., transpose ops) onto end of other operations (e.g., transpose after RoPE)
+# [ ] Some kernels are not optimized; e.g., softmax masking is using scalar cores
+# [ ] Fine-tune parameters of operators (e.g., num AIE columns, tile sizes)
+# [ ] Patching of operators (instantiating new xrt::elf for each token) is slow; find quicker way of patching instruction sequence in-memory
+# [ ] Spatial fusion of operators
+
 import torch
 import math
 from pathlib import Path
@@ -14,31 +22,32 @@ repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(repo_root))
 
 from operators.common.context import AIEContext
-from operators.common import (
-    AIEBuffer
-)
-from operators.common.utils import torch_to_numpy, numpy_to_torch
+from operators.common import AIEBuffer
+from operators.common.utils import torch_to_numpy
 from operators.common.base import PatchableSingleXclbinCallable
 from operators.common.fusion import FusedMLIROperator, FusedFullELFCallable, load_elf, patch_elf
 from operators import (
     AIERMSNorm,
     AIEGEMM,
     AIEGEMV,
-    AIEElementwiseAdd
+    AIEElementwiseAdd,
+    AIEElementwiseMul,
+    AIESiLU,
+    AIERope,
+    AIEStridedCopy,
+    AIERepeat,
+    AIESoftmax,
+    AIETranspose
 )
-from operators.elementwise_mul.op import AIEElementwiseMul
-from operators.silu.op import AIESiLU
-from operators.rope.op import AIERope
-from operators.strided_copy.op import AIEStridedCopy
-from operators.repeat.op import AIERepeat
-from operators.softmax.op import AIESoftmax
-from operators.transpose.op import AIETranspose
 
 logging.basicConfig(level=logging.DEBUG)
+
+max_seq_len = 2048
 
 
 # AIE Operator Configuration
 # ##########################################################################
+
 
 aie_ops = None
 
@@ -57,11 +66,9 @@ class AIELlamaOperators:
         self.prefill = AIEPrefillOperations()
         self.decode = AIEDecodeOperations()
 
-
-        # ##########################################################################
+        # ##################################################################
         # Prefill operators
 
-        # RMS Norm
         self.prefill.rms_norm = AIERMSNorm(
             size=prompt_len * config.emb_dim,
             eps=1e-5,
@@ -71,8 +78,6 @@ class AIELlamaOperators:
             context=self.context
         ).compile().get_callable()
 
-
-        # Residual additions
         self.prefill.residual_add = AIEElementwiseAdd(
             size=prompt_len * config.emb_dim,
             tile_size=config.emb_dim
@@ -82,7 +87,6 @@ class AIELlamaOperators:
             tile_size=config.emb_dim // 8
         ).compile().get_callable()
 
-        # Final GEMM
         min_N = 64 * 8 * 4  # tile_n * num_aie_columns * partition_N
         config.padded_vocab_size = (config.vocab_size + min_N - 1) // min_N * min_N
         config.vocab_partitions = 4
@@ -222,12 +226,11 @@ class AIELlamaOperators:
         ).compile().get_callable()
 
 
-        # Fused prefill operator
-        # ##########################################################################
+        # Decode operator (everything temporally fused)
+        # ##################################################################
 
         elf_ctx = AIEContext(build_dir="build_elf")
 
-        # Fused operator for attention projections + RoPE (decode)
         gemv_attn_query_op = AIEGEMV(
             M=config.n_heads * config.head_dim,
             K=config.emb_dim,
@@ -490,7 +493,6 @@ class AIELlamaOperators:
             magic = magic & 0xFFFFFFFF
             return np.where(elf_data == magic)[0]
 
-        # Extract patch offsets for strided_copy operations in fused operator
         keys_patches = {}
         values_patches = {}
         for layer_idx in range(config.n_layers):
@@ -599,16 +601,11 @@ class AIEPrefillBuffers:
         # Attention weights buffer (output of softmax)
         self.attn_weights = AIEBuffer(shape=(n_heads * prompt_len, prompt_len), dtype=ml_dtypes.bfloat16)
 
-class AIEDecodeBuffers:
-    def __init__(self, emb_dim, hidden_dim, n_heads, n_kv_groups, head_dim, max_context_len):
-        self.x = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
-
 
 class AIELlamaBuffers:
     def __init__(self, config, prompt_len):
         # Vector of the current token(s) being processed through the pipeline
         self.prefill = AIEPrefillBuffers(prompt_len, config.emb_dim, config.hidden_dim, config.n_heads, config.n_kv_groups, config.head_dim)
-        self.decode = AIEDecodeBuffers(config.emb_dim, config.hidden_dim, config.n_heads, config.n_kv_groups, config.head_dim, prompt_len)
 
         # Per-layer KV cache buffers on NPU (used by strided copy for transpose and concatenate)
         self.keys_cache = [
@@ -685,7 +682,6 @@ class AIELlamaBuffers:
             )
             for i in range(config.vocab_partitions)
         ]
-        self.decode.logits = AIEBuffer(shape=(config.vocab_size,))
 
 
 # Prefill
@@ -935,26 +931,23 @@ def patch_fused_decode_operator(ops, config, num_preceding_tokens):
 def llama_forward_pass_decode(config, state):
     batch, seq_len = state.token_ids.shape
     assert seq_len == 1 
+    assert state.num_preceding_tokens < max_seq_len
 
     patch_fused_decode_operator(aie_ops.decode, config, state.num_preceding_tokens)
 
     # Prefill RoPE angle look-up tables
     angles_slice = config.angles[state.num_preceding_tokens : state.num_preceding_tokens + seq_len]
     aie_ops.decode.fused.get_buffer("rope_angles").to("cpu").view_as_torch()[:] = angles_slice
-    #scale_factor = 1.0 / math.sqrt(config.head_dim)
-    #aie_ops.decode.fused.get_buffer("attn_scale_factor").to("cpu").view_as_torch()[:] = scale_factor
 
     # Token embedding (on CPU)
     tok_emb_weight = config.weights['model.embed_tokens.weight']
     x = torch.nn.functional.embedding(state.token_ids, tok_emb_weight)
     aie_ops.decode.fused.get_buffer("x").view_as_torch().view(-1, config.emb_dim)[:seq_len, :] = x
 
-    # Fused NPU operator for all of decode
+    # Fused NPU operator for all of decode (16 transformer blocks + final norm + final linear layer)
     aie_ops.decode.fused.input_buffer.to("cpu")
     aie_ops.decode.fused()
     aie_ops.decode.fused.output_buffer.to("cpu")
-
-    # Read outputs from NPU to CPU
     logits = aie_ops.decode.fused.get_buffer("logits").view_as_torch().view(1, 1, config.vocab_size)
 
     return logits, state
@@ -962,6 +955,7 @@ def llama_forward_pass_decode(config, state):
 
 # Main
 # ##########################################################################
+
 
 def llama_forward_pass(
     config,
@@ -987,7 +981,6 @@ def llama_forward_pass(
 
 def main():
     global aie_ops, aie_buffers
-    max_seq_len = 2048
     prompt = "The capital of France is "
     #with open('prompt.txt', 'r') as f:
     #    prompt = f.read()
