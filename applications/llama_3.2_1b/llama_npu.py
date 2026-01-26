@@ -57,6 +57,10 @@ class AIELlamaOperators:
         self.prefill = AIEPrefillOperations()
         self.decode = AIEDecodeOperations()
 
+
+        # ##########################################################################
+        # Prefill operators
+
         # RMS Norm
         self.prefill.rms_norm = AIERMSNorm(
             size=prompt_len * config.emb_dim,
@@ -95,14 +99,6 @@ class AIELlamaOperators:
             context=self.context
         ).compile()
         self.prefill.out_head = self.prefill.gemv_out_head_compilable.get_callable()
-        self.decode.gemv_out_head = AIEGEMV(
-            M=config.vocab_size,
-            K=config.emb_dim,
-            num_aie_columns=8,
-            tile_size_input=4,
-            tile_size_output=32,
-            context=self.context
-        ).compile().get_callable()
         
         # SwiGLU FFN operators
         # Prefill: M=prompt_len, K=emb_dim, N=hidden_dim
@@ -143,15 +139,92 @@ class AIELlamaOperators:
             num_aie_columns=8,
             context=self.context
         ).compile().get_callable()
-        self.decode.rms_norm = AIERMSNorm(
-            size=config.emb_dim,
-            eps=1e-5,
-            num_aie_columns=1,
-            num_channels=2,
-            tile_size=config.emb_dim,
+
+        # Attention score scaling operators
+        # FIXME: Using elementwise mul is very wasteful (of bandwidth) here since it's the same scalar factor for all values; need a kernel that allows scalar multiplication of a vector; maybe use AXPY
+        self.prefill.attn_scale = AIEElementwiseMul(
+            size=config.n_heads * prompt_len * prompt_len,
+            tile_size=prompt_len,
+            num_aie_columns=8,
             context=self.context
-        ).compile().get_callable()        
+        ).compile().get_callable()
         
+        # RoPE operators
+        # For queries: (seq_len, num_heads * head_dim) = (seq_len, 2048)
+        # For keys: (seq_len, num_kv_groups * head_dim) = (seq_len, 512)
+        # angle_rows=1 because all rows use the same angle row (angles are per position)
+        self.prefill.rope_queries = AIERope(
+            rows=prompt_len * config.n_heads,
+            cols=config.head_dim,
+            angle_rows=prompt_len,
+            context=self.context
+        ).compile().get_callable()
+        
+        self.prefill.rope_keys = AIERope(
+            rows=prompt_len * config.n_kv_groups,
+            cols=config.head_dim,
+            angle_rows=prompt_len,
+            context=self.context
+        ).compile().get_callable()
+        
+        # Attention projection operators
+        # Query projection: (seq_len, emb_dim) -> (seq_len, n_heads * head_dim)
+        self.prefill.attn_query = AIEGEMM(
+            M=prompt_len,
+            K=config.emb_dim,
+            N=config.n_heads * config.head_dim,
+            num_aie_columns=8,
+            tile_m=64,
+            tile_k=64,
+            tile_n=64,
+            b_col_maj=False,
+            context=self.context
+        ).compile().get_callable()
+        
+        # Key projection: (seq_len, emb_dim) -> (seq_len, n_kv_groups * head_dim)
+        self.prefill.attn_key = AIEGEMM(
+            M=prompt_len,
+            K=config.emb_dim,
+            N=config.n_kv_groups * config.head_dim,
+            num_aie_columns=8,
+            tile_m=64,
+            tile_k=64,
+            tile_n=64,
+            b_col_maj=False,
+            context=self.context
+        ).compile().get_callable()
+        
+        # Value projection: (seq_len, emb_dim) -> (seq_len, n_kv_groups * head_dim)
+        self.prefill.attn_value = AIEGEMM(
+            M=prompt_len,
+            K=config.emb_dim,
+            N=config.n_kv_groups * config.head_dim,
+            num_aie_columns=8,
+            tile_m=64,
+            tile_k=64,
+            tile_n=64,
+            b_col_maj=False,
+            context=self.context
+        ).compile().get_callable()
+        
+        # Attention score computation: Q @ K^T per head
+        # For prefill: (seq_len, head_dim) @ (head_dim, seq_len) = (seq_len, seq_len) per head
+        self.prefill.attn_scores = AIEGEMM(
+            M=prompt_len,
+            K=config.head_dim,
+            N=prompt_len,
+            num_aie_columns=8,
+            tile_m=64,
+            tile_k=64,
+            tile_n=64,
+            b_col_maj=False,
+            context=self.context
+        ).compile().get_callable()
+
+
+        # Fused prefill operator
+        # ##########################################################################
+
         elf_ctx = AIEContext(build_dir="build_elf")
 
         # Fused operator for attention projections + RoPE (decode)
@@ -319,6 +392,17 @@ class AIELlamaOperators:
             transfer_size=config.head_dim,
             context=elf_ctx
         )
+
+        gemv_out_head_op = AIEGEMV(
+            M=config.vocab_size,
+            K=config.emb_dim,
+            num_aie_columns=8,
+            tile_size_input=4,
+            tile_size_output=32,
+            context=self.context
+        )
+
+        # Create fused operator
         
         cache_buffer_size = config.n_kv_groups * prompt_len * config.head_dim * 2  # * 2 for bfloat16
         values_per_head_buffer_size = prompt_len * config.head_dim * 2  # * 2 for bfloat16
@@ -326,6 +410,7 @@ class AIELlamaOperators:
 
         runlist = []
         for layer_idx in range(config.n_layers):       
+            # <transformer block>
             runlist.extend(
                 [
                     (rms_norm_op,             "x", f"W_norm1_{layer_idx}", "x_norm") # Step 1: RMS normalization
@@ -354,7 +439,6 @@ class AIELlamaOperators:
                     (gemv_attn_output_op,    f"W_attn_output_decode_{layer_idx}", "attn_context", "attn_output")
                     # </grouped query attention>
                 ] + [
-                    # <post attention block>
                     (residual_add_op,        "x", "attn_output", "x"),
                     (rms_norm_op,            "x", f"W_norm2_{layer_idx}", "x_norm"),
                     (gemv_ffn_up_gate_op,    f"W_ffn_gate_{layer_idx}", "x_norm", "ffn_gate"),
@@ -363,18 +447,24 @@ class AIELlamaOperators:
                     (eltwise_mul_ffn_op,     "ffn_gate", "ffn_up", "ffn_hidden"),
                     (gemv_ffn_down_op,       f"W_ffn_down_{layer_idx}", "ffn_hidden", "ffn_output"),
                     (residual_add_op,        "x", "ffn_output", "x"),
-                    # </post attention block>
                 ]
             )
+            # </transformer block>
+        runlist += [
+            (rms_norm_op,       "x", "W_final_norm", "x"), 
+            (gemv_out_head_op,  "W_out_head", "x", "logits")  
+        ]
             
         self.decode.fused_op = FusedMLIROperator(
             "fused_op",
             runlist,
             input_args=[  # arguments that change between invocations of the fused kernel and therefore need to be synced on each token
-                "x",  # both input and output
+                "x",
                 "rope_angles",
             ],
-            output_args=[],
+            output_args=[
+                "logits"
+            ],
             buffer_sizes={
                 **{
                     f"keys_cache_{layer_idx}": cache_buffer_size
@@ -392,8 +482,10 @@ class AIELlamaOperators:
             context=elf_ctx
         ).compile()
 
+        # Operator patching
+
         self.decode.fused_elf_data = load_elf(self.decode.fused_op)
-        
+
         def get_patch_locs(elf_data, magic):
             magic = magic & 0xFFFFFFFF
             return np.where(elf_data == magic)[0]
@@ -427,6 +519,8 @@ class AIELlamaOperators:
             elf_data=self.decode.fused_elf_data
         )
 
+        # Operator static buffers (weights, LUTs)
+
         for layer_idx in range(config.n_layers):
             self.decode.fused.get_buffer(f"W_norm1_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.input_layernorm.weight'].flatten()
             self.decode.fused.get_buffer(f"W_attn_query_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.self_attn.q_proj.weight'].flatten()
@@ -438,92 +532,12 @@ class AIELlamaOperators:
             self.decode.fused.get_buffer(f"W_ffn_up_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.mlp.up_proj.weight'].flatten()
             self.decode.fused.get_buffer(f"W_ffn_down_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.mlp.down_proj.weight'].flatten()
         scale_factor = 1.0 / math.sqrt(config.head_dim)
-        self.decode.fused.get_buffer(f"attn_scale_factor").to("cpu").view_as_torch()[:] = scale_factor
+        self.decode.fused.get_buffer("attn_scale_factor").to("cpu").view_as_torch()[:] = scale_factor
+        self.decode.fused.get_buffer("W_final_norm").to("cpu").view_as_torch()[:] = config.weights['model.norm.weight'].flatten()
+        self.decode.fused.get_buffer("W_out_head").to("cpu").view_as_torch()[:] = config.weights['model.embed_tokens.weight'].flatten()
         self.decode.fused.input_buffer.to("npu")
         self.decode.fused.scratch_buffer.to("npu")
-        self.decode.fused.output_buffer.to("npu")
-
-        # Attention score scaling operators
-        # FIXME: Using elementwise mul is very wasteful (of bandwidth) here since it's the same scalar factor for all values; need a kernel that allows scalar multiplication of a vector; maybe use AXPY
-        self.prefill.attn_scale = AIEElementwiseMul(
-            size=config.n_heads * prompt_len * prompt_len,
-            tile_size=prompt_len,
-            num_aie_columns=8,
-            context=self.context
-        ).compile().get_callable()
-        
-        # RoPE operators
-        # For queries: (seq_len, num_heads * head_dim) = (seq_len, 2048)
-        # For keys: (seq_len, num_kv_groups * head_dim) = (seq_len, 512)
-        # angle_rows=1 because all rows use the same angle row (angles are per position)
-        self.prefill.rope_queries = AIERope(
-            rows=prompt_len * config.n_heads,
-            cols=config.head_dim,
-            angle_rows=prompt_len,
-            context=self.context
-        ).compile().get_callable()
-        
-        self.prefill.rope_keys = AIERope(
-            rows=prompt_len * config.n_kv_groups,
-            cols=config.head_dim,
-            angle_rows=prompt_len,
-            context=self.context
-        ).compile().get_callable()
-        
-        # Attention projection operators
-        # Query projection: (seq_len, emb_dim) -> (seq_len, n_heads * head_dim)
-        self.prefill.attn_query = AIEGEMM(
-            M=prompt_len,
-            K=config.emb_dim,
-            N=config.n_heads * config.head_dim,
-            num_aie_columns=8,
-            tile_m=64,
-            tile_k=64,
-            tile_n=64,
-            b_col_maj=False,
-            context=self.context
-        ).compile().get_callable()
-        
-        # Key projection: (seq_len, emb_dim) -> (seq_len, n_kv_groups * head_dim)
-        self.prefill.attn_key = AIEGEMM(
-            M=prompt_len,
-            K=config.emb_dim,
-            N=config.n_kv_groups * config.head_dim,
-            num_aie_columns=8,
-            tile_m=64,
-            tile_k=64,
-            tile_n=64,
-            b_col_maj=False,
-            context=self.context
-        ).compile().get_callable()
-        
-        # Value projection: (seq_len, emb_dim) -> (seq_len, n_kv_groups * head_dim)
-        self.prefill.attn_value = AIEGEMM(
-            M=prompt_len,
-            K=config.emb_dim,
-            N=config.n_kv_groups * config.head_dim,
-            num_aie_columns=8,
-            tile_m=64,
-            tile_k=64,
-            tile_n=64,
-            b_col_maj=False,
-            context=self.context
-        ).compile().get_callable()
-        
-        # Attention score computation: Q @ K^T per head
-        # For prefill: (seq_len, head_dim) @ (head_dim, seq_len) = (seq_len, seq_len) per head
-        self.prefill.attn_scores = AIEGEMM(
-            M=prompt_len,
-            K=config.head_dim,
-            N=prompt_len,
-            num_aie_columns=8,
-            tile_m=64,
-            tile_k=64,
-            tile_n=64,
-            b_col_maj=False,
-            context=self.context
-        ).compile().get_callable()
-        
+        self.decode.fused.output_buffer.to("npu")       
 
 
 # Allocate buffers shared with NPU
@@ -924,35 +938,26 @@ def llama_forward_pass_decode(config, state):
 
     patch_fused_decode_operator(aie_ops.decode, config, state.num_preceding_tokens)
 
-    # Step 1: Prefill RoPE angle look-up tables
+    # Prefill RoPE angle look-up tables
     angles_slice = config.angles[state.num_preceding_tokens : state.num_preceding_tokens + seq_len]
     aie_ops.decode.fused.get_buffer("rope_angles").to("cpu").view_as_torch()[:] = angles_slice
     #scale_factor = 1.0 / math.sqrt(config.head_dim)
     #aie_ops.decode.fused.get_buffer("attn_scale_factor").to("cpu").view_as_torch()[:] = scale_factor
 
-    # Step 2: Token embedding (on CPU)
+    # Token embedding (on CPU)
     tok_emb_weight = config.weights['model.embed_tokens.weight']
     x = torch.nn.functional.embedding(state.token_ids, tok_emb_weight)
     aie_ops.decode.fused.get_buffer("x").view_as_torch().view(-1, config.emb_dim)[:seq_len, :] = x
 
-    # Step 3: Transformer blocks
-    transformer_blocks_forward_decode(config, state.num_preceding_tokens)
-    aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_final_norm, aie_buffers.decode.x) # Step 4: Final normalization
-    aie_ops.decode.gemv_out_head(aie_buffers.W_out_head, aie_buffers.decode.x, aie_buffers.decode.logits)  # Step 5: Output projection
+    # Fused NPU operator for all of decode
+    aie_ops.decode.fused.input_buffer.to("cpu")
+    aie_ops.decode.fused()
+    aie_ops.decode.fused.output_buffer.to("cpu")
 
     # Read outputs from NPU to CPU
-    aie_buffers.decode.logits.to("cpu")
-    logits = aie_buffers.decode.logits.view_as_torch().view(1, 1, config.vocab_size)
+    logits = aie_ops.decode.fused.get_buffer("logits").view_as_torch().view(1, 1, config.vocab_size)
 
     return logits, state
-
-
-def transformer_blocks_forward_decode(config, num_preceding_tokens):
-    fused_op = aie_ops.decode.fused
-
-    fused_op.input_buffer.to("cpu")
-    fused_op()
-    aie_buffers.decode.x.to("cpu").view_as_torch()[:] = fused_op.get_buffer("x").to("cpu").view_as_torch()[:]
 
 
 # Main
