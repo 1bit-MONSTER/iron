@@ -206,7 +206,22 @@ def patch_elf(elf_data, patches):
 
 class FullELFCallable:
     def __init__(self, elf_data, device_name="main", sequence_name="sequence", device_manager=None):
+        self.device_name = device_name
+        self.sequence_name = sequence_name
         self.device_manager = device_manager or AIEDeviceManager()
+        self.reload_elf(elf_data)
+
+    def __call__(self, *args):
+        run = pyxrt.run(self.xrt_kernel)
+        for i, arg in enumerate(args):
+            assert isinstance(arg, pyxrt.bo), f"Argument {i} is not a pyxrt.bo"
+            run.set_arg(i, arg)
+        run.start()
+        ret_code = run.wait()
+        if ret_code != pyxrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
+            raise RuntimeError(f"Kernel execution failed with return code {ret_code}")
+    
+    def reload_elf(self, elf_data):
         # Create a PyCapsule from the numpy array pointer for pybind11
         elf_data_u8 = elf_data.view(dtype=np.uint8)
         ctypes.pythonapi.PyCapsule_New.restype = ctypes.py_object
@@ -218,17 +233,7 @@ class FullELFCallable:
         )
         xrt_elf = pyxrt.elf(capsule, elf_data.nbytes)
         xrt_context = pyxrt.hw_context(self.device_manager.device, xrt_elf)
-        self.xrt_kernel = pyxrt.ext.kernel(xrt_context, f"{device_name}:{sequence_name}")
-
-    def __call__(self, *args):
-        run = pyxrt.run(self.xrt_kernel)
-        for i, arg in enumerate(args):
-            assert isinstance(arg, pyxrt.bo), f"Argument {i} is not a pyxrt.bo"
-            run.set_arg(i, arg)
-        run.start()
-        ret_code = run.wait()
-        if ret_code != pyxrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
-            raise RuntimeError(f"Kernel execution failed with return code {ret_code}")
+        self.xrt_kernel = pyxrt.ext.kernel(xrt_context, f"{self.device_name}:{self.sequence_name}")
 
 
 class FusedFullELFCallable(FullELFCallable):
@@ -298,7 +303,6 @@ class FusedFullELFCallable(FullELFCallable):
     def __call__(self):
         self.input_buffer.to("npu")
         self.output_buffer.to("npu")
-        self.scratch_buffer.to("npu")
         super().__call__(
             self.input_buffer.bo if self.input_buffer else None,
             self.output_buffer.bo if self.output_buffer else None,

@@ -336,8 +336,8 @@ class AIELlamaOperators:
                     (gemv_attn_key_value_op, f"W_attn_value_{layer_idx}", "x_norm", "values"),
                     (rope_queries_op,        "queries", "rope_angles", "queries"),
                     (rope_keys_op,           "keys", "rope_angles", "keys"),
-                    (strided_copy_cache_op,  "keys", "keys_cache"),
-                    (strided_copy_cache_op,  "values", "values_cache"),
+                    (strided_copy_cache_op,  "keys", f"keys_cache_{layer_idx}"),
+                    (strided_copy_cache_op,  "values", f"values_cache_{layer_idx}"),
                     (repeat_interleave_op,   f"keys_cache_{layer_idx}", "attn_scores_keys"),
                     (repeat_interleave_op,   f"values_cache_{layer_idx}", "attn_scores_values"),
                     (gemv_attn_scores_op,    "attn_scores_keys", "queries", "attn_scores"),
@@ -367,41 +367,21 @@ class AIELlamaOperators:
                 ]
             )
             
-        self.decode.attn_fused_op = FusedMLIROperator(
-            "attn_fused_op",
+        self.decode.fused_op = FusedMLIROperator(
+            "fused_op",
             runlist,
-            input_args=[
-                f"W_norm1_{layer_idx}" for layer_idx in range(config.n_layers)
-            ] + [
-                f"W_attn_query_{layer_idx}" for layer_idx in range(config.n_layers)
-            ] + [
-                f"W_attn_key_{layer_idx}" for layer_idx in range(config.n_layers)
-            ] + [
-                f"W_attn_value_{layer_idx}" for layer_idx in range(config.n_layers)
-            ] + [
-                f"W_norm2_{layer_idx}" for layer_idx in range(config.n_layers)
-            ] + [
-                f"W_ffn_gate_{layer_idx}" for layer_idx in range(config.n_layers)
-            ] + [
-                f"W_ffn_up_{layer_idx}" for layer_idx in range(config.n_layers)
-            ] + [
-                f"W_ffn_down_{layer_idx}" for layer_idx in range(config.n_layers)
-            ] + [
-                f"keys_cache_{layer_idx}" for layer_idx in range(config.n_layers)
-            ] + [
-                f"values_cache_{layer_idx}" for layer_idx in range(config.n_layers)
-            ] + [
+            input_args=[  # arguments that change between invocations of the fused kernel and therefore need to be synced on each token
+                "x",  # both input and output
                 "rope_angles",
-                "attn_scale_factor",
             ],
             output_args=[],
             buffer_sizes={
                 **{
-                    "keys_cache_{layer_idx}": cache_buffer_size
+                    f"keys_cache_{layer_idx}": cache_buffer_size
                     for layer_idx in range(config.n_layers)
                 },
                 **{
-                    "values_cache_{layer_idx}": cache_buffer_size
+                    f"values_cache_{layer_idx}": cache_buffer_size
                     for layer_idx in range(config.n_layers)
                 },
                 **{
@@ -412,31 +392,56 @@ class AIELlamaOperators:
             context=elf_ctx
         ).compile()
 
-        self.decode.attn_fused_elf_data = load_elf(self.decode.attn_fused_op)
+        self.decode.fused_elf_data = load_elf(self.decode.fused_op)
         
         def get_patch_locs(elf_data, magic):
-            return [i for i, x in enumerate(elf_data) if magic & 0xFFFFFFFF == x]
+            magic = magic & 0xFFFFFFFF
+            return np.where(elf_data == magic)[0]
 
         # Extract patch offsets for strided_copy operations in fused operator
-        _, keys_cache_offs, _ = self.decode.attn_fused_op.get_layout_for_buffer("keys_cache")
-        _, values_cache_offs, _ = self.decode.attn_fused_op.get_layout_for_buffer("values_cache")
-        keys_patches = {
-            l: keys_cache_offs
-            for l in get_patch_locs(self.decode.attn_fused_elf_data, (keys_cache_offs + strided_copy_cache_magic * 2))
-        }
-        values_patches = {
-            l: values_cache_offs
-            for l in get_patch_locs(self.decode.attn_fused_elf_data, (values_cache_offs + strided_copy_cache_magic * 2))
-        }
+        keys_patches = {}
+        values_patches = {}
+        for layer_idx in range(config.n_layers):
+            _, keys_cache_offs, _ = self.decode.fused_op.get_layout_for_buffer(f"keys_cache_{layer_idx}")
+            _, values_cache_offs, _ = self.decode.fused_op.get_layout_for_buffer(f"values_cache_{layer_idx}")
+            keys_patches.update({
+                int(l): keys_cache_offs
+                for l in get_patch_locs(self.decode.fused_elf_data, (keys_cache_offs + strided_copy_cache_magic * 2))
+            })
+            values_patches.update({
+                int(l): values_cache_offs
+                for l in get_patch_locs(self.decode.fused_elf_data, (values_cache_offs + strided_copy_cache_magic * 2))
+            })
         no_offset_patches = {
-            l: 0
-            for l in get_patch_locs(self.decode.attn_fused_elf_data, (strided_copy_cache_magic * 2))
+            int(l): 0
+            for l in get_patch_locs(self.decode.fused_elf_data, (strided_copy_cache_magic * 2))
         }
-        self.decode.attn_fused_patch_locations = {**keys_patches, **values_patches, **no_offset_patches}
-        assert len(self.decode.attn_fused_patch_locations) == 4 * config.n_layers + 2
+        self.decode.fused_patch_locations = {**keys_patches, **values_patches, **no_offset_patches}
+        assert len(self.decode.fused_patch_locations) == 4 * config.n_layers + 2
 
-        self.decode.softmax_patch_offsets = get_patch_locs(self.decode.attn_fused_elf_data, softmax_magic)
+        self.decode.softmax_patch_offsets = get_patch_locs(self.decode.fused_elf_data, softmax_magic)
         assert len(self.decode.softmax_patch_offsets) == config.n_layers + 1
+
+        self.decode.fused = FusedFullELFCallable(
+            self.decode.fused_op,
+            elf_data=self.decode.fused_elf_data
+        )
+
+        for layer_idx in range(config.n_layers):
+            self.decode.fused.get_buffer(f"W_norm1_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.input_layernorm.weight'].flatten()
+            self.decode.fused.get_buffer(f"W_attn_query_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.self_attn.q_proj.weight'].flatten()
+            self.decode.fused.get_buffer(f"W_attn_key_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.self_attn.k_proj.weight'].flatten()
+            self.decode.fused.get_buffer(f"W_attn_value_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.self_attn.v_proj.weight'].flatten()
+            self.decode.fused.get_buffer(f"W_attn_output_decode_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.self_attn.o_proj.weight'].flatten()
+            self.decode.fused.get_buffer(f"W_norm2_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.post_attention_layernorm.weight'].flatten()
+            self.decode.fused.get_buffer(f"W_ffn_gate_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.mlp.gate_proj.weight'].flatten()
+            self.decode.fused.get_buffer(f"W_ffn_up_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.mlp.up_proj.weight'].flatten()
+            self.decode.fused.get_buffer(f"W_ffn_down_{layer_idx}").to("cpu").view_as_torch()[:] = config.weights[f'model.layers.{layer_idx}.mlp.down_proj.weight'].flatten()
+        scale_factor = 1.0 / math.sqrt(config.head_dim)
+        self.decode.fused.get_buffer(f"attn_scale_factor").to("cpu").view_as_torch()[:] = scale_factor
+        self.decode.fused.input_buffer.to("npu")
+        self.decode.fused.scratch_buffer.to("npu")
+        self.decode.fused.output_buffer.to("npu")
 
         # Attention score scaling operators
         # FIXME: Using elementwise mul is very wasteful (of bandwidth) here since it's the same scalar factor for all values; need a kernel that allows scalar multiplication of a vector; maybe use AXPY
@@ -465,20 +470,6 @@ class AIELlamaOperators:
             context=self.context
         ).compile().get_callable()
         
-        self.decode.rope_queries = AIERope(
-            rows=1 * config.n_heads,
-            cols=config.head_dim,
-            angle_rows=1,
-            context=self.context
-        ).compile().get_callable()
-        
-        self.decode.rope_keys = AIERope(
-            rows=1 * config.n_kv_groups,
-            cols=config.head_dim,
-            angle_rows=1,
-            context=self.context
-        ).compile().get_callable()
-        
         # Attention projection operators
         # Query projection: (seq_len, emb_dim) -> (seq_len, n_heads * head_dim)
         self.prefill.attn_query = AIEGEMM(
@@ -493,15 +484,6 @@ class AIELlamaOperators:
             context=self.context
         ).compile().get_callable()
         
-        self.decode.gemv_attn_query = AIEGEMV(
-            M=config.n_heads * config.head_dim,
-            K=config.emb_dim,
-            num_aie_columns=8,
-            tile_size_input=4,
-            tile_size_output=config.head_dim // 2,
-            context=self.context
-        ).compile().get_callable()
-        
         # Key projection: (seq_len, emb_dim) -> (seq_len, n_kv_groups * head_dim)
         self.prefill.attn_key = AIEGEMM(
             M=prompt_len,
@@ -512,15 +494,6 @@ class AIELlamaOperators:
             tile_k=64,
             tile_n=64,
             b_col_maj=False,
-            context=self.context
-        ).compile().get_callable()
-        
-        self.decode.gemv_attn_key_value = AIEGEMV(
-            M=config.n_kv_groups * config.head_dim,
-            K=config.emb_dim,
-            num_aie_columns=8,
-            tile_size_input=4,
-            tile_size_output=config.head_dim // 2,
             context=self.context
         ).compile().get_callable()
         
@@ -548,18 +521,6 @@ class AIELlamaOperators:
             tile_k=64,
             tile_n=64,
             b_col_maj=False,
-            context=self.context
-        ).compile().get_callable()
-        
-        # Transpose values from (max_context_len, head_dim) to (head_dim, max_context_len) per head
-        self.decode.transpose_values = AIETranspose(
-            M=prompt_len,
-            N=config.head_dim,
-            num_aie_columns=2,
-            num_channels=1,
-            m=256,
-            n=32,
-            s=8,
             context=self.context
         ).compile().get_callable()
         
@@ -627,48 +588,7 @@ class AIEPrefillBuffers:
 class AIEDecodeBuffers:
     def __init__(self, emb_dim, hidden_dim, n_heads, n_kv_groups, head_dim, max_context_len):
         self.x = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
-        self.x_norm = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
-        self.attn_output = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
-        self.ffn_output = AIEBuffer(shape=(1, emb_dim), dtype=ml_dtypes.bfloat16)
-        # SwiGLU intermediate buffers
-        self.ffn_gate = AIEBuffer(shape=(1, hidden_dim), dtype=ml_dtypes.bfloat16)
-        self.ffn_up = AIEBuffer(shape=(1, hidden_dim), dtype=ml_dtypes.bfloat16)
-        self.ffn_hidden = AIEBuffer(shape=(1, hidden_dim), dtype=ml_dtypes.bfloat16)
-        # Attention buffers: queries and keys serve as both projection output and RoPE input/output
-        self.queries = AIEBuffer(shape=(1 * n_heads, head_dim), dtype=ml_dtypes.bfloat16)
-        self.keys = AIEBuffer(shape=(1 * n_kv_groups, head_dim), dtype=ml_dtypes.bfloat16)
-        self.values = AIEBuffer(shape=(1, n_kv_groups * head_dim), dtype=ml_dtypes.bfloat16)
-        self.rope_angles = AIEBuffer(shape=(1, head_dim), dtype=ml_dtypes.bfloat16)
-        # Attention score computation buffers (batched)
-        self.attn_scores_keys = AIEBuffer(shape=(n_heads, max_context_len, head_dim), dtype=ml_dtypes.bfloat16)
-        self.attn_scores_values = AIEBuffer(shape=(n_heads, max_context_len, head_dim), dtype=ml_dtypes.bfloat16)
-        self.attn_scores_values_transposed = AIEBuffer(shape=(n_heads, head_dim, max_context_len), dtype=ml_dtypes.bfloat16)
-        # Create per-head subbuffers for transpose operations (to avoid allocating in hot path)
-        self.attn_scores_values_per_head = [
-            self.attn_scores_values.subbuffer(
-                length=max_context_len * head_dim,
-                offset=h * max_context_len * head_dim,
-                shape=(max_context_len, head_dim)
-            )
-            for h in range(n_heads)
-        ]
-        self.attn_scores_values_transposed_per_head = [
-            self.attn_scores_values_transposed.subbuffer(
-                length=head_dim * max_context_len,
-                offset=h * head_dim * max_context_len,
-                shape=(head_dim, max_context_len)
-            )
-            for h in range(n_heads)
-        ]
-        self.attn_context = AIEBuffer(shape=(n_heads, head_dim), dtype=ml_dtypes.bfloat16)
-        self.attn_context_concat = AIEBuffer(shape=(n_heads * head_dim,), dtype=ml_dtypes.bfloat16)
-        self.attn_scores = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
-        # Attention score scaling buffer (pre-initialized with 1/sqrt(head_dim))
-        scale_factor = 1.0 / math.sqrt(head_dim)
-        self.attn_scale_factor = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
-        self.attn_scale_factor.view_as_torch()[:] = scale_factor
-        self.attn_scale_factor.to("npu")
-        self.attn_weights = AIEBuffer(shape=(n_heads, max_context_len), dtype=ml_dtypes.bfloat16)
+
 
 class AIELlamaBuffers:
     def __init__(self, config, prompt_len):
@@ -711,35 +631,14 @@ class AIELlamaBuffers:
             self.W_norm2.append(
                 AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.post_attention_layernorm.weight']).to("npu")
             )
-            self.W_attn_query_decode.append(
-                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.q_proj.weight']).to("npu")
-            )
             self.W_attn_query_prefill.append(
                 AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.q_proj.weight'].T).to("npu")
-            )
-            self.W_attn_key_decode.append(
-                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.k_proj.weight']).to("npu")
             )
             self.W_attn_key_prefill.append(
                 AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.k_proj.weight'].T).to("npu")
             )
-            self.W_attn_value_decode.append(
-                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.v_proj.weight']).to("npu")
-            )
             self.W_attn_value_prefill.append(
                 AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.v_proj.weight'].T).to("npu")
-            )
-            self.W_attn_output_decode.append(
-                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.self_attn.o_proj.weight']).to("npu")
-            )
-            self.W_ffn_gate_decode.append(
-                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.mlp.gate_proj.weight']).to("npu")
-            )
-            self.W_ffn_up_decode.append(
-                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.mlp.up_proj.weight']).to("npu")
-            )
-            self.W_ffn_down_decode.append(
-                AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.mlp.down_proj.weight']).to("npu")
             )
             self.W_ffn_gate_prefill.append(
                 AIEBuffer.from_torch(config.weights[f'model.layers.{layer_idx}.mlp.gate_proj.weight'].T).to("npu")
@@ -998,7 +897,7 @@ def llama_forward_pass_prefill(
 # Decode
 # ##########################################################################
 
-def patch_operators_for_decode(ops, config, num_preceding_tokens):
+def patch_fused_decode_operator(ops, config, num_preceding_tokens):
     context_len = num_preceding_tokens + 1
     
     # Patch fused operator for strided copy cache offset
@@ -1006,42 +905,38 @@ def patch_operators_for_decode(ops, config, num_preceding_tokens):
     offset_val = output_offset * 2  # Multiply by 2 for bfloat16 byte offset
     strided_copy_patches = { 
         i: (base + offset_val, 0xFFFFFFFF)
-        for i, base in ops.attn_fused_patch_locations.items()
+        for i, base in ops.fused_patch_locations.items()
     }
     softmax_patches = {
         i: (context_len, 0xFFFFFFFF)
         for i in ops.softmax_patch_offsets
     }
     patches = {**strided_copy_patches, **softmax_patches}
-    patched_elf_data = ops.attn_fused_elf_data.copy()
+    patched_elf_data = ops.fused_elf_data.copy()
     patch_elf(patched_elf_data, patches)
 
-    ops.attn_fused = FusedFullELFCallable(
-        ops.attn_fused_op,
-        elf_data=patched_elf_data
-    )
+    ops.fused.reload_elf(patched_elf_data)
 
 
 def llama_forward_pass_decode(config, state):
     batch, seq_len = state.token_ids.shape
     assert seq_len == 1 
 
-    patch_operators_for_decode(aie_ops.decode, config, state.num_preceding_tokens)
+    patch_fused_decode_operator(aie_ops.decode, config, state.num_preceding_tokens)
 
     # Step 1: Prefill RoPE angle look-up tables
     angles_slice = config.angles[state.num_preceding_tokens : state.num_preceding_tokens + seq_len]
-    aie_buffers.decode.rope_angles.view_as_torch()[:] = angles_slice
+    aie_ops.decode.fused.get_buffer("rope_angles").to("cpu").view_as_torch()[:] = angles_slice
+    #scale_factor = 1.0 / math.sqrt(config.head_dim)
+    #aie_ops.decode.fused.get_buffer("attn_scale_factor").to("cpu").view_as_torch()[:] = scale_factor
 
     # Step 2: Token embedding (on CPU)
     tok_emb_weight = config.weights['model.embed_tokens.weight']
     x = torch.nn.functional.embedding(state.token_ids, tok_emb_weight)
-    aie_buffers.decode.x.view_as_torch().unsqueeze(0)[0, :seq_len, :] = x
+    aie_ops.decode.fused.get_buffer("x").view_as_torch().view(-1, config.emb_dim)[:seq_len, :] = x
 
     # Step 3: Transformer blocks
-    transformer_blocks_forward_decode(
-        config,
-        state.num_preceding_tokens,
-    )
+    transformer_blocks_forward_decode(config, state.num_preceding_tokens)
     aie_ops.decode.rms_norm(aie_buffers.decode.x, aie_buffers.W_final_norm, aie_buffers.decode.x) # Step 4: Final normalization
     aie_ops.decode.gemv_out_head(aie_buffers.W_out_head, aie_buffers.decode.x, aie_buffers.decode.logits)  # Step 5: Output projection
 
@@ -1053,33 +948,10 @@ def llama_forward_pass_decode(config, state):
 
 
 def transformer_blocks_forward_decode(config, num_preceding_tokens):
-    fused_op = aie_ops.decode.attn_fused
-    fused_op.input_buffer.view_as_torch().to("cpu")[:] = 0
-    fused_op.output_buffer.view_as_torch().to("cpu")[:] = 0
-    fused_op.scratch_buffer.view_as_torch().to("cpu")[:] = 0
+    fused_op = aie_ops.decode.fused
 
-    for layer_idx in range(config.n_layers):
-        fused_op.get_buffer(f"W_norm1_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.W_norm1[layer_idx].to("cpu").view_as_torch().flatten()
-        fused_op.get_buffer(f"W_attn_query_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_query_decode[layer_idx].to("cpu").view_as_torch().flatten()
-        fused_op.get_buffer(f"W_attn_key_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_key_decode[layer_idx].to("cpu").view_as_torch().flatten()
-        fused_op.get_buffer(f"W_attn_value_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_value_decode[layer_idx].to("cpu").view_as_torch().flatten()
-        fused_op.get_buffer(f"W_attn_output_decode_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.W_attn_output_decode[layer_idx].to("cpu").view_as_torch().flatten()
-        fused_op.get_buffer(f"W_norm2_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.W_norm2[layer_idx].to("cpu").view_as_torch().flatten()
-        fused_op.get_buffer(f"W_ffn_gate_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_gate_decode[layer_idx].to("cpu").view_as_torch().flatten()
-        fused_op.get_buffer(f"W_ffn_up_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_up_decode[layer_idx].to("cpu").view_as_torch().flatten()
-        fused_op.get_buffer(f"W_ffn_down_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.W_ffn_down_decode[layer_idx].to("cpu").view_as_torch().flatten()
-        fused_op.get_buffer(f"keys_cache_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.keys_cache[layer_idx].to("cpu").view_as_torch().flatten()
-        fused_op.get_buffer(f"values_cache_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.values_cache[layer_idx].to("cpu").view_as_torch().flatten()
-
-    fused_op.get_buffer("x").to("cpu").view_as_torch()[:] = aie_buffers.decode.x.to("cpu").view_as_torch().flatten()
-    fused_op.get_buffer("rope_angles").to("cpu").view_as_torch()[:] = aie_buffers.decode.rope_angles.to("cpu").view_as_torch().flatten()
-    fused_op.get_buffer("attn_scale_factor").to("cpu").view_as_torch()[:] = aie_buffers.decode.attn_scale_factor.to("cpu").view_as_torch().flatten()
-
+    fused_op.input_buffer.to("cpu")
     fused_op()
-    
-    for layer_idx in range(config.n_layers):
-        aie_buffers.keys_cache[layer_idx].to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer(f"keys_cache_{layer_idx}").to("cpu").view_as_torch().flatten()
-        aie_buffers.values_cache[layer_idx].to("cpu").view_as_torch().flatten()[:] = fused_op.get_buffer(f"values_cache_{layer_idx}").to("cpu").view_as_torch().flatten()
     aie_buffers.decode.x.to("cpu").view_as_torch()[:] = fused_op.get_buffer("x").to("cpu").view_as_torch()[:]
 
 
@@ -1090,10 +962,17 @@ def llama_forward_pass(
     config,
     state
 ):
+    global aie_ops, aie_buffers
+
     batch, seq_len = state.token_ids.shape
     if seq_len > 1:
         ret = llama_forward_pass_prefill(config, state)
         state.num_preceding_tokens = state.token_ids.shape[1]
+        # Pass KV cache data onto fused decode operator       
+        for layer_idx in range(config.n_layers):
+            aie_ops.decode.fused.get_buffer(f"keys_cache_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.keys_cache[layer_idx].to("cpu").view_as_torch().flatten()
+            aie_ops.decode.fused.get_buffer(f"values_cache_{layer_idx}").to("cpu").view_as_torch()[:] = aie_buffers.values_cache[layer_idx].to("cpu").view_as_torch().flatten()
+            aie_ops.decode.fused.scratch_buffer.to("cpu")
         return ret
     else:
         ret = llama_forward_pass_decode(config, state)

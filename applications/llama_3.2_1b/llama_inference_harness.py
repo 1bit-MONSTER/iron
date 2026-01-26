@@ -194,7 +194,6 @@ def generate(
     n_tokens_generated = 0
     t_prefill_start = time.perf_counter()
     first_token, state = generate_token(config, forward_pass, state)
-    print(len(state.token_ids[0]))
     token_text = config.tokenizer.decode([first_token])
     n_tokens_generated  += 1
     print(token_text, end='', flush=True)
