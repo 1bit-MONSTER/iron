@@ -98,12 +98,7 @@ def test_rope(rows, cols, angle_rows, aie_columns, method_type, aie_context):
         operator, input_buffers, output_buffers, rel_tol=0.05, abs_tol=0.5
     )
 
-    print(golden_ref["C"])
-    print(
-        operator.read_buffer_as_torch("output", (rows // angle_rows, angle_rows, cols))
-    )
-
     print(f"\nLatency (us): {latency_us:.1f}")
     print(f"Effective Bandwidth: {bandwidth_gbps:.6e} GB/s\n")
 
-    # assert not errors, f"Test failed with errors: {errors}"
+    assert not errors, f"Test failed with errors: {errors}"

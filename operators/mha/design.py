@@ -24,7 +24,7 @@ from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1Col1, NPU2, Tile
 from aie.iron.controlflow import range_
 from aie.helpers.taplib import TensorTiler2D, TensorAccessSequence, TensorAccessPattern
-from aie.helpers.dialects.ext.scf import if_, else_
+from aie.helpers.dialects.scf import if_, else_
 
 base_dir = Path(__file__).parent
 
@@ -115,6 +115,7 @@ def fused_mha(
     emulate_bf16_mmul_with_bfp16: bool,
     trace_size: int = 0,
     verbose: bool = False,
+    kernel_archive=None,
 ):
 
     of_depth = 2
@@ -205,7 +206,7 @@ def fused_mha(
 
     # AIE kernel declarations
     func_type = "" if vectorized else "_scalar"
-    bin_name = "mha_kernels.a"
+    bin_name = kernel_archive if kernel_archive else "mha_kernels.a"
 
     zero_kernel = Kernel(f"zero_{dtype_str}", bin_name, [qk_ty])
 

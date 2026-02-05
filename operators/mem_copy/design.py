@@ -167,7 +167,16 @@ def create_partial_workload_config(
 #
 
 
-def my_mem_copy(dev, size, num_cores, num_channels, bypass, tile_size, trace_size):
+def my_mem_copy(
+    dev,
+    size,
+    num_cores,
+    num_channels,
+    bypass,
+    tile_size,
+    trace_size,
+    kernel_archive=None,
+):
     # --------------------------------------------------------------------------
     # Configuration
     # --------------------------------------------------------------------------

@@ -15,7 +15,9 @@ from aie.helpers.taplib.tap import TensorAccessPattern
 from aie.iron.controlflow import range_
 
 
-def my_gelu(dev, size, num_columns, num_channels, tile_size, trace_size):
+def my_gelu(
+    dev, size, num_columns, num_channels, tile_size, trace_size, kernel_archive=None
+):
     xfr_dtype = bfloat16
     line_size = 8192 if tile_size > 8192 else tile_size
     fifodepth = 1 if line_size > 4096 else 2

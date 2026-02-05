@@ -31,7 +31,7 @@ class AIEDeviceManager:
         if AIEDeviceManager._initialized:
             return
         AIEDeviceManager._initialized = True
-        
+
         self.device = pyxrt.device(0)
         self.device_type = XRTHostRuntime().device()
         self.contexts = {}  # xclbin_path -> (context, xclbin)
@@ -104,3 +104,4 @@ class AIEDeviceManager:
         """Reset the device manager (for debugging)"""
         self.cleanup()
         AIEDeviceManager._instance = None
+        AIEDeviceManager._initialized = False

@@ -15,7 +15,15 @@ from aie.iron.controlflow import range_
 from aie.helpers.util import np_ndarray_type_get_shape
 
 
-def my_layer_norm(dev, num_elements, num_columns, num_channels, trace_size, tile_size):
+def my_layer_norm(
+    dev,
+    num_elements,
+    num_columns,
+    num_channels,
+    trace_size,
+    tile_size,
+    kernel_archive=None,
+):
     per_tile_elements = 8192 if tile_size > 8192 else tile_size
     n = per_tile_elements * num_columns
     if num_elements % n != 0:

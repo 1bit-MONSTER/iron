@@ -34,7 +34,7 @@ def get_optimal_columns_channels(input_length, tile_size):
 def generate_test_params(extensive=False):
     max_aie_columns = 8
     num_channels = 2
-    input_lengths = [4096] if not extensive else []
+    input_lengths = [32768] if not extensive else []
     tile_sizes = [1024, 512, 2048]
 
     params = []

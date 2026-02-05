@@ -16,7 +16,14 @@ from aie.helpers.util import np_ndarray_type_get_shape
 
 
 def my_dequant_kernel(
-    dev, num_elements, num_columns, num_channels, trace_size, tile_size, group_size
+    dev,
+    num_elements,
+    num_columns,
+    num_channels,
+    trace_size,
+    tile_size,
+    group_size,
+    kernel_archive=None,
 ):
     per_tile_elements = (
         16384 if tile_size > 16384 else tile_size

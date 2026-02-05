@@ -17,7 +17,9 @@ from operators.common import AIEContext
 @pytest.fixture
 def aie_context():
     """Create a fresh AIEContext for each test"""
-    return AIEContext()
+    ctx = AIEContext()
+    yield ctx
+    ctx.device_manager.reset()
 
 
 def pytest_addoption(parser):

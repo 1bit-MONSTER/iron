@@ -14,7 +14,16 @@ from aie.helpers.taplib.tap import TensorAccessPattern
 from aie.iron.controlflow import range_
 
 
-def my_leaky_relu(dev, size, num_columns, num_channels, tile_size, trace_size, alpha):
+def my_leaky_relu(
+    dev,
+    size,
+    num_columns,
+    num_channels,
+    tile_size,
+    trace_size,
+    alpha,
+    kernel_archive=None,
+):
     xfr_dtype = bfloat16
     line_size = 4096 if tile_size > 4096 else tile_size
     line_type = np.ndarray[(line_size,), np.dtype[xfr_dtype]]

@@ -16,7 +16,14 @@ from aie.helpers.util import np_ndarray_type_get_shape
 
 
 def my_axpy(
-    dev, num_elements, num_columns, num_channels, tile_size, trace_size, scalar_factor
+    dev,
+    num_elements,
+    num_columns,
+    num_channels,
+    tile_size,
+    trace_size,
+    scalar_factor,
+    kernel_archive=None,
 ):
     factor = scalar_factor
     per_tile_elements = 4096 if tile_size > 4096 else tile_size

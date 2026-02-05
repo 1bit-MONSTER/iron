@@ -34,7 +34,9 @@ class AIERMSNorm(SingleMLIRSourceOperator):
         context=None,
     ):
         max_multiple = num_aie_columns * tile_size
-        assert size % max_multiple == 0, "size must be multiple of num_aie_columns * tile_size"
+        assert (
+            size % max_multiple == 0
+        ), "size must be multiple of num_aie_columns * tile_size"
         assert size % tile_size == 0, "size must be multiple of tile_size"
 
         self.size = size
@@ -57,52 +59,68 @@ class AIERMSNorm(SingleMLIRSourceOperator):
 
     def get_mlir_artifact(self):
         operator_dir = Path(__file__).parent
-        return PythonGeneratedMLIRArtifact(
-            f"{self.get_operator_name()}.mlir",
-            import_path=operator_dir / "design_weighted.py",
-            callback_fn="my_weighted_rms_norm",
-            callback_args=[
+        if self.weighted:
+            import_path = operator_dir / "design_weighted.py"
+            callback_fn = "my_weighted_rms_norm"
+            callback_args = [
                 self.context.device_manager.device_type,
                 self.size,
                 self.num_columns,
                 self.num_channels,
                 self.tile_size,
                 0,
-            ],
+            ]
+        else:
+            import_path = operator_dir / "design.py"
+            callback_fn = "my_rms_norm"
+            callback_args = [
+                self.context.device_manager.device_type,
+                self.size,
+                self.num_columns,
+                self.num_channels,
+                0,  # trace_size
+                self.tile_size,
+            ]
+
+        return PythonGeneratedMLIRArtifact(
+            f"{self.get_operator_name()}.mlir",
+            import_path=import_path,
+            callback_fn=callback_fn,
+            callback_args=callback_args,
             callback_kwargs={
-                "kernel_archive": f"{self.get_operator_name()}.a",
-            }
+                "kernel_archive": self.kernel_archive,
+            },
         )
 
     def get_kernel_artifacts(self):
-        return [
+        artifacts = [
             KernelObjectArtifact(
                 f"rms_norm.o",
                 dependencies=[
                     SourceArtifact(
-                        self.context.base_dir
-                        / "aie_kernels"
-                        / "aie2p"
-                        / "rms_norm.cc"
-                    )
-                ],
-            ),
-            KernelObjectArtifact(
-                "mul.o",
-                dependencies=[
-                    SourceArtifact(
-                        self.context.base_dir
-                        / "aie_kernels"
-                        / "generic"
-                        / "mul.cc"
+                        self.context.base_dir / "aie_kernels" / "aie2p" / "rms_norm.cc"
                     )
                 ],
             ),
         ]
+        if self.weighted:
+            artifacts.append(
+                KernelObjectArtifact(
+                    "mul.o",
+                    dependencies=[
+                        SourceArtifact(
+                            self.context.base_dir / "aie_kernels" / "generic" / "mul.cc"
+                        )
+                    ],
+                )
+            )
+        return artifacts
 
     def get_arg_spec(self):
-        return [
-            AIERuntimeArgSpec("in", (self.size // self.tile_size, self.tile_size)),  # input
-            AIERuntimeArgSpec("in", (self.tile_size,)),  # weight
-            AIERuntimeArgSpec("out", (self.size // self.tile_size, self.tile_size))  # output
-        ]
+        specs = [AIERuntimeArgSpec("in", (self.size // self.tile_size, self.tile_size))]
+        if self.weighted:
+            specs.append(AIERuntimeArgSpec("in", (self.tile_size,)))
+        specs.append(
+            AIERuntimeArgSpec("out", (self.size // self.tile_size, self.tile_size))
+        )
+        return specs

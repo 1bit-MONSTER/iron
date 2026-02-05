@@ -45,10 +45,7 @@ Matrix-vector multiplication kernel
  - r: Vector size; data from the matrix and vector will be loaded in and processed in chunks of this size
 */
 template <uint32_t r, uint32_t k>
-void matvec_vectorized(uint32_t m,
-                       const bfloat16 *__restrict a,
-                       const bfloat16 *__restrict b,
-                       bfloat16 *__restrict c)
+void matvec_vectorized(uint32_t m, const bfloat16 *__restrict a, const bfloat16 *__restrict b, bfloat16 *__restrict c)
 {
     ::aie::set_rounding(aie::rounding_mode::conv_even);
     bfloat16 *c_end = c + m;
