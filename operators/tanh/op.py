@@ -7,24 +7,25 @@ from ml_dtypes import bfloat16
 from pathlib import Path
 
 from operators.common import (
-    AIEOperatorBase,
-    AIEOperatorConstraintError,
-    XclbinArtifact,
-    InstsBinArtifact,
+    SingleMLIRSourceOperator,
+    AIERuntimeArgSpec,
     KernelObjectArtifact,
     SourceArtifact,
     PythonGeneratedMLIRArtifact,
 )
 
 
-class AIETanh(AIEOperatorBase):
+class AIETanh(SingleMLIRSourceOperator):
     """AIE-accelerated Tanh activation function"""
 
     def __init__(self, size, num_aie_columns, num_channels, tile_size, context=None):
         max_multiple = num_aie_columns * tile_size
-        padded_size = ((size + max_multiple - 1) // max_multiple) * max_multiple
-        self.orig_size = size
-        self.size = padded_size
+        assert (
+            size % max_multiple == 0
+        ), "size must be multiple of num_aie_columns * tile_size"
+        assert size % tile_size == 0, "size must be multiple of tile_size"
+
+        self.size = size
         self.tile_size = tile_size
 
         self.num_columns = num_aie_columns
@@ -33,17 +34,15 @@ class AIETanh(AIEOperatorBase):
         total_shimdma_channels = self.num_columns * self.num_channels
         assert total_shimdma_channels <= 16, "Conservative ShimDMA limit"
 
-        self.xclbin_artifact = None
-        self.insts_artifact = None
+        SingleMLIRSourceOperator.__init__(self, context=context)
 
-        AIEOperatorBase.__init__(self, context=context)
+    def get_operator_name(self):
+        return f"tanh_{self.num_columns}c_{self.num_channels}ch_{self.size}_{self.tile_size}t"
 
-    def set_up_artifacts(self):
+    def get_mlir_artifact(self):
         operator_dir = Path(__file__).parent
-        file_name_base = f"tanh_{self.num_columns}c_{self.num_channels}ch_{self.size}_{self.tile_size}t"
-
-        mlir_artifact = PythonGeneratedMLIRArtifact(
-            f"{file_name_base}.mlir",
+        return PythonGeneratedMLIRArtifact(
+            f"{self.get_operator_name()}.mlir",
             import_path=operator_dir / "design.py",
             callback_fn="my_tanh",
             callback_args=[
@@ -56,59 +55,20 @@ class AIETanh(AIEOperatorBase):
             ],
         )
 
-        xclbin_artifact = XclbinArtifact(
-            f"{file_name_base}.xclbin",
-            dependencies=[
-                mlir_artifact,
-                KernelObjectArtifact(
-                    f"tanh.o",
-                    dependencies=[
-                        SourceArtifact(
-                            self.context.base_dir / "aie_kernels" / "aie2p" / "tanh.cc"
-                        )
-                    ],
-                ),
-            ],
-        )
+    def get_kernel_artifacts(self):
+        return [
+            KernelObjectArtifact(
+                f"tanh.o",
+                dependencies=[
+                    SourceArtifact(
+                        self.context.base_dir / "aie_kernels" / "aie2p" / "tanh.cc"
+                    )
+                ],
+            ),
+        ]
 
-        insts_artifact = InstsBinArtifact(
-            f"{file_name_base}.bin", dependencies=[mlir_artifact]
-        )
-
-        self.xclbin_artifact = xclbin_artifact
-        self.insts_artifact = insts_artifact
-        self.add_artifacts([xclbin_artifact, insts_artifact])
-
-    def set_up_runtime(self):
-        self.add_buffer("input", self.size)
-        self.add_buffer("output", self.size)
-        self.add_kernel(
-            "tanh",
-            self.xclbin_artifact,
-            self.xclbin_artifact.kernel_name,
-            self.insts_artifact,
-        )
-        self.add_to_runlist("tanh", "input", "output")
-
-    def forward(self, x):
-        if x.numel() > self.size:
-            raise AIEOperatorConstraintError(
-                "AIETanh: input too large for configured size"
-            )
-
-        original_shape = x.shape
-        x_flat = x.reshape(-1)
-
-        pad_len = self.size - x_flat.numel()
-        if pad_len > 0:
-            x_flat = torch.nn.functional.pad(x_flat, (0, pad_len))
-
-        self.write_buffer("input", x_flat)
-        self.write_buffer("output", np.zeros(self.size, dtype=bfloat16))
-        self.run_runlist()
-        result = self.read_buffer_as_torch("output", shape=(self.size,), dtype=bfloat16)
-
-        if pad_len > 0:
-            result = result[: x_flat.numel() - pad_len]
-
-        return result.reshape(*original_shape)
+    def get_arg_spec(self):
+        return [
+            AIERuntimeArgSpec("in", (self.size,)),  # input
+            AIERuntimeArgSpec("out", (self.size,)),  # output
+        ]

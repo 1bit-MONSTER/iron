@@ -7,17 +7,15 @@ from ml_dtypes import bfloat16
 from pathlib import Path
 
 from operators.common import (
-    AIEOperatorBase,
-    AIEOperatorConstraintError,
-    XclbinArtifact,
-    InstsBinArtifact,
+    SingleMLIRSourceOperator,
+    AIERuntimeArgSpec,
     KernelObjectArtifact,
     SourceArtifact,
     PythonGeneratedMLIRArtifact,
 )
 
 
-class AIEAXPY(AIEOperatorBase):
+class AIEAXPY(SingleMLIRSourceOperator):
     """AIE-accelerated aX + Y operator"""
 
     def __init__(
@@ -30,25 +28,26 @@ class AIEAXPY(AIEOperatorBase):
         context=None,
     ):
         max_multiple = num_aie_columns * tile_size
-        padded_size = ((size + max_multiple - 1) // max_multiple) * max_multiple
-        self.orig_size = size
-        self.size = padded_size
+        assert (
+            size % max_multiple == 0
+        ), "size must be multiple of num_aie_columns * tile_size"
+        assert size % tile_size == 0, "size must be multiple of tile_size"
+
+        self.size = size
         self.tile_size = tile_size
         self.num_aie_columns = num_aie_columns
         self.num_channels = num_channels
         self.scalar_factor = scalar_factor
 
-        self.xclbin_artifact = None
-        self.insts_artifact = None
+        SingleMLIRSourceOperator.__init__(self, context=context)
 
-        AIEOperatorBase.__init__(self, context=context)
+    def get_operator_name(self):
+        return f"axpy_{self.num_aie_columns}c_{self.num_channels}ch_{self.size}_{self.tile_size}t_{self.scalar_factor}s"
 
-    def set_up_artifacts(self):
+    def get_mlir_artifact(self):
         operator_dir = Path(__file__).parent
-        file_name_base = f"axpy_{self.num_aie_columns}c_{self.num_channels}ch_{self.size}_{self.tile_size}t_{self.scalar_factor}s"
-
-        mlir_artifact = PythonGeneratedMLIRArtifact(
-            f"{file_name_base}.mlir",
+        return PythonGeneratedMLIRArtifact(
+            f"{self.get_operator_name()}.mlir",
             import_path=operator_dir / "design.py",
             callback_fn="my_axpy",
             callback_args=[
@@ -62,68 +61,21 @@ class AIEAXPY(AIEOperatorBase):
             ],
         )
 
-        xclbin_artifact = XclbinArtifact(
-            f"{file_name_base}.xclbin",
-            dependencies=[
-                mlir_artifact,
-                KernelObjectArtifact(
-                    f"axpy.o",
-                    dependencies=[
-                        SourceArtifact(
-                            self.context.base_dir
-                            / "aie_kernels"
-                            / "generic"
-                            / "axpy.cc"
-                        )
-                    ],
-                ),
-            ],
-        )
+    def get_kernel_artifacts(self):
+        return [
+            KernelObjectArtifact(
+                f"axpy.o",
+                dependencies=[
+                    SourceArtifact(
+                        self.context.base_dir / "aie_kernels" / "generic" / "axpy.cc"
+                    )
+                ],
+            ),
+        ]
 
-        insts_artifact = InstsBinArtifact(
-            f"{file_name_base}.bin", dependencies=[mlir_artifact]
-        )
-
-        self.xclbin_artifact = xclbin_artifact
-        self.insts_artifact = insts_artifact
-        self.add_artifacts([xclbin_artifact, insts_artifact])
-
-    def set_up_runtime(self):
-        self.add_buffer("x", self.size)
-        self.add_buffer("y", self.size)
-        self.add_buffer("output", self.size)
-        self.add_kernel(
-            "axpy",
-            self.xclbin_artifact,
-            self.xclbin_artifact.kernel_name,
-            self.insts_artifact,
-        )
-        self.add_to_runlist("axpy", "x", "y", "output")
-
-    def forward(self, x, y):
-        if x.numel() > self.size or y.numel() > self.size:
-            raise AIEOperatorConstraintError(
-                "AIEAXPY: input too large for configured size"
-            )
-        if x.numel() != y.numel():
-            raise AIEOperatorConstraintError("AIEAXPY: sizes of X and Y do not match")
-
-        original_shape = x.shape
-        x_flat = x.reshape(-1)
-        y_flat = y.reshape(-1)
-
-        pad_len = self.size - x_flat.numel()
-        if pad_len > 0:
-            x_flat = torch.nn.functional.pad(x_flat, (0, pad_len))
-            y_flat = torch.nn.functional.pad(y_flat, (0, pad_len))
-
-        self.write_buffer("x", x_flat)
-        self.write_buffer("y", y_flat)
-        self.write_buffer("output", np.zeros(self.size, dtype=bfloat16))
-        self.run_runlist()
-        result = self.read_buffer_as_torch("output", shape=(self.size,), dtype=bfloat16)
-
-        if pad_len > 0:
-            result = result[: x_flat.numel() - pad_len]
-
-        return result.reshape(*original_shape)
+    def get_arg_spec(self):
+        return [
+            AIERuntimeArgSpec("in", (self.size,)),  # x
+            AIERuntimeArgSpec("in", (self.size,)),  # y
+            AIERuntimeArgSpec("out", (self.size,)),  # output
+        ]
