@@ -16,7 +16,9 @@ class AIESiLU(SingleMLIRSourceOperator):
     """AIE-accelerated SiLU activation function"""
 
     def __init__(self, size, tile_size, num_aie_columns=8, context=None):
-        assert size % (num_aie_columns * tile_size) == 0, "size must be multiple of num_aie_columns * tile_size"
+        assert (
+            size % (num_aie_columns * tile_size) == 0
+        ), "size must be multiple of num_aie_columns * tile_size"
         self.size = size
         self.tile_size = tile_size
         self.num_aie_columns = num_aie_columns
@@ -40,8 +42,8 @@ class AIESiLU(SingleMLIRSourceOperator):
                 self.size,
                 self.num_aie_columns,
                 self.tile_size,
-                0
-            ]
+                0,
+            ],
         )
 
     def get_kernel_artifacts(self):

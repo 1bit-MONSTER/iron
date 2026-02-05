@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
-#from aie.extras.context import mlir_mod_ctx
-#from aie.ir import StridedLayoutAttr, ShapedType
-#from aie.dialects.aie import *
-#from aie.dialects.aiex import *
+
+# from aie.extras.context import mlir_mod_ctx
+# from aie.ir import StridedLayoutAttr, ShapedType
+# from aie.dialects.aie import *
+# from aie.dialects.aiex import *
 from aie.dialects.aiex import TensorAccessPattern
 from aie.iron import Kernel, ObjectFifo, Program, Runtime, Worker
 from aie.iron.placers import SequentialPlacer
-
 
 """
 Strided copy design
@@ -17,7 +17,24 @@ Strided copy design
 This can be useful for data layout manipulation and data copying such as:
 input[0, :, 0] -> output[:, 0, 0]
 """
-def strided_copy(dev, dtype, input_buffer_size, input_sizes, input_strides, input_offset, output_buffer_size, output_sizes, output_strides, output_offset, transfer_size=None, num_aie_channels=1, input_offset_patch_marker=0, output_offset_patch_marker=0):
+
+
+def strided_copy(
+    dev,
+    dtype,
+    input_buffer_size,
+    input_sizes,
+    input_strides,
+    input_offset,
+    output_buffer_size,
+    output_sizes,
+    output_strides,
+    output_offset,
+    transfer_size=None,
+    num_aie_channels=1,
+    input_offset_patch_marker=0,
+    output_offset_patch_marker=0,
+):
     assert len(input_sizes) == len(input_strides)
     assert len(output_sizes) == len(output_strides)
 
@@ -29,31 +46,48 @@ def strided_copy(dev, dtype, input_buffer_size, input_sizes, input_strides, inpu
 
     input_highest_sz_idx = max(idx for idx, sz in enumerate(input_sizes) if sz >= 1)
     output_highest_sz_idx = max(idx for idx, sz in enumerate(output_sizes) if sz >= 1)
-    assert input_sizes[input_highest_sz_idx] % num_aie_channels == 0, "Highest dimension of input_sizes must be divisible by num_aie_channels"
-    assert output_sizes[output_highest_sz_idx] % num_aie_channels == 0, "Highest dimension of output_sizes must be divisible by num_aie_channels"
+    assert (
+        input_sizes[input_highest_sz_idx] % num_aie_channels == 0
+    ), "Highest dimension of input_sizes must be divisible by num_aie_channels"
+    assert (
+        output_sizes[output_highest_sz_idx] % num_aie_channels == 0
+    ), "Highest dimension of output_sizes must be divisible by num_aie_channels"
 
     if transfer_size is None:
         transfer_size = int(np.prod(input_sizes))
     assert np.prod(input_sizes) % transfer_size == 0
-    transfer_ty = np.ndarray[(transfer_size,), np.dtype[dtype],]
-    
-    inp_ty = np.ndarray[(int(input_buffer_size),), np.dtype[dtype],]
-    out_ty = np.ndarray[(int(output_buffer_size),), np.dtype[dtype],]
+    transfer_ty = np.ndarray[
+        (transfer_size,),
+        np.dtype[dtype],
+    ]
+
+    inp_ty = np.ndarray[
+        (int(input_buffer_size),),
+        np.dtype[dtype],
+    ]
+    out_ty = np.ndarray[
+        (int(output_buffer_size),),
+        np.dtype[dtype],
+    ]
 
     input_taps = [
         TensorAccessPattern(
             tensor_dims=(int(input_buffer_size + input_offset_patch_marker),),
             offset=(
-                input_offset_patch_marker if input_offset_patch_marker != 0 else
-                input_offset + c * (input_sizes[input_highest_sz_idx] // num_aie_channels) * input_strides[input_highest_sz_idx]
+                input_offset_patch_marker
+                if input_offset_patch_marker != 0
+                else input_offset
+                + c
+                * (input_sizes[input_highest_sz_idx] // num_aie_channels)
+                * input_strides[input_highest_sz_idx]
             ),
             sizes=(
                 input_sizes[:input_highest_sz_idx]
                 + [input_sizes[input_highest_sz_idx] // num_aie_channels]
-                + input_sizes[input_highest_sz_idx+1:]
+                + input_sizes[input_highest_sz_idx + 1 :]
             ),
             strides=list(input_strides),
-        ) 
+        )
         for c in range(num_aie_channels)
     ]
 
@@ -61,13 +95,17 @@ def strided_copy(dev, dtype, input_buffer_size, input_sizes, input_strides, inpu
         TensorAccessPattern(
             tensor_dims=(int(output_buffer_size + output_offset_patch_marker),),
             offset=(
-                output_offset_patch_marker if output_offset_patch_marker != 0 else
-                output_offset + c * (output_sizes[output_highest_sz_idx] // num_aie_channels) * output_strides[output_highest_sz_idx]
+                output_offset_patch_marker
+                if output_offset_patch_marker != 0
+                else output_offset
+                + c
+                * (output_sizes[output_highest_sz_idx] // num_aie_channels)
+                * output_strides[output_highest_sz_idx]
             ),
             sizes=(
                 output_sizes[:output_highest_sz_idx]
                 + [output_sizes[output_highest_sz_idx] // num_aie_channels]
-                + output_sizes[output_highest_sz_idx+1:]
+                + output_sizes[output_highest_sz_idx + 1 :]
             ),
             strides=list(output_strides),
         )
@@ -75,8 +113,14 @@ def strided_copy(dev, dtype, input_buffer_size, input_sizes, input_strides, inpu
     ]
 
     # Use smaller FIFOs for the transfer amount
-    fifos_in = [ObjectFifo(transfer_ty, name=f"fifo_in_{c}", depth=1) for c in range(num_aie_channels)]
-    fifos_out = [fifos_in[c].cons().forward(name=f"fifo_out_{c}", depth=1) for c in range(num_aie_channels)]
+    fifos_in = [
+        ObjectFifo(transfer_ty, name=f"fifo_in_{c}", depth=1)
+        for c in range(num_aie_channels)
+    ]
+    fifos_out = [
+        fifos_in[c].cons().forward(name=f"fifo_out_{c}", depth=1)
+        for c in range(num_aie_channels)
+    ]
 
     rt = Runtime()
     with rt.sequence(inp_ty, out_ty) as (inp, out):

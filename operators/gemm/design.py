@@ -23,7 +23,6 @@ from aie.iron.device import NPU1Col1, NPU1Col2, NPU1, NPU2, Tile
 from aie.helpers.taplib import TensorAccessSequence, TensorTiler2D, TensorAccessPattern
 from aie.iron.controlflow import range_
 
-
 microkernel_mac_dim_map = {
     "npu": {
         "bf16": (4, 8, 4),
@@ -275,7 +274,11 @@ def my_matmul(
 
     # AIE Core Function declarations
     scalar_suffix = "_scalar" if use_scalar else ""
-    kernel_archive = f"{func_prefix}gemm_{m}x{k}x{n}_archive.a" if kernel_archive is None else kernel_archive
+    kernel_archive = (
+        f"{func_prefix}gemm_{m}x{k}x{n}_archive.a"
+        if kernel_archive is None
+        else kernel_archive
+    )
     if use_larger_internal_buffer:
         # Fix fifo depth for C objfifo to 1 since 1 buffer will be used for accumulation
         # and another for transfer to L2

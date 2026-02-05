@@ -20,8 +20,10 @@ class AIETranspose(SingleMLIRSourceOperator):
         assert N % n == 0, f"Matrix columns ({N}) must be a multiple of {n}"
         assert m % s == 0, f"AIE tile rows ({m}) must be a multiple of {s}"
         assert n % s == 0, f"AIE tile columns ({n}) must be a multiple of {s}"
-        assert M * N % (m * n * num_aie_columns * num_channels) == 0, "Transfer size must be divisible by m*n*num_columns*num_channels"
-        
+        assert (
+            M * N % (m * n * num_aie_columns * num_channels) == 0
+        ), "Transfer size must be divisible by m*n*num_columns*num_channels"
+
         self.M = M
         self.N = N
         self.m = m
@@ -29,7 +31,7 @@ class AIETranspose(SingleMLIRSourceOperator):
         self.s = s
         self.num_columns = num_aie_columns
         self.num_channels = num_channels
-        
+
         SingleMLIRSourceOperator.__init__(self, context=context)
 
     def get_operator_name(self):

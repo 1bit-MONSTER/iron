@@ -29,7 +29,9 @@ class AIEElementwiseAdd(SingleMLIRSourceOperator):
         num_aie_columns=8,
         context=None,
     ):
-        assert size % (num_aie_columns * tile_size) == 0, "size must be multiple of num_aie_columns * tile_size"
+        assert (
+            size % (num_aie_columns * tile_size) == 0
+        ), "size must be multiple of num_aie_columns * tile_size"
         self.size = size
         self.tile_size = tile_size
         self.num_aie_columns = num_aie_columns
@@ -53,7 +55,7 @@ class AIEElementwiseAdd(SingleMLIRSourceOperator):
                 self.size,
                 self.num_aie_columns,
                 self.tile_size,
-                0
+                0,
             ],
         )
 

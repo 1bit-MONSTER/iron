@@ -54,7 +54,7 @@ class AIERepeat(SingleMLIRSourceOperator):
                 self.cols,
                 self.repeat,
                 self.transfer_size,
-            ]
+            ],
         )
 
     def get_kernel_artifacts(self):

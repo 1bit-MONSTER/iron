@@ -16,9 +16,9 @@ import time
 import safetensors.torch
 import tiktoken, tiktoken.load
 
-
 # Configuration
 # ##########################################################################
+
 
 class LlamaConfig:
     def __init__(self, weights_path, tokenizer_path):
@@ -30,16 +30,16 @@ class LlamaConfig:
         self.n_kv_groups = 8
         self.head_dim = self.emb_dim // self.n_heads  # 64
         self.hidden_dim = 8192
-        
+
         # RoPE
         self.rope_base = 500000.0
         self.context_length = 131072
-        
+
         # Generation
         self.temperature = 0.7
         self.top_k = 50
 
-        # Tokenization 
+        # Tokenization
         self.special_tokens = {
             "<|begin_of_text|>": 128000,
             "<|end_of_text|>": 128001,
@@ -47,10 +47,12 @@ class LlamaConfig:
             "<|end_header_id|>": 128007,
             "<|eot_id|>": 128009,
         }
-        self.special_tokens.update({
-            f"<|reserved_{i}|>": i
-            for i in list(range(128002, 128006)) + list(range(128009, 128256))
-        })
+        self.special_tokens.update(
+            {
+                f"<|reserved_{i}|>": i
+                for i in list(range(128002, 128006)) + list(range(128009, 128256))
+            }
+        )
 
         # Load model weights and tokenizer
         self.weights = safetensors.torch.load_file(weights_path)
@@ -59,9 +61,7 @@ class LlamaConfig:
 
         # Compute RoPE angle look-up table
         self.angles = compute_rope_angles(
-            self.head_dim,
-            self.context_length,
-            self.rope_base
+            self.head_dim, self.context_length, self.rope_base
         )
 
 
@@ -75,11 +75,23 @@ class LlamaModelState:
         # Set up KV cache -- initially empty
         # This is what passes information from previous tokens to the current token during generation
         self.attn_keys_caches = [
-            torch.empty(1, config.n_kv_groups, 0, config.head_dim, dtype=config.weights["model.layers.0.self_attn.k_proj.weight"].dtype)  # (batch_size, n_kv_groups, seq_len, head_dim)
+            torch.empty(
+                1,
+                config.n_kv_groups,
+                0,
+                config.head_dim,
+                dtype=config.weights["model.layers.0.self_attn.k_proj.weight"].dtype,
+            )  # (batch_size, n_kv_groups, seq_len, head_dim)
             for _ in range(config.n_layers)
         ]
         self.attn_values_caches = [
-            torch.empty(1, config.n_kv_groups, 0, config.head_dim, dtype=config.weights["model.layers.0.self_attn.v_proj.weight"].dtype)  # (batch_size, n_kv_groups, seq_len, head_dim)
+            torch.empty(
+                1,
+                config.n_kv_groups,
+                0,
+                config.head_dim,
+                dtype=config.weights["model.layers.0.self_attn.v_proj.weight"].dtype,
+            )  # (batch_size, n_kv_groups, seq_len, head_dim)
             for _ in range(config.n_layers)
         ]
 
@@ -87,16 +99,17 @@ class LlamaModelState:
 # Utilities
 # ##########################################################################
 
+
 def compute_rope_angles(head_dim, context_length, rope_base=500000.0):
     """Compute RoPE (Rotary Position Embedding) angles."""
     # Precompute the frequency tensor
     inv_freq = 1.0 / (rope_base ** (torch.arange(0, head_dim, 2).float() / head_dim))
     position = torch.arange(context_length).float()
     freqs = torch.outer(position, inv_freq)
-    
+
     cos = torch.cos(freqs)
     sin = torch.sin(freqs)
-    
+
     # Interleave cos and sin - create angles buffer
     angles = torch.empty(context_length, head_dim)
     angles[:, ::2] = cos
@@ -123,36 +136,28 @@ def get_tokenizer(tokenizer_path, special_tokens):
 # Generation loop
 # ##########################################################################
 
-def generate_token(
-    config,
-    forward_pass,
-    state
-):
+
+def generate_token(config, forward_pass, state):
     generated_tokens = []
-    
+
     # Step 1: Forward pass
-    logits, state = forward_pass(
-        config,
-        state
-    )
-    
+    logits, state = forward_pass(config, state)
+
     # Step 2: Get logits for last token
     last_token_logits = logits[:, -1, :]  # (batch, vocab_size)
-    
+
     # Step 3: Temperature scaling
     if config.temperature > 0:
         last_token_logits = last_token_logits / config.temperature
-    
+
     # Step 4: Top-k filtering
     if config.top_k is not None:
         top_logits, top_indices = torch.topk(last_token_logits, config.top_k)
         min_val = top_logits[:, -1:]
         last_token_logits = torch.where(
-            last_token_logits < min_val,
-            torch.tensor(float('-inf')),
-            last_token_logits
+            last_token_logits < min_val, torch.tensor(float("-inf")), last_token_logits
         )
-    
+
     # Step 5: Sample
     probs = torch.nn.functional.softmax(last_token_logits, dim=-1)
     next_token = torch.multinomial(probs, num_samples=1)
@@ -174,7 +179,9 @@ def init(
     # Tokenize prompt
     prompt_token_ids = [config.special_tokens["<|begin_of_text|>"]]
     prompt_token_ids += config.tokenizer.encode(prompt)
-    assert len(prompt_token_ids) <= config.context_length, "Prompt + new tokens to generate too long (exceed context)"
+    assert (
+        len(prompt_token_ids) <= config.context_length
+    ), "Prompt + new tokens to generate too long (exceed context)"
     prompt_token_ids = torch.tensor([prompt_token_ids], dtype=torch.long)
 
     state.token_ids = prompt_token_ids
@@ -182,21 +189,15 @@ def init(
     return config, state
 
 
-def generate(
-    config,
-    state,
-    forward_pass,
-    num_tokens=100,
-    use_kv_cache=True
-):
+def generate(config, state, forward_pass, num_tokens=100, use_kv_cache=True):
     # Generate tokens
     # First token (prefill)
     n_tokens_generated = 0
     t_prefill_start = time.perf_counter()
     first_token, state = generate_token(config, forward_pass, state)
     token_text = config.tokenizer.decode([first_token])
-    n_tokens_generated  += 1
-    print(token_text, end='', flush=True)
+    n_tokens_generated += 1
+    print(token_text, end="", flush=True)
     t_prefill_stop = time.perf_counter()
 
     # Remaining tokens (decode)
@@ -204,30 +205,41 @@ def generate(
         state.token_ids = torch.tensor([[first_token]], dtype=torch.long)
     else:
         state.reset_kv_cache(config)
-        state.token_ids = torch.cat([state.token_ids, torch.tensor([[first_token]], dtype=torch.long)], dim=1)
+        state.token_ids = torch.cat(
+            [state.token_ids, torch.tensor([[first_token]], dtype=torch.long)], dim=1
+        )
     t_decode_start = time.perf_counter()
-    for _ in range(num_tokens-1):
+    for _ in range(num_tokens - 1):
         next_token, state = generate_token(config, forward_pass, state)
         token_text = config.tokenizer.decode([next_token])
         n_tokens_generated += 1
-        print(token_text, end='', flush=True)
+        print(token_text, end="", flush=True)
         if use_kv_cache:
             state.token_ids = torch.tensor([[next_token]], dtype=torch.long)
         else:
             state.reset_kv_cache(config)
-            state.token_ids = torch.cat([state.token_ids, torch.tensor([[next_token]], dtype=torch.long)], dim=1)
+            state.token_ids = torch.cat(
+                [state.token_ids, torch.tensor([[next_token]], dtype=torch.long)], dim=1
+            )
     t_decode_end = time.perf_counter()
 
     t_prefill = t_prefill_stop - t_prefill_start
     t_decode = t_decode_end - t_decode_start
     sys.stderr.write("\n\n=== Performance Statistics ===\n")
     sys.stderr.write(f"[Prefill] Time to first token:   {t_prefill:7.3f} s\n")
-    sys.stderr.write(f"[Decode]  Time per token (mean): {t_decode / (n_tokens_generated - 1):7.3f} s\n")
-    sys.stderr.write(f"[Decode]  Tokens per second:     {(n_tokens_generated - 1) / t_decode:7.3f}\n")
-    sys.stderr.write(f"[Total]   Time per token (mean): {(t_prefill + t_decode) / n_tokens_generated:7.3f} s\n")
-    sys.stderr.write(f"[Total]   Tokens per second:     {n_tokens_generated / (t_prefill + t_decode):7.3f}\n")
+    sys.stderr.write(
+        f"[Decode]  Time per token (mean): {t_decode / (n_tokens_generated - 1):7.3f} s\n"
+    )
+    sys.stderr.write(
+        f"[Decode]  Tokens per second:     {(n_tokens_generated - 1) / t_decode:7.3f}\n"
+    )
+    sys.stderr.write(
+        f"[Total]   Time per token (mean): {(t_prefill + t_decode) / n_tokens_generated:7.3f} s\n"
+    )
+    sys.stderr.write(
+        f"[Total]   Tokens per second:     {n_tokens_generated / (t_prefill + t_decode):7.3f}\n"
+    )
 
 
 if __name__ == "__main__":
     main()
-

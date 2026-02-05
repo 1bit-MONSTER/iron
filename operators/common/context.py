@@ -29,8 +29,12 @@ class AIEContext:
             comp.GenerateMLIRFromPythonCompilationRule(),
             comp.PeanoCompilationRule(self.peano_dir, self.mlir_aie_dir),
             comp.ArchiveCompilationRule(self.peano_dir),
-            comp.AieccXclbinInstsCompilationRule(self.build_dir, self.peano_dir, self.mlir_aie_dir),
-            comp.AieccFullElfCompilationRule(self.build_dir, self.peano_dir, self.mlir_aie_dir),
+            comp.AieccXclbinInstsCompilationRule(
+                self.build_dir, self.peano_dir, self.mlir_aie_dir
+            ),
+            comp.AieccFullElfCompilationRule(
+                self.build_dir, self.peano_dir, self.mlir_aie_dir
+            ),
         ]
 
     def register_operator(self, operator):

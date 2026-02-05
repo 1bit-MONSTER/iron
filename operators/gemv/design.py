@@ -18,7 +18,6 @@ from aie.iron import Kernel, ObjectFifo, Program, Runtime, Worker
 from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1, NPU2
 
-
 """
 Matrix-vector design
 
@@ -34,7 +33,17 @@ Calls into the mv.cc kernel code. That kernel computes `m_input` output rows per
 """
 
 
-def my_matvec(dev, cols, M, K, m_input, m_output=None, num_batches=1, kernel_archive="mv.o", func_prefix=""):
+def my_matvec(
+    dev,
+    cols,
+    M,
+    K,
+    m_input,
+    m_output=None,
+    num_batches=1,
+    kernel_archive="mv.o",
+    func_prefix="",
+):
     if m_output is None:
         m_output = m_input
 
@@ -70,9 +79,7 @@ def my_matvec(dev, cols, M, K, m_input, m_output=None, num_batches=1, kernel_arc
     L1_B_ty = np.ndarray[(K,), dtype_in]
     L1_C_ty = np.ndarray[(m_output,), dtype_out]
     L3_A_ty = np.ndarray[
-        (
-            num_batches * M * K,
-        ),
+        (num_batches * M * K,),
         dtype_in,
     ]
     L3_B_ty = np.ndarray[(num_batches * K,), dtype_in]
@@ -174,9 +181,17 @@ def my_matvec(dev, cols, M, K, m_input, m_output=None, num_batches=1, kernel_arc
         for batch in range(num_batches):
             tg_ac = rt.task_group()
             for col in range(cols):
-                rt.fill(A_L3L1_fifos[col].prod(), A, A_taps[col][batch], task_group=tg_ac)
+                rt.fill(
+                    A_L3L1_fifos[col].prod(), A, A_taps[col][batch], task_group=tg_ac
+                )
             for col in range(cols):
-                rt.drain(C_L1L3_fifos[col].cons(), C, C_taps[col][batch], task_group=tg_ac, wait=True)
+                rt.drain(
+                    C_L1L3_fifos[col].cons(),
+                    C,
+                    C_taps[col][batch],
+                    task_group=tg_ac,
+                    wait=True,
+                )
             rt.finish_task_group(tg_ac)
         rt.finish_task_group(tg_b)
 

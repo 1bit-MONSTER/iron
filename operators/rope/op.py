@@ -25,12 +25,18 @@ class AIERope(SingleMLIRSourceOperator):
     ):
         if angle_rows is None:
             angle_rows = rows
-        
-        assert cols % (16 * 2) == 0 and cols >= (16 * 2), "cols must be multiple of 32 and >= 32"
+
+        assert cols % (16 * 2) == 0 and cols >= (
+            16 * 2
+        ), "cols must be multiple of 32 and >= 32"
         assert rows % num_aie_columns == 0, "rows must be divisible by num_aie_columns"
-        assert angle_rows <= rows and rows % angle_rows == 0, "angle_rows must divide rows"
-        assert angle_rows >= num_aie_columns and angle_rows % num_aie_columns == 0, "angle_rows must be divisible by num_aie_columns"
-        
+        assert (
+            angle_rows <= rows and rows % angle_rows == 0
+        ), "angle_rows must divide rows"
+        assert (
+            angle_rows >= num_aie_columns and angle_rows % num_aie_columns == 0
+        ), "angle_rows must be divisible by num_aie_columns"
+
         self.rows = rows
         self.cols = cols
         self.angle_rows = angle_rows
@@ -77,7 +83,25 @@ class AIERope(SingleMLIRSourceOperator):
 
     def get_arg_spec(self):
         return [
-            AIERuntimeArgSpec("in", (self.rows, self.cols,)),  # input tensor
-            AIERuntimeArgSpec("in", (self.angle_rows, self.cols,)),  # angles
-            AIERuntimeArgSpec("out", (self.rows, self.cols,)),  # output
+            AIERuntimeArgSpec(
+                "in",
+                (
+                    self.rows,
+                    self.cols,
+                ),
+            ),  # input tensor
+            AIERuntimeArgSpec(
+                "in",
+                (
+                    self.angle_rows,
+                    self.cols,
+                ),
+            ),  # angles
+            AIERuntimeArgSpec(
+                "out",
+                (
+                    self.rows,
+                    self.cols,
+                ),
+            ),  # output
         ]

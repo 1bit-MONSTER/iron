@@ -10,7 +10,9 @@ from aie.helpers.taplib.tap import TensorAccessPattern
 from aie.iron.controlflow import range_
 
 
-def shuffle_transpose(dev, M, N, num_columns, num_channels, m, n, s, kernel_archive=None, func_prefix=""):
+def shuffle_transpose(
+    dev, M, N, num_columns, num_channels, m, n, s, kernel_archive=None, func_prefix=""
+):
     num_elements = M * N
     per_tile_elements = m * n
     dtype = bfloat16

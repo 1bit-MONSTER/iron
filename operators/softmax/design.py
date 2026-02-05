@@ -7,7 +7,15 @@ import numpy as np
 import argparse
 import sys
 
-from aie.iron import Kernel, ObjectFifo, Program, Runtime, Worker, Buffer, WorkerRuntimeBarrier
+from aie.iron import (
+    Kernel,
+    ObjectFifo,
+    Program,
+    Runtime,
+    Worker,
+    Buffer,
+    WorkerRuntimeBarrier,
+)
 from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1, NPU2
 from aie.helpers.taplib.tap import TensorAccessPattern
@@ -15,7 +23,18 @@ from aie.helpers.dialects.scf import _for as range_
 from ml_dtypes import bfloat16
 
 
-def softmax(dev, num_elements, num_aie_columns, num_channels, trace_size, tile_size, rtp_vector_size=None, mask_patch_value=0, kernel_archive="softmax.a", func_prefix=""):
+def softmax(
+    dev,
+    num_elements,
+    num_aie_columns,
+    num_channels,
+    trace_size,
+    tile_size,
+    rtp_vector_size=None,
+    mask_patch_value=0,
+    kernel_archive="softmax.a",
+    func_prefix="",
+):
     per_tile_elements = tile_size
     if rtp_vector_size is None:
         rtp_vector_size = per_tile_elements
@@ -45,8 +64,12 @@ def softmax(dev, num_elements, num_aie_columns, num_channels, trace_size, tile_s
     ]
 
     # AIE Core Function declaration
-    softmax_kernel = Kernel(f"{func_prefix}softmax_bf16", kernel_archive, [tile_ty, tile_ty, np.int32])
-    mask_kernel = Kernel(f"{func_prefix}mask_bf16", kernel_archive, [tile_ty, np.int32, np.int32])
+    softmax_kernel = Kernel(
+        f"{func_prefix}softmax_bf16", kernel_archive, [tile_ty, tile_ty, np.int32]
+    )
+    mask_kernel = Kernel(
+        f"{func_prefix}mask_bf16", kernel_archive, [tile_ty, np.int32, np.int32]
+    )
 
     # Define a task that will run on a compute tile
     def core_body(of_in1, of_out, softmax_kernel, mask_kernel, rtp, barrier):
@@ -60,7 +83,7 @@ def softmax(dev, num_elements, num_aie_columns, num_channels, trace_size, tile_s
             softmax_kernel(elem_in1, elem_out, per_tile_elements)
             of_in1.release(1)
             of_out.release(1)
-    
+
     rtps = [
         Buffer(
             np.ndarray[(1,), np.dtype[np.int32]],
@@ -87,7 +110,7 @@ def softmax(dev, num_elements, num_aie_columns, num_channels, trace_size, tile_s
                 softmax_kernel,
                 mask_kernel,
                 rtps[i * num_channels + j],
-                barriers[i * num_channels + j]
+                barriers[i * num_channels + j],
             ],
         )
         for i in range(num_aie_columns)
@@ -118,12 +141,10 @@ def softmax(dev, num_elements, num_aie_columns, num_channels, trace_size, tile_s
         # Set run-time parameter for actual vector size (remainder is considered padding and ignored by the computation)
         def set_rtps(*args):
             for rtp in args:
-                rtp[0] = (
-                    rtp_vector_size if not mask_patch_value else mask_patch_value
-                )
+                rtp[0] = rtp_vector_size if not mask_patch_value else mask_patch_value
 
         rt.inline_ops(set_rtps, rtps)
-        
+
         for i in range(num_aie_columns * num_channels):
             rt.set_barrier(barriers[i], 1)
 

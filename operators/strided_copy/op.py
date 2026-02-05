@@ -20,11 +20,11 @@ class AIEStridedCopy(SingleMLIRSourceOperator):
 
     def __init__(
         self,
-        input_sizes, 
-        input_strides, 
-        input_offset, 
-        output_sizes, 
-        output_strides, 
+        input_sizes,
+        input_strides,
+        input_offset,
+        output_sizes,
+        output_strides,
         output_offset,
         input_buffer_size,
         output_buffer_size,
@@ -32,7 +32,7 @@ class AIEStridedCopy(SingleMLIRSourceOperator):
         transfer_size=None,
         num_aie_channels=1,
         context=None,
-        **kwargs
+        **kwargs,
     ):
         assert len(input_sizes) == len(input_strides)
         assert len(output_sizes) == len(output_strides)

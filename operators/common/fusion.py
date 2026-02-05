@@ -12,23 +12,28 @@ from .device_manager import AIEDeviceManager
 
 class FusedMLIROperator(AIEOperatorBase):
     """Operator that fuses multiple SingleMLIRSourceOperators into one."""
-    
-    def __init__(self, name, runlist, input_args, output_args, buffer_sizes=None, *args, **kwargs):
+
+    def __init__(
+        self, name, runlist, input_args, output_args, buffer_sizes=None, *args, **kwargs
+    ):
         assert all(
-            isinstance(op, SingleMLIRSourceOperator) and all(isinstance(buf, str) for buf in bufs)
+            isinstance(op, SingleMLIRSourceOperator)
+            and all(isinstance(buf, str) for buf in bufs)
             for op, *bufs in runlist
         )
         self.runlist = runlist
         self.name = name
         self.input_args = input_args
         self.output_args = output_args
-        self.explicit_buffer_sizes = buffer_sizes or {}  # Optional dict: buffer_name -> size_in_bytes
+        self.explicit_buffer_sizes = (
+            buffer_sizes or {}
+        )  # Optional dict: buffer_name -> size_in_bytes
         self.kernel_archive = "kernels.a"
         super().__init__(*args, **kwargs)
-    
+
     def get_operator_name(self):
         return self.name
-    
+
     def get_kernel_artifacts(self):
         """Collect all kernel artifacts from child operators."""
         kernel_artifacts = []
@@ -43,13 +48,13 @@ class FusedMLIROperator(AIEOperatorBase):
                 obj.prefix_symbols = f"op{idx}_"
             kernel_artifacts.extend(objs)
         return kernel_artifacts
-    
+
     def get_mlir_artifact(self):
         # Build operator_mlir_map: {op_name -> PythonGeneratedMLIRArtifact}
         operator_mlir_map = {}
         mlir_dependencies = []
         comp_runlist = []
-        op_names = {} # op -> op_name
+        op_names = {}  # op -> op_name
 
         unique_operators = []
         for op, *_ in self.runlist:
@@ -65,13 +70,15 @@ class FusedMLIROperator(AIEOperatorBase):
             op_name = f"op{idx}_{op.__class__.__name__}"
             op_names[op] = op_name
             operator_mlir_map[op_name] = mlir_artifact
-        
+
         for op, *bufs in self.runlist:
             comp_runlist.append((op_names[op], *bufs))
-        
+
         # Calculate buffer layout: {buffer_name -> (type, offset, length)}
-        self.subbuffer_layout, self.buffer_sizes, self.slice_info = self._calculate_buffer_layout()
-        
+        self.subbuffer_layout, self.buffer_sizes, self.slice_info = (
+            self._calculate_buffer_layout()
+        )
+
         filename = self.get_operator_name() + "_fused.mlir"
         fused_artifact = comp.FusedMLIRSource(
             filename,
@@ -79,52 +86,67 @@ class FusedMLIROperator(AIEOperatorBase):
             runlist=comp_runlist,
             subbuffer_layout=self.subbuffer_layout,
             buffer_sizes=self.buffer_sizes,
-            slice_info=self.slice_info
+            slice_info=self.slice_info,
         )
-        
+
         return fused_artifact
-    
+
     def _calculate_buffer_layout(self):
         args = {}  # base_buffer_name -> args_spec
-        sliced_buffers = {}  # full_buffer_name (with slice) -> (base_name, start, end, args_spec)
-        
+        sliced_buffers = (
+            {}
+        )  # full_buffer_name (with slice) -> (base_name, start, end, args_spec)
+
         # Collect all buffer specs from operators
         for op, *bufs in self.runlist:
             args_specs = op.get_arg_spec()
-            assert len(args_specs) == len(bufs), "Number of buffers must match operator argument specification"
+            assert len(args_specs) == len(
+                bufs
+            ), "Number of buffers must match operator argument specification"
             for i, buf_name in enumerate(bufs):
                 args_spec = args_specs[i]
-                
+
                 # Parse slice notation: "buffer_name[start:end]"
-                if '[' in buf_name and buf_name.endswith(']'):
-                    base_name = buf_name[:buf_name.index('[')]
-                    slice_part = buf_name[buf_name.index('[')+1:-1]
-                    start, end = map(int, slice_part.split(':'))
+                if "[" in buf_name and buf_name.endswith("]"):
+                    base_name = buf_name[: buf_name.index("[")]
+                    slice_part = buf_name[buf_name.index("[") + 1 : -1]
+                    start, end = map(int, slice_part.split(":"))
                     sliced_buffers[buf_name] = (base_name, start, end, args_spec)
                     # Track that base buffer exists (size will be set later)
-                    if base_name not in args and base_name not in self.explicit_buffer_sizes:
-                        raise ValueError(f"Sliced buffer '{buf_name}' requires explicit size for base buffer '{base_name}' in buffer_sizes parameter")
+                    if (
+                        base_name not in args
+                        and base_name not in self.explicit_buffer_sizes
+                    ):
+                        raise ValueError(
+                            f"Sliced buffer '{buf_name}' requires explicit size for base buffer '{base_name}' in buffer_sizes parameter"
+                        )
                 else:
                     # Regular buffer (no slice)
                     if buf_name not in args:
                         args[buf_name] = args_spec
                     else:
-                        assert np.prod(args[buf_name].shape) == np.prod(args_spec.shape), f"Buffer {buf_name} has conflicting sizes between operators"
-        
+                        assert np.prod(args[buf_name].shape) == np.prod(
+                            args_spec.shape
+                        ), f"Buffer {buf_name} has conflicting sizes between operators"
+
         # Verify all input/output args are present (either as regular or sliced buffers)
         all_buffer_names = set(args.keys()) | set(sliced_buffers.keys())
         for arg in self.input_args:
             # Check if it's a base buffer name in explicit_buffer_sizes
             if arg not in all_buffer_names and arg not in self.explicit_buffer_sizes:
-                raise AssertionError(f"Input argument {arg} not found in runlist buffers")
+                raise AssertionError(
+                    f"Input argument {arg} not found in runlist buffers"
+                )
         for arg in self.output_args:
             if arg not in all_buffer_names and arg not in self.explicit_buffer_sizes:
-                raise AssertionError(f"Output argument {arg} not found in runlist buffers")
-        
+                raise AssertionError(
+                    f"Output argument {arg} not found in runlist buffers"
+                )
+
         # Determine buffer types and create layout
         subbuffer_layout = {}
         slice_info = {}  # full_buffer_name -> (base_name, start, end)
-        
+
         def add_buffers(buffer_type, args_list):
             offset = 0
             for arg in args_list:
@@ -136,46 +158,62 @@ class FusedMLIROperator(AIEOperatorBase):
                 elif arg in args:
                     # Regular buffer with inferred size
                     arg_spec = args[arg]
-                    length = int(np.prod(arg_spec.shape) * np.dtype(arg_spec.dtype).itemsize)
+                    length = int(
+                        np.prod(arg_spec.shape) * np.dtype(arg_spec.dtype).itemsize
+                    )
                     subbuffer_layout[arg] = (buffer_type, offset, length)
                     offset += length
                 # Note: sliced buffers are handled separately, not in args_list
             return offset  # == total length
-        
+
         # Add sliced buffer entries to layout (they reference parent buffers)
         for buf_name, (base_name, start, end, args_spec) in sliced_buffers.items():
             slice_info[buf_name] = (base_name, start, end)
-        
-        input_buffer_size = add_buffers('input', self.input_args)
-        output_buffer_size = add_buffers('output', self.output_args)
-        scratch_args = [arg for arg in args if arg not in self.input_args and arg not in self.output_args]
+
+        input_buffer_size = add_buffers("input", self.input_args)
+        output_buffer_size = add_buffers("output", self.output_args)
+        scratch_args = [
+            arg
+            for arg in args
+            if arg not in self.input_args and arg not in self.output_args
+        ]
         # Also include explicit buffers that are only used for slicing
         for explicit_buf in self.explicit_buffer_sizes:
-            if explicit_buf not in self.input_args and explicit_buf not in self.output_args and explicit_buf not in scratch_args:
+            if (
+                explicit_buf not in self.input_args
+                and explicit_buf not in self.output_args
+                and explicit_buf not in scratch_args
+            ):
                 scratch_args.append(explicit_buf)
-        scratch_buffer_size = add_buffers('scratch', scratch_args)
-        
+        scratch_buffer_size = add_buffers("scratch", scratch_args)
+
         buffer_sizes = (input_buffer_size, output_buffer_size, scratch_buffer_size)
         return subbuffer_layout, buffer_sizes, slice_info
-    
+
     def set_up_artifacts(self):
         operator_name = self.get_operator_name()
         mlir_artifact = self.get_mlir_artifact()
         kernel_objects = self.get_kernel_artifacts()
-        kernel_dep = [comp.KernelArchiveArtifact(
-            self.kernel_archive,
-            dependencies=kernel_objects,
-        )] if kernel_objects else []
+        kernel_dep = (
+            [
+                comp.KernelArchiveArtifact(
+                    self.kernel_archive,
+                    dependencies=kernel_objects,
+                )
+            ]
+            if kernel_objects
+            else []
+        )
         full_elf_artifact = comp.FullElfArtifact(
             f"{operator_name}.elf",
             mlir_input=mlir_artifact,
             dependencies=[mlir_artifact] + kernel_dep,
         )
         self.add_artifacts([full_elf_artifact])
-    
+
     def get_arg_spec(self):
         pass
-    
+
     def get_callable(self):
         return FusedFullELFCallable(self)
 
@@ -192,7 +230,7 @@ class FusedMLIROperator(AIEOperatorBase):
 def load_elf(op):
     assert isinstance(op.artifacts[0], comp.FullElfArtifact)
     elf_data = None
-    with open(op.artifacts[0].filename, 'rb') as f:
+    with open(op.artifacts[0].filename, "rb") as f:
         elf_data = np.frombuffer(f.read(), dtype=np.uint32)
     return elf_data
 
@@ -205,7 +243,13 @@ def patch_elf(elf_data, patches):
 
 
 class FullELFCallable:
-    def __init__(self, elf_data, device_name="main", sequence_name="sequence", device_manager=None):
+    def __init__(
+        self,
+        elf_data,
+        device_name="main",
+        sequence_name="sequence",
+        device_manager=None,
+    ):
         self.device_name = device_name
         self.sequence_name = sequence_name
         self.device_manager = device_manager or AIEDeviceManager()
@@ -220,20 +264,22 @@ class FullELFCallable:
         ret_code = run.wait()
         if ret_code != pyxrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
             raise RuntimeError(f"Kernel execution failed with return code {ret_code}")
-    
+
     def reload_elf(self, elf_data):
         # Create a PyCapsule from the numpy array pointer for pybind11
         elf_data_u8 = elf_data.view(dtype=np.uint8)
         ctypes.pythonapi.PyCapsule_New.restype = ctypes.py_object
-        ctypes.pythonapi.PyCapsule_New.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-        capsule = ctypes.pythonapi.PyCapsule_New(
-            elf_data_u8.ctypes.data,
-            None,
-            None
-        )
+        ctypes.pythonapi.PyCapsule_New.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_void_p,
+        ]
+        capsule = ctypes.pythonapi.PyCapsule_New(elf_data_u8.ctypes.data, None, None)
         xrt_elf = pyxrt.elf(capsule, elf_data.nbytes)
         xrt_context = pyxrt.hw_context(self.device_manager.device, xrt_elf)
-        self.xrt_kernel = pyxrt.ext.kernel(xrt_context, f"{self.device_name}:{self.sequence_name}")
+        self.xrt_kernel = pyxrt.ext.kernel(
+            xrt_context, f"{self.device_name}:{self.sequence_name}"
+        )
 
 
 class FusedFullELFCallable(FullELFCallable):
@@ -245,61 +291,63 @@ class FusedFullELFCallable(FullELFCallable):
         self.op = op
         input_buffer_size, output_buffer_size, scratch_buffer_size = op.buffer_sizes
         itemsize = np.dtype(ml_dtypes.bfloat16).itemsize
-        
+
         self.input_buffer = AIEBuffer(
             shape=(max(input_buffer_size, itemsize) // itemsize,),
-            dtype=ml_dtypes.bfloat16
-        ) 
-        
+            dtype=ml_dtypes.bfloat16,
+        )
+
         self.output_buffer = AIEBuffer(
             shape=(max(output_buffer_size, itemsize) // itemsize,),
-            dtype=ml_dtypes.bfloat16
-        ) 
-        
+            dtype=ml_dtypes.bfloat16,
+        )
+
         self.scratch_buffer = AIEBuffer(
             shape=(max(scratch_buffer_size, itemsize) // itemsize,),
-            dtype=ml_dtypes.bfloat16
-        ) 
-        
+            dtype=ml_dtypes.bfloat16,
+        )
+
         self._buffer_cache = {}
-    
+
     def get_buffer(self, buffer_name):
         # Return cached buffer if already allocated
         if buffer_name in self._buffer_cache:
             return self._buffer_cache[buffer_name]
-        
+
         buf_type, offset, length = self.op.get_layout_for_buffer(buffer_name)
-        
+
         # Select the appropriate main buffer
-        if buf_type == 'input':
+        if buf_type == "input":
             main_buffer = self.input_buffer
-        elif buf_type == 'output':
+        elif buf_type == "output":
             main_buffer = self.output_buffer
-        elif buf_type == 'scratch':
+        elif buf_type == "scratch":
             main_buffer = self.scratch_buffer
         else:
-            raise ValueError(f"Unknown buffer type '{buf_type}' for buffer '{buffer_name}'")
-        
+            raise ValueError(
+                f"Unknown buffer type '{buf_type}' for buffer '{buffer_name}'"
+            )
+
         if main_buffer is None:
             raise RuntimeError(f"Main buffer for type '{buf_type}' is not allocated")
-        
+
         # Convert byte offset/length to element offset/length
         itemsize = np.dtype(ml_dtypes.bfloat16).itemsize
         offset_elements = offset // itemsize
         length_elements = length // itemsize
-        
+
         # Create subbuffer with appropriate shape
         sub_buffer = main_buffer.subbuffer(
             length=length_elements,
             offset=offset_elements,
             shape=(length_elements,),
-            dtype=ml_dtypes.bfloat16
+            dtype=ml_dtypes.bfloat16,
         )
-        
+
         # Cache and return
         self._buffer_cache[buffer_name] = sub_buffer
         return sub_buffer
-    
+
     def __call__(self):
         self.input_buffer.to("npu")
         self.output_buffer.to("npu")

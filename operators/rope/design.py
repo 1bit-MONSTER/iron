@@ -14,7 +14,6 @@ from aie.helpers.taplib.tap import TensorAccessPattern
 from aie.helpers.dialects.scf import _for as range_
 from ml_dtypes import bfloat16
 
-
 """
 Rotary Positional Encoding (RoPE) design
 
@@ -39,14 +38,16 @@ def rope(
     trace_size=0,
     method_type=None,
     kernel_archive=None,
-    func_prefix=""
+    func_prefix="",
 ):
     dtype = bfloat16
 
     if angle_rows is None:
         angle_rows = rows
     if kernel_archive is None:
-        kernel_archive = "rope" + (f"_{method_type}" if method_type is not None else "") + ".o"
+        kernel_archive = (
+            "rope" + (f"_{method_type}" if method_type is not None else "") + ".o"
+        )
 
     assert cols % (16 * 2) == 0 and cols >= (
         16 * 2

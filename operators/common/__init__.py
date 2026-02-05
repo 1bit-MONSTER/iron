@@ -4,7 +4,7 @@
 """Common utilities and base classes for IRON operators."""
 
 from .base import (
-    AIEOperatorBase, 
+    AIEOperatorBase,
     SingleMLIRSourceOperator,
     AIEBuffer,
     SingleXclbinCallable,

@@ -48,7 +48,9 @@ class AIEGEMV(SingleMLIRSourceOperator):
         self.tile_size_output = tile_size_output
         self.num_batches = num_batches
         self.kernel_vector_size = kernel_vector_size
-        assert K >= kernel_vector_size and K % kernel_vector_size == 0, "K must be multiple of kernel_vector_size"
+        assert (
+            K >= kernel_vector_size and K % kernel_vector_size == 0
+        ), "K must be multiple of kernel_vector_size"
 
         self.xclbin_artifact = None
         self.insts_artifact = None
@@ -73,9 +75,9 @@ class AIEGEMV(SingleMLIRSourceOperator):
                 self.tile_size_input,
                 self.tile_size_output,
                 self.num_batches,
-            ]
+            ],
         )
-    
+
     def get_kernel_artifacts(self):
         return [
             KernelObjectArtifact(
@@ -88,7 +90,7 @@ class AIEGEMV(SingleMLIRSourceOperator):
                 extra_flags=[
                     f"-DDIM_K={self.K}",
                     f"-DVEC_SIZE={self.kernel_vector_size}",
-                ]
+                ],
             ),
         ]
 

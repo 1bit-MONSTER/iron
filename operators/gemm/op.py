@@ -112,7 +112,7 @@ class AIEGEMM(SingleMLIRSourceOperator):
             },
             requires_context=False,
         )
-        
+
     def get_kernel_artifacts(self):
         base_dir = self.context.base_dir
         emulate_bf16_mmul_with_bfp16 = self.gemm_args.get(
@@ -143,29 +143,28 @@ class AIEGEMM(SingleMLIRSourceOperator):
                 f"gemm_{self.tile_m}x{self.tile_k}x{self.tile_n}_{int(self.b_col_maj)}_{int(self.c_col_maj)}.o",
                 extra_flags=kernel_flags,
                 dependencies=[
-                    SourceArtifact(
-                        base_dir / "aie_kernels" / "aie2p" / "mm.cc"
-                    )
+                    SourceArtifact(base_dir / "aie_kernels" / "aie2p" / "mm.cc")
                 ],
             ),
             KernelObjectArtifact(
                 "convert_copy.o",
                 [
                     SourceArtifact(
-                        base_dir
-                        / "aie_kernels"
-                        / "generic"
-                        / "convert_copy.cc"
+                        base_dir / "aie_kernels" / "generic" / "convert_copy.cc"
                     )
                 ],
-            )
+            ),
         ]
-    
+
     def get_arg_spec(self):
         return [
             AIERuntimeArgSpec("in", (self.M, self.K)),  # input A
-            AIERuntimeArgSpec("in", (self.K, self.N) if not self.b_col_maj else (self.N, self.K)),  # input B (weights)
-            AIERuntimeArgSpec("out", (self.M, self.N) if not self.c_col_maj else (self.N, self.M)),  # output C
+            AIERuntimeArgSpec(
+                "in", (self.K, self.N) if not self.b_col_maj else (self.N, self.K)
+            ),  # input B (weights)
+            AIERuntimeArgSpec(
+                "out", (self.M, self.N) if not self.c_col_maj else (self.N, self.M)
+            ),  # output C
         ]
 
     # def _get_B_dims(self, B_shape):

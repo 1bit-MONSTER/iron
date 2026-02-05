@@ -2,18 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
-#from aie.extras.context import mlir_mod_ctx
-#from aie.ir import StridedLayoutAttr, ShapedType
-#from aie.dialects.aie import *
-#from aie.dialects.aiex import *
+
+# from aie.extras.context import mlir_mod_ctx
+# from aie.ir import StridedLayoutAttr, ShapedType
+# from aie.dialects.aie import *
+# from aie.dialects.aiex import *
 from aie.dialects.aiex import TensorAccessPattern
 from aie.iron import Kernel, ObjectFifo, Program, Runtime, Worker
 from aie.iron.placers import SequentialPlacer
 
-
 """
 Repeat interleave
 """
+
+
 def repeat(dev, dtype, rows, cols, repeat, transfer_size=None):
     dtype = np.dtype[dtype]
 
@@ -25,22 +27,33 @@ def repeat(dev, dtype, rows, cols, repeat, transfer_size=None):
                 cols_split = divisor
                 break
         else:
-            raise ValueError(f"Cannot split cols={cols} into chunks <= 1023; hardware limits cols to not exceed 1023")
+            raise ValueError(
+                f"Cannot split cols={cols} into chunks <= 1023; hardware limits cols to not exceed 1023"
+            )
     assert cols_split <= 1023, "cols is too large, can't split into smaller transfers"
 
     if transfer_size is None:
         transfer_size = cols
-    
-    inp_ty = np.ndarray[(rows, cols), dtype,]
-    out_ty = np.ndarray[(rows * repeat, cols), dtype,]
-    transfer_ty = np.ndarray[(transfer_size,), dtype,]
+
+    inp_ty = np.ndarray[
+        (rows, cols),
+        dtype,
+    ]
+    out_ty = np.ndarray[
+        (rows * repeat, cols),
+        dtype,
+    ]
+    transfer_ty = np.ndarray[
+        (transfer_size,),
+        dtype,
+    ]
 
     input_tap = TensorAccessPattern(
         tensor_dims=(rows, cols),
         offset=0,
         sizes=[repeat, rows, cols // cols_split, cols_split],
         strides=[0, cols, cols_split, 1],
-    ) 
+    )
 
     output_tap = TensorAccessPattern(
         tensor_dims=(rows * repeat, cols),

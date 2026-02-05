@@ -4,20 +4,21 @@ import sys
 from pathlib import Path
 import time
 import torch
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from operators.softmax.op import AIESoftmax
 from operators.common import AIEBuffer
 
-max_context_len=2048
-prompt_len=8
-n_heads=32
+max_context_len = 2048
+prompt_len = 8
+n_heads = 32
 
-softmax_op = AIESoftmax(
-    rows=n_heads,
-    cols=max_context_len,
-    rtp_vector_size=prompt_len
-).compile().get_callable()
+softmax_op = (
+    AIESoftmax(rows=n_heads, cols=max_context_len, rtp_vector_size=prompt_len)
+    .compile()
+    .get_callable()
+)
 
 inp = AIEBuffer((n_heads, max_context_len))
 out = AIEBuffer((n_heads, max_context_len))
@@ -53,7 +54,8 @@ mismatches = torch.where(diff > 1e-2)
 if len(mismatches[0]) > 0:
     for i in range(min(10, len(mismatches[0]))):
         h, s = mismatches[0][i], mismatches[1][i]
-        print(f"Mismatch at head={h}, seq={s}: ref={out_ref[h,s]}, aie={aie_out[h,s]}, diff={diff[h,s]}")
+        print(
+            f"Mismatch at head={h}, seq={s}: ref={out_ref[h,s]}, aie={aie_out[h,s]}, diff={diff[h,s]}"
+        )
 
 assert torch.allclose(out_ref, aie_out, atol=1e-2, rtol=1e-2)
-
