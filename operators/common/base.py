@@ -95,8 +95,8 @@ def execute_runlist(runlist):
     runlist.wait()
 
 
-class SingleMLIRSourceOperator(AIEOperatorBase, ABC):
-    """Base class for AIE-accelerated operations"""
+class MLIROperator(AIEOperatorBase, ABC):
+    """Base class for AIE-accelerated operations defined by a single MLIR source"""
 
     def __init__(self, *args, **kwargs):
         self.kernel_archive = f"{self.get_operator_name()}_kernels.a"
@@ -157,6 +157,13 @@ class SingleMLIRSourceOperator(AIEOperatorBase, ABC):
             insts_bin_path=self.insts_artifact.filename,
             args_spec=self.get_arg_spec(),
         )
+
+
+class CompositeOperator(AIEOperatorBase, ABC):
+    """Base class for composite operators that chain multiple sub-operators"""
+
+    def __init__(self, context=None):
+        super().__init__(context)
 
 
 class AIERuntimeArgSpec:
@@ -322,3 +329,25 @@ class PatchableSingleXclbinCallable(SingleXclbinCallable):
         for pos, (val, mask) in patches.items():
             insts[pos] = (np.int64(insts[pos]) & ~mask) | (val & mask)
         self.insts_buffer.to("npu")
+
+
+class CompositeCallable:
+    """Callable for executing a sequence of sub-operators"""
+
+    def __init__(self, sequence, intermediate_buffers=None):
+        """
+        Args:
+            sequence: List of (callable, args_indices) tuples.
+                      args_indices is a list of indices into the combined list of [inputs, outputs, intermediates].
+            intermediate_buffers: List of AIEBuffer objects for intermediate results.
+        """
+        self.sequence = sequence
+        self.intermediate_buffers = intermediate_buffers or []
+
+    def __call__(self, *args):
+        # args contains inputs and outputs
+        all_buffers = list(args) + self.intermediate_buffers
+
+        for op_callable, indices in self.sequence:
+            op_args = [all_buffers[i] for i in indices]
+            op_callable(*op_args)

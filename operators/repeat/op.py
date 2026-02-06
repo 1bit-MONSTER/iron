@@ -7,7 +7,7 @@ from ml_dtypes import bfloat16
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     KernelObjectArtifact,
     SourceArtifact,
@@ -15,7 +15,7 @@ from operators.common import (
 )
 
 
-class AIERepeat(SingleMLIRSourceOperator):
+class AIERepeat(MLIROperator):
     """AIE-accelerated General Matrix-Vector/Vector-Matrix Multiplication layer"""
 
     def __init__(
@@ -32,7 +32,7 @@ class AIERepeat(SingleMLIRSourceOperator):
         self.repeat = repeat
         self.transfer_size = transfer_size
         self.dtype = dtype
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         name = f"repeat_{self.rows}x{self.cols}_by_{self.repeat}"

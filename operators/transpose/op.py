@@ -4,7 +4,7 @@
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     KernelObjectArtifact,
     SourceArtifact,
@@ -12,7 +12,7 @@ from operators.common import (
 )
 
 
-class AIETranspose(SingleMLIRSourceOperator):
+class AIETranspose(MLIROperator):
     """AIE-accelerated transpose operator"""
 
     def __init__(self, M, N, num_aie_columns, num_channels, m, n, s, context=None):
@@ -32,7 +32,7 @@ class AIETranspose(SingleMLIRSourceOperator):
         self.num_columns = num_aie_columns
         self.num_channels = num_channels
 
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         return f"transpose_{self.num_columns}c_{self.num_channels}ch_{self.M}x{self.N}_{self.m}x{self.n}_{self.s}s"

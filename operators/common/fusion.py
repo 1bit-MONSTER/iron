@@ -3,7 +3,7 @@ import ml_dtypes
 import pyxrt
 import ctypes
 from . import compilation as comp
-from .base import AIEOperatorBase, SingleMLIRSourceOperator, AIEBuffer
+from .base import AIEOperatorBase, MLIROperator, AIEBuffer
 from .device_manager import AIEDeviceManager
 
 # Fused Operator
@@ -11,14 +11,13 @@ from .device_manager import AIEDeviceManager
 
 
 class FusedMLIROperator(AIEOperatorBase):
-    """Operator that fuses multiple SingleMLIRSourceOperators into one."""
+    """Operator that fuses multiple MLIROperators into one."""
 
     def __init__(
         self, name, runlist, input_args, output_args, buffer_sizes=None, *args, **kwargs
     ):
         assert all(
-            isinstance(op, SingleMLIRSourceOperator)
-            and all(isinstance(buf, str) for buf in bufs)
+            isinstance(op, MLIROperator) and all(isinstance(buf, str) for buf in bufs)
             for op, *bufs in runlist
         )
         self.runlist = runlist

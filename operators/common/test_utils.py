@@ -6,7 +6,7 @@ import numpy as np
 from ml_dtypes import bfloat16
 from .utils import torch_to_numpy
 import logging
-from .base import SingleMLIRSourceOperator, AIEBuffer
+from .base import MLIROperator, CompositeOperator, AIEBuffer
 
 
 def nearly_equal(
@@ -85,8 +85,8 @@ def run_test(
     )
     logger = logging.getLogger(__name__)
 
-    if not isinstance(operator, SingleMLIRSourceOperator):
-        raise ValueError("run_test only supports SingleMLIRSourceOperator")
+    if not isinstance(operator, (MLIROperator, CompositeOperator)):
+        raise ValueError("run_test only supports MLIROperator or CompositeOperator")
 
     operator.compile()
     op_func = operator.get_callable()
@@ -148,12 +148,10 @@ def run_test(
         else:
             print(f"Warning: Output buffer {buf_name} not found in operator arguments")
 
-    # Intermediate buffers are not supported in this generic run_test for SingleMLIRSourceOperator
+    # Intermediate buffers are not supported in this generic run_test
     # unless we expose them somehow. For now, ignore or warn.
     if intermediate_buffers:
-        print(
-            "Warning: intermediate_buffers verification is not supported for SingleMLIRSourceOperator in run_test"
-        )
+        print("Warning: intermediate_buffers verification is not supported in run_test")
 
     # Calculate bandwidth
     bandwidth_gbps = total_bytes / (latency_us * 1e-6) / 1e9

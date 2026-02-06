@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     XclbinArtifact,
     InstsBinArtifact,
@@ -20,7 +20,7 @@ from operators.common import (
 from operators.common.utils import torch_to_numpy, numpy_to_torch
 
 
-class AIEMHA(SingleMLIRSourceOperator):
+class AIEMHA(MLIROperator):
 
     def __init__(
         self,
@@ -40,7 +40,7 @@ class AIEMHA(SingleMLIRSourceOperator):
         self.num_of_pipelines = num_of_pipelines
         assert d == 64, "Only d=64 is supported in this version"
 
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         kv_heads = self.num_KV_heads if self.num_KV_heads > 0 else self.num_heads

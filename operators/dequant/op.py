@@ -7,7 +7,7 @@ from ml_dtypes import bfloat16
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     KernelObjectArtifact,
     SourceArtifact,
@@ -15,7 +15,7 @@ from operators.common import (
 )
 
 
-class AIEDequant(SingleMLIRSourceOperator):
+class AIEDequant(MLIROperator):
 
     def __init__(
         self,
@@ -44,7 +44,7 @@ class AIEDequant(SingleMLIRSourceOperator):
         assert self.size % total_cores == 0, "Size must be divisible by total cores"
         assert total_cores <= 16, "Total cores (columns * channels) must be <= 16"
 
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         return f"dequant_{self.num_columns}c_{self.num_channels}ch_{self.size}_{self.tile_size}t"

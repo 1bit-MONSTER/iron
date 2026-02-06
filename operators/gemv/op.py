@@ -7,7 +7,7 @@ from ml_dtypes import bfloat16
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     XclbinArtifact,
     InstsBinArtifact,
@@ -19,7 +19,7 @@ from operators.common import (
 from operators.common.utils import torch_to_numpy
 
 
-class AIEGEMV(SingleMLIRSourceOperator):
+class AIEGEMV(MLIROperator):
     """AIE-accelerated General Matrix-Vector/Vector-Matrix Multiplication layer"""
 
     def __init__(
@@ -55,7 +55,7 @@ class AIEGEMV(SingleMLIRSourceOperator):
         self.xclbin_artifact = None
         self.insts_artifact = None
 
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         return f"gemv_{self.M}x{self.K}_{self.tile_size_input}tsi_{self.tile_size_output}tso_{self.num_batches}batch_{self.num_aie_columns}col"

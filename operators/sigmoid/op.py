@@ -7,7 +7,7 @@ from ml_dtypes import bfloat16
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     KernelObjectArtifact,
     SourceArtifact,
@@ -15,7 +15,7 @@ from operators.common import (
 )
 
 
-class AIESigmoid(SingleMLIRSourceOperator):
+class AIESigmoid(MLIROperator):
     """AIE-accelerated Sigmoid activation function"""
 
     def __init__(self, size, num_aie_columns, num_channels, tile_size, context=None):
@@ -34,7 +34,7 @@ class AIESigmoid(SingleMLIRSourceOperator):
         total_shimdma_channels = self.num_columns * self.num_channels
         assert total_shimdma_channels <= 16, "Conservative ShimDMA limit"
 
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         return f"sigmoid_{self.num_columns}c_{self.num_channels}ch_{self.size}_{self.tile_size}t"

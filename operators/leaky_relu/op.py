@@ -7,7 +7,7 @@ from ml_dtypes import bfloat16
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     KernelObjectArtifact,
     SourceArtifact,
@@ -15,7 +15,7 @@ from operators.common import (
 )
 
 
-class AIELeakyReLU(SingleMLIRSourceOperator):
+class AIELeakyReLU(MLIROperator):
     """AIE-accelerated LEAKY RELU operator"""
 
     def __init__(
@@ -37,7 +37,7 @@ class AIELeakyReLU(SingleMLIRSourceOperator):
         total_shimdma_channels = self.num_columns * self.num_channels
         assert total_shimdma_channels <= 16, "Conservative ShimDMA limit"
 
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         return f"leaky_relu_{self.num_columns}c_{self.num_channels}ch_{self.size}_{self.tile_size}t"

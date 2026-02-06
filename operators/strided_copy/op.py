@@ -7,7 +7,7 @@ from ml_dtypes import bfloat16
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     KernelObjectArtifact,
     SourceArtifact,
@@ -15,7 +15,7 @@ from operators.common import (
 )
 
 
-class AIEStridedCopy(SingleMLIRSourceOperator):
+class AIEStridedCopy(MLIROperator):
     """AIE-accelerated General Matrix-Vector/Vector-Matrix Multiplication layer"""
 
     def __init__(
@@ -48,7 +48,7 @@ class AIEStridedCopy(SingleMLIRSourceOperator):
         self.transfer_size = transfer_size
         self.num_aie_channels = num_aie_channels
         self.kwargs = kwargs
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         return f"strided_copy_{'x'.join(map(str, self.input_sizes))}sz_{'x'.join(map(str, self.input_strides))}st_{self.input_offset}off_to_{'x'.join(map(str, self.output_sizes))}sz_{'x'.join(map(str, self.output_strides))}st_{self.output_offset}off_{self.transfer_size if self.transfer_size is not None else 'auto'}tr_{self.num_aie_channels}ch"

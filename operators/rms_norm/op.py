@@ -8,7 +8,7 @@ from ml_dtypes import bfloat16
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     XclbinArtifact,
     InstsBinArtifact,
@@ -20,7 +20,7 @@ from operators.common import (
 from operators.common.utils import torch_to_numpy
 
 
-class AIERMSNorm(SingleMLIRSourceOperator):
+class AIERMSNorm(MLIROperator):
     """AIE-accelerated RMS Normalization layer"""
 
     def __init__(
@@ -52,7 +52,7 @@ class AIERMSNorm(SingleMLIRSourceOperator):
         total_shimdma_channels = self.num_columns * self.num_channels
         assert total_shimdma_channels <= 16, "Conservative ShimDMA limit"
 
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         return f"weighted_rms_{self.num_columns}c_{self.num_channels}ch_{self.size}_{self.tile_size}t"

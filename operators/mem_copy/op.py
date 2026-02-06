@@ -7,7 +7,7 @@ from ml_dtypes import bfloat16
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     XclbinArtifact,
     InstsBinArtifact,
@@ -18,7 +18,7 @@ from operators.common import (
 )
 
 
-class AIEMemCopy(SingleMLIRSourceOperator):
+class AIEMemCopy(MLIROperator):
 
     def __init__(self, size, num_cores, num_channels, bypass, tile_size, context=None):
         self.size = size
@@ -30,7 +30,7 @@ class AIEMemCopy(SingleMLIRSourceOperator):
         # For naming consistency with other operators
         self.bypass_str = "bypass" if bypass else "no_bypass"
 
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         return f"mem_copy_{self.num_cores}_cores_{self.num_channels}_chans_tile_{self.tile_size}_{self.bypass_str}"

@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     XclbinArtifact,
     InstsBinArtifact,
@@ -19,7 +19,7 @@ from operators.common import (
 )
 
 
-class AIEElementwiseAdd(SingleMLIRSourceOperator):
+class AIEElementwiseAdd(MLIROperator):
     """AIE-accelerated element-wise addition"""
 
     def __init__(
@@ -39,7 +39,7 @@ class AIEElementwiseAdd(SingleMLIRSourceOperator):
         # Maximum safe configuration: 8 columns × 2 channels = 16 ShimDMA channels
         total_shimdma_channels = self.num_aie_columns * 2
         assert total_shimdma_channels <= 16, "Conservative ShimDMA limit"
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         return f"add_{self.num_aie_columns}col_{self.size}_{self.tile_size}t"

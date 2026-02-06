@@ -4,7 +4,7 @@
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     KernelObjectArtifact,
     SourceArtifact,
@@ -12,7 +12,7 @@ from operators.common import (
 )
 
 
-class AIESiLU(SingleMLIRSourceOperator):
+class AIESiLU(MLIROperator):
     """AIE-accelerated SiLU activation function"""
 
     def __init__(self, size, tile_size, num_aie_columns=8, context=None):
@@ -26,7 +26,7 @@ class AIESiLU(SingleMLIRSourceOperator):
         # Maximum safe configuration: 8 columns × 1 channel = 8 ShimDMA channels
         total_shimdma_channels = self.num_aie_columns * 1
         assert total_shimdma_channels <= 16, "Conservative ShimDMA limit"
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         return f"silu_{self.num_aie_columns}col_{self.size}_{self.tile_size}t"

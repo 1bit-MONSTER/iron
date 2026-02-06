@@ -4,7 +4,7 @@
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     KernelObjectArtifact,
     SourceArtifact,
@@ -12,7 +12,7 @@ from operators.common import (
 )
 
 
-class AIERope(SingleMLIRSourceOperator):
+class AIERope(MLIROperator):
 
     def __init__(
         self,
@@ -44,7 +44,7 @@ class AIERope(SingleMLIRSourceOperator):
         self.method_type = method_type
         assert method_type in {0, 1}
 
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         return f"rope_{self.num_aie_columns}col_{self.rows}rows_{self.cols}cols_{self.angle_rows}arows_{self.method_type}m"

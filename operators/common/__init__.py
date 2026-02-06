@@ -5,7 +5,9 @@
 
 from .base import (
     AIEOperatorBase,
-    SingleMLIRSourceOperator,
+    MLIROperator,
+    CompositeOperator,
+    CompositeCallable,
     AIEBuffer,
     SingleXclbinCallable,
     AIERuntimeArgSpec,

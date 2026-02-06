@@ -7,7 +7,7 @@ from ml_dtypes import bfloat16
 from pathlib import Path
 
 from operators.common import (
-    SingleMLIRSourceOperator,
+    MLIROperator,
     AIERuntimeArgSpec,
     KernelObjectArtifact,
     SourceArtifact,
@@ -15,7 +15,7 @@ from operators.common import (
 )
 
 
-class AIEAXPY(SingleMLIRSourceOperator):
+class AIEAXPY(MLIROperator):
     """AIE-accelerated aX + Y operator"""
 
     def __init__(
@@ -39,7 +39,7 @@ class AIEAXPY(SingleMLIRSourceOperator):
         self.num_channels = num_channels
         self.scalar_factor = scalar_factor
 
-        SingleMLIRSourceOperator.__init__(self, context=context)
+        MLIROperator.__init__(self, context=context)
 
     def get_operator_name(self):
         return f"axpy_{self.num_aie_columns}c_{self.num_channels}ch_{self.size}_{self.tile_size}t_{self.scalar_factor}s"
