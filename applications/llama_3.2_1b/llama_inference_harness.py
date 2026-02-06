@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Inference harness -- all the necessary code _other_ than the actual model (forward pass).
 Exposes a 'harness' function that can be called with a 'forward_pass' function that implements the model.
