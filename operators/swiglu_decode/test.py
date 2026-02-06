@@ -54,7 +54,7 @@ def test_swiglu_decode(embedding_dim, hidden_dim, aie_context):
     # Note that the previous intermediate result _is_ still verified up to the given tolerance.
 
     input_buffers = {"input": golden_ref["input"]}
-    output_buffers = {}
+    output_buffers = {"output": None}
     intermediate_buffers = {
         "left": golden_ref["left"],
         "left_swished": golden_ref["left_swished"],

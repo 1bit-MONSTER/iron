@@ -146,7 +146,6 @@ class AIESwiGLUPrefill(CompositeOperator):
         silu = AIESiLU(
             size=self.seq_len_padded * self.hidden_dim_padded,
             num_aie_columns=8,
-            num_channels=2,
             tile_size=self.hidden_dim_padded // 8,
         )
         self.silu = silu
@@ -159,13 +158,12 @@ class AIESwiGLUPrefill(CompositeOperator):
             "--xclbin-kernel-id=0x902",
         ]
         silu_xclbin.kernel_name = "swiglu_silu"
-        silu_xclbin.dependencies += [gemm_1_xclbin]
+        silu_xclbin.dependencies.add(gemm_1_xclbin)
         artifacts.append(silu_insts)
 
         eltwise_mul = AIEElementwiseMul(
             size=self.seq_len_padded * self.hidden_dim_padded,
             num_aie_columns=8,
-            num_channels=2,
             tile_size=self.hidden_dim_padded // 8,
         )
         self.eltwise_mul = eltwise_mul
@@ -180,7 +178,7 @@ class AIESwiGLUPrefill(CompositeOperator):
             "--xclbin-kernel-id=0x903",
         ]
         eltwise_mul_xclbin.kernel_name = "swiglu_eltwise_mul"
-        eltwise_mul_xclbin.dependencies += [silu_xclbin]
+        eltwise_mul_xclbin.dependencies.add(silu_xclbin)
         artifacts.append(eltwise_mul_insts)
 
         gemm_2 = AIEGEMM(
@@ -198,7 +196,7 @@ class AIESwiGLUPrefill(CompositeOperator):
             "--xclbin-kernel-id=0x904",
         ]
         gemm_2_xclbin.kernel_name = "swiglu_gemm_2"
-        gemm_2_xclbin.dependencies += [eltwise_mul_xclbin]
+        gemm_2_xclbin.dependencies.add(eltwise_mul_xclbin)
         artifacts.append(gemm_2_xclbin)
         artifacts.append(gemm_2_insts)
 

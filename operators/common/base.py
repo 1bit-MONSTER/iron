@@ -114,8 +114,8 @@ class MLIROperator(AIEOperatorBase, ABC):
     def get_kernel_artifacts(self):
         pass
 
-    def get_artifacts(self):
-        operator_name = self.get_operator_name()
+    def get_artifacts(self, prefix=""):
+        operator_name = prefix + self.get_operator_name()
         mlir_artifact = self.get_mlir_artifact()
         kernel_deps_inputs = self.get_kernel_artifacts()
         if len(kernel_deps_inputs) > 0:

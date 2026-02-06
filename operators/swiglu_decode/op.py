@@ -124,9 +124,7 @@ class AIESwiGLUDecode(CompositeOperator):
             tile_size_output=self.hidden_dim // 8,
         )
         self.gemv_1 = gemv_1
-        gemv_1_xclbin, gemv_1_insts = gemv_1.get_artifacts(
-            prefix="swiglu_decode_gemv_1_"
-        )
+        gemv_1_xclbin, gemv_1_insts = gemv_1.get_artifacts()
         gemv_1_xclbin.extra_flags += [
             "--xclbin-instance-name=swiglu_gemv_1",
             "--xclbin-kernel-id=0x901",
@@ -139,39 +137,35 @@ class AIESwiGLUDecode(CompositeOperator):
         silu = AIESiLU(
             size=self.hidden_dim,
             num_aie_columns=8,
-            num_channels=2,
             tile_size=self.hidden_dim // 16,
         )
         self.silu = silu
         self.hidden_dim_padded = silu.size
-        silu_xclbin, silu_insts = silu.get_artifacts(prefix="swiglu_decode_silu_")
+        silu_xclbin, silu_insts = silu.get_artifacts()
         silu_xclbin.xclbin_input = gemv_1_xclbin
         silu_xclbin.extra_flags += [
             "--xclbin-instance-name=swiglu_silu",
             "--xclbin-kernel-id=0x902",
         ]
         silu_xclbin.kernel_name = "swiglu_silu"
-        silu_xclbin.dependencies += [gemv_1_xclbin]
+        silu_xclbin.dependencies.add(gemv_1_xclbin)
         artifacts.append(silu_insts)
 
         eltwise_mul = AIEElementwiseMul(
             size=self.hidden_dim,
             num_aie_columns=8,
-            num_channels=2,
             tile_size=self.hidden_dim // 8,
         )
         self.eltwise_mul = eltwise_mul
         assert self.hidden_dim <= eltwise_mul.size <= self.hidden_dim_padded
-        eltwise_mul_xclbin, eltwise_mul_insts = eltwise_mul.get_artifacts(
-            prefix="swiglu_decode_eltwise_mul_"
-        )
+        eltwise_mul_xclbin, eltwise_mul_insts = eltwise_mul.get_artifacts()
         eltwise_mul_xclbin.xclbin_input = silu_xclbin
         eltwise_mul_xclbin.extra_flags += [
             "--xclbin-instance-name=swiglu_eltwise_mul",
             "--xclbin-kernel-id=0x903",
         ]
         eltwise_mul_xclbin.kernel_name = "swiglu_eltwise_mul"
-        eltwise_mul_xclbin.dependencies += [silu_xclbin]
+        eltwise_mul_xclbin.dependencies.add(silu_xclbin)
         artifacts.append(eltwise_mul_insts)
 
         gemv_2 = AIEGEMV(
@@ -182,16 +176,14 @@ class AIESwiGLUDecode(CompositeOperator):
             tile_size_output=self.embedding_dim // 8,
         )
         self.gemv_2 = gemv_2
-        gemv_2_xclbin, gemv_2_insts = gemv_2.get_artifacts(
-            prefix="swiglu_decode_gemv_2_"
-        )
+        gemv_2_xclbin, gemv_2_insts = gemv_2.get_artifacts()
         gemv_2_xclbin.xclbin_input = eltwise_mul_xclbin
         gemv_2_xclbin.extra_flags += [
             "--xclbin-instance-name=swiglu_gemv_2",
             "--xclbin-kernel-id=0x904",
         ]
         gemv_2_xclbin.kernel_name = "swiglu_gemv_2"
-        gemv_2_xclbin.dependencies += [eltwise_mul_xclbin]
+        gemv_2_xclbin.dependencies.add(eltwise_mul_xclbin)
         artifacts.append(gemv_2_xclbin)
         artifacts.append(gemv_2_insts)
 

@@ -82,7 +82,7 @@ class AIEGEMM(MLIROperator):
         emulate_bf16_mmul_with_bfp16 = self.gemm_args.get(
             "emulate_bf16_mmul_with_bfp16", True
         )
-        prio_accuracy = self.gemm_args.get("prio_accuracy", False)
+        prio_accuracy = False  # Force False for debugging
         use_scalar = self.gemm_args.get("use_scalar", False)
         round_conv_even = self.gemm_args.get("round_conv_even", True)
         separate_c_tiles = self.gemm_args.get("separate_c_tiles", False)
@@ -118,7 +118,7 @@ class AIEGEMM(MLIROperator):
         emulate_bf16_mmul_with_bfp16 = self.gemm_args.get(
             "emulate_bf16_mmul_with_bfp16", True
         )
-        prio_accuracy = self.gemm_args.get("prio_accuracy", False)
+        prio_accuracy = False  # Force False for debugging
         round_conv_even = self.gemm_args.get("round_conv_even", True)
         kernel_flags = [
             f"-DDIM_M={self.tile_m}",

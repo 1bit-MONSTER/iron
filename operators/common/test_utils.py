@@ -139,6 +139,8 @@ def run_test(
     # Verify outputs
     errors = {}
     for buf_name, expected in output_buffers.items():
+        if expected is None:
+            continue
         if buf_name in output_map:
             buf = output_map[buf_name]
             output_np = buf.view_as_np()

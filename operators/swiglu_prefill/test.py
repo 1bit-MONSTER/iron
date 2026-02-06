@@ -15,8 +15,8 @@ from operators.common.test_utils import run_test, verify_buffer
 
 def generate_test_params(extensive=False):
     # This operation is currently untested except for the integrated llama application tests.
-    params = []
-    names = []
+    params = [(256, 2048, 2048, False)]
+    names = [f"swiglu_prefill_256x{emb}x{hid}" for _, emb, hid, _ in params]
     return params, names
 
 
@@ -54,7 +54,7 @@ def test_swiglu_prefill(seq_len, embedding_dim, hidden_dim, prio_accuracy, aie_c
 
     input_buffers = {"input": golden_ref["input"]}
     # output_buffers = {'output': golden_ref['output']}
-    output_buffers = {}
+    output_buffers = {"output": None}
     intermediate_buffers = {
         "left": golden_ref["left"],
         "left_swished": golden_ref["left_swished"],
