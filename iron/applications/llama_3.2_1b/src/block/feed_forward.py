@@ -299,27 +299,28 @@ class FeedForward(nn.Module):
         if self.cfg["use_kv_cache"] and self.cfg["use_aie_ffn_gemv"]:
             self._aie_callables["fc1_gemv"] = self.aie_fc1_gemv.get_callable()
             arg_spec = self.aie_fc1_gemv.get_arg_spec()
-            self._aie_buffers["fc1_gemv_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
-            self._aie_buffers["fc1_gemv_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            # GEMV arg order: [weight_matrix(MxK), input_vector(K), output_vector(M)]
+            self._aie_buffers["fc1_gemv_weight"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["fc1_gemv_in"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
             self._aie_buffers["fc1_gemv_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
             
             self._aie_callables["fc2_gemv"] = self.aie_fc2_gemv.get_callable()
             arg_spec = self.aie_fc2_gemv.get_arg_spec()
-            self._aie_buffers["fc2_gemv_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
-            self._aie_buffers["fc2_gemv_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            self._aie_buffers["fc2_gemv_weight"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["fc2_gemv_in"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
             self._aie_buffers["fc2_gemv_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
             
             self._aie_callables["fc3_gemv"] = self.aie_fc3_gemv.get_callable()
             arg_spec = self.aie_fc3_gemv.get_arg_spec()
-            self._aie_buffers["fc3_gemv_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
-            self._aie_buffers["fc3_gemv_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            self._aie_buffers["fc3_gemv_weight"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["fc3_gemv_in"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
             self._aie_buffers["fc3_gemv_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
             
             # Populate weights if they were set before prepare was called
             if hasattr(self, '_pending_weights'):
-                self._aie_buffers["fc1_gemv_weight"].from_np(torch_to_numpy(self._pending_weights['fc1']))
-                self._aie_buffers["fc2_gemv_weight"].from_np(torch_to_numpy(self._pending_weights['fc2']))
-                self._aie_buffers["fc3_gemv_weight"].from_np(torch_to_numpy(self._pending_weights['fc3']))
+                self._aie_buffers["fc1_gemv_weight"].data[:] = torch_to_numpy(self._pending_weights['fc1'])
+                self._aie_buffers["fc2_gemv_weight"].data[:] = torch_to_numpy(self._pending_weights['fc2'])
+                self._aie_buffers["fc3_gemv_weight"].data[:] = torch_to_numpy(self._pending_weights['fc3'])
         
         # SiLU operators
         if self.cfg["use_aie_ffn_silu"]:

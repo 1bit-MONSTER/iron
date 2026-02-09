@@ -5,6 +5,7 @@
 
 from iron.common import AIEBuffer
 from iron.common.utils import torch_to_numpy
+from iron.common.base import sync_to_device, sync_from_device
 from ml_dtypes import bfloat16
 import torch
 import numpy as np
@@ -30,6 +31,7 @@ def copy_and_run(callable_op, buffers, data_map, output_shape=None):
     args = []
     none_names = []
     input_shape = None
+    buffers_to_sync_to_device = []
     
     for name, data in data_map.items():
         if name not in buffers:
@@ -45,18 +47,26 @@ def copy_and_run(callable_op, buffers, data_map, output_shape=None):
                     input_shape = data.shape
                 
                 data_np = torch_to_numpy(data)
-                # Ensure data shape matches buffer shape or can be reshaped
-                buf_size = int(np.prod(buf.shape))
-                if data_np.size != buf_size:
-                    data_np = data_np.reshape(buf.shape)
-                buf.from_np(data_np)
+                # buf.data has a shape that matches buf.shape
+                # Reshape input data to match
+                if data_np.shape != buf.data.shape:
+                    # Flatten and reshape to match buf.data.shape
+                    data_np = data_np.reshape(buf.data.shape)
+                buf.data[:] = data_np
+                # Mark buffer for syncing to device
+                buffers_to_sync_to_device.append(buf.bo)
         else:
             # None means either: pre-populated weight buffer or output buffer
             # Track all None entries in order
             none_names.append(name)
+            # Mark all buffers (weights and output) for syncing to device
+            buffers_to_sync_to_device.append(buf.bo)
         
         # Always append the buffer
         args.append(buf)
+    
+    # Sync all buffers to device before execution
+    sync_to_device(buffers_to_sync_to_device)
     
     # Execute the operator
     callable_op(*args)
@@ -64,7 +74,12 @@ def copy_and_run(callable_op, buffers, data_map, output_shape=None):
     # Return output - assume last None is the output buffer
     if len(none_names) >= 1:
         output_name = none_names[-1]
-        output = buffers[output_name].view_as_torch()
+        output_buf = buffers[output_name]
+        
+        # Sync output buffer from device to CPU
+        sync_from_device([output_buf.bo])
+        
+        output = output_buf.view_as_torch()
         
         # Reshape output if shape is provided
         if output_shape is not None:

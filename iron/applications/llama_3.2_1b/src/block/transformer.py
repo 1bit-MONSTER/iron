@@ -50,18 +50,18 @@ class TransformerBlock(nn.Module):
                 num_aie_columns=8,
                 num_channels=2,
                 tile_size=self.cfg["emb_dim"],
+                weighted=True,
             )
             # For decode phase - single token (only when using KV cache)
             if self.cfg["use_kv_cache"]:
                 decode_size = self.cfg["emb_dim"]  # 1 token * emb_dim
-                # Use smaller tile_size to avoid timeout (tile_size=emb_dim causes timeout)
-                decode_tile_size = min(1024, self.cfg["emb_dim"])
                 self.aie_norm1_decode = AIERMSNorm(
                     size=decode_size,
                     eps=1e-5,
                     num_aie_columns=1,
                     num_channels=2,
-                    tile_size=decode_tile_size,
+                    tile_size=self.cfg["emb_dim"],
+                    weighted=True,
                 )
             else:
                 # When not using KV cache, use same operator for both phases
@@ -80,18 +80,18 @@ class TransformerBlock(nn.Module):
                 num_aie_columns=8,
                 num_channels=2,
                 tile_size=self.cfg["emb_dim"],
+                weighted=True,
             )
             # For decode phase - single token (only when using KV cache)
             if self.cfg["use_kv_cache"]:
                 decode_size = self.cfg["emb_dim"]  # 1 token * emb_dim
-                # Use smaller tile_size to avoid timeout (tile_size=emb_dim causes timeout)
-                decode_tile_size = min(1024, self.cfg["emb_dim"])
                 self.aie_norm2_decode = AIERMSNorm(
                     size=decode_size,
                     eps=1e-5,
                     num_aie_columns=1,
                     num_channels=2,
-                    tile_size=decode_tile_size,
+                    tile_size=self.cfg["emb_dim"],
+                    weighted=True,
                 )
             else:
                 # When not using KV cache, use same operator for both phases
@@ -137,17 +137,31 @@ class TransformerBlock(nn.Module):
         shortcut = x
         if self.cfg["use_aie_norm1"]:
             if is_decode_with_kv:
-                x = self._copy_and_run(
-                    self._aie_callables["norm1_decode"],
-                    self._aie_buffers,
-                    {"norm1_decode_in": x, "norm1_decode_out": None}
-                )
+                if self.aie_norm1_decode.weighted:
+                    x = self._copy_and_run(
+                        self._aie_callables["norm1_decode"],
+                        self._aie_buffers,
+                        {"norm1_decode_in": x, "norm1_decode_weight": None, "norm1_decode_out": None}
+                    )
+                else:
+                    x = self._copy_and_run(
+                        self._aie_callables["norm1_decode"],
+                        self._aie_buffers,
+                        {"norm1_decode_in": x, "norm1_decode_out": None}
+                    )
             else:
-                x = self._copy_and_run(
-                    self._aie_callables["norm1_prefill"],
-                    self._aie_buffers,
-                    {"norm1_prefill_in": x, "norm1_prefill_out": None}
-                )
+                if self.aie_norm1_prefill.weighted:
+                    x = self._copy_and_run(
+                        self._aie_callables["norm1_prefill"],
+                        self._aie_buffers,
+                        {"norm1_prefill_in": x, "norm1_prefill_weight": None, "norm1_prefill_out": None}
+                    )
+                else:
+                    x = self._copy_and_run(
+                        self._aie_callables["norm1_prefill"],
+                        self._aie_buffers,
+                        {"norm1_prefill_in": x, "norm1_prefill_out": None}
+                    )
         else:
             x = self.norm1(x)
 
@@ -173,17 +187,31 @@ class TransformerBlock(nn.Module):
         shortcut = x
         if self.cfg["use_aie_norm2"]:
             if is_decode_with_kv:
-                x = self._copy_and_run(
-                    self._aie_callables["norm2_decode"],
-                    self._aie_buffers,
-                    {"norm2_decode_in": x, "norm2_decode_out": None}
-                )
+                if self.aie_norm2_decode.weighted:
+                    x = self._copy_and_run(
+                        self._aie_callables["norm2_decode"],
+                        self._aie_buffers,
+                        {"norm2_decode_in": x, "norm2_decode_weight": None, "norm2_decode_out": None}
+                    )
+                else:
+                    x = self._copy_and_run(
+                        self._aie_callables["norm2_decode"],
+                        self._aie_buffers,
+                        {"norm2_decode_in": x, "norm2_decode_out": None}
+                    )
             else:
-                x = self._copy_and_run(
-                    self._aie_callables["norm2_prefill"],
-                    self._aie_buffers,
-                    {"norm2_prefill_in": x, "norm2_prefill_out": None}
-                )
+                if self.aie_norm2_prefill.weighted:
+                    x = self._copy_and_run(
+                        self._aie_callables["norm2_prefill"],
+                        self._aie_buffers,
+                        {"norm2_prefill_in": x, "norm2_prefill_weight": None, "norm2_prefill_out": None}
+                    )
+                else:
+                    x = self._copy_and_run(
+                        self._aie_callables["norm2_prefill"],
+                        self._aie_buffers,
+                        {"norm2_prefill_in": x, "norm2_prefill_out": None}
+                    )
         else:
             x = self.norm2(x)
         x = self.ff(x)
@@ -220,26 +248,58 @@ class TransformerBlock(nn.Module):
             self._aie_callables["norm1_prefill"] = self.aie_norm1_prefill.get_callable()
             arg_spec = self.aie_norm1_prefill.get_arg_spec()
             self._aie_buffers["norm1_prefill_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
-            self._aie_buffers["norm1_prefill_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            if self.aie_norm1_prefill.weighted:
+                self._aie_buffers["norm1_prefill_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+                self._aie_buffers["norm1_prefill_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+                # Populate weight if it was set before prepare was called
+                if hasattr(self.aie_norm1_prefill, 'weight') and self.aie_norm1_prefill.weight is not None:
+                    from iron.common.utils import torch_to_numpy
+                    self._aie_buffers["norm1_prefill_weight"].data[:] = torch_to_numpy(self.aie_norm1_prefill.weight)
+            else:
+                self._aie_buffers["norm1_prefill_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
             
             if self.cfg["use_kv_cache"]:
                 self._aie_callables["norm1_decode"] = self.aie_norm1_decode.get_callable()
                 arg_spec = self.aie_norm1_decode.get_arg_spec()
                 self._aie_buffers["norm1_decode_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
-                self._aie_buffers["norm1_decode_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+                if self.aie_norm1_decode.weighted:
+                    self._aie_buffers["norm1_decode_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+                    self._aie_buffers["norm1_decode_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+                    # Populate weight if it was set before prepare was called
+                    if hasattr(self.aie_norm1_decode, 'weight') and self.aie_norm1_decode.weight is not None:
+                        from iron.common.utils import torch_to_numpy
+                        self._aie_buffers["norm1_decode_weight"].data[:] = torch_to_numpy(self.aie_norm1_decode.weight)
+                else:
+                    self._aie_buffers["norm1_decode_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
         
         # Prepare norm2 operators
         if self.cfg["use_aie_norm2"]:
             self._aie_callables["norm2_prefill"] = self.aie_norm2_prefill.get_callable()
             arg_spec = self.aie_norm2_prefill.get_arg_spec()
             self._aie_buffers["norm2_prefill_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
-            self._aie_buffers["norm2_prefill_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            if self.aie_norm2_prefill.weighted:
+                self._aie_buffers["norm2_prefill_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+                self._aie_buffers["norm2_prefill_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+                # Populate weight if it was set before prepare was called
+                if hasattr(self.aie_norm2_prefill, 'weight') and self.aie_norm2_prefill.weight is not None:
+                    from iron.common.utils import torch_to_numpy
+                    self._aie_buffers["norm2_prefill_weight"].data[:] = torch_to_numpy(self.aie_norm2_prefill.weight)
+            else:
+                self._aie_buffers["norm2_prefill_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
             
             if self.cfg["use_kv_cache"]:
                 self._aie_callables["norm2_decode"] = self.aie_norm2_decode.get_callable()
                 arg_spec = self.aie_norm2_decode.get_arg_spec()
                 self._aie_buffers["norm2_decode_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
-                self._aie_buffers["norm2_decode_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+                if self.aie_norm2_decode.weighted:
+                    self._aie_buffers["norm2_decode_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+                    self._aie_buffers["norm2_decode_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+                    # Populate weight if it was set before prepare was called
+                    if hasattr(self.aie_norm2_decode, 'weight') and self.aie_norm2_decode.weight is not None:
+                        from iron.common.utils import torch_to_numpy
+                        self._aie_buffers["norm2_decode_weight"].data[:] = torch_to_numpy(self.aie_norm2_decode.weight)
+                else:
+                    self._aie_buffers["norm2_decode_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
         
         # Prepare residual add operators
         if self.cfg["use_aie_residual"]:
@@ -265,19 +325,25 @@ class TransformerBlock(nn.Module):
             self.aie_norm1_prefill.weight = norm1
             if self.cfg["use_kv_cache"]:
                 self.aie_norm1_decode.weight = norm1
+        
         if self.cfg["use_aie_norm2"]:
             self.aie_norm2_prefill.weight = norm2
             if self.cfg["use_kv_cache"]:
                 self.aie_norm2_decode.weight = norm2
+        
+        # If using AIE for both norms, we're done
+        if self.cfg["use_aie_norm1"] and self.cfg["use_aie_norm2"]:
             return
 
-        self.norm1.weight = assign(
-            self.norm1.weight,
-            norm1,
-            f"model.layers.{l}.input_layernorm.weight",
-        )
-        self.norm2.weight = assign(
-            self.norm2.weight,
+        if not self.cfg["use_aie_norm1"]:
+            self.norm1.weight = assign(
+                self.norm1.weight,
+                norm1,
+                f"model.layers.{l}.input_layernorm.weight",
+            )
+        if not self.cfg["use_aie_norm2"]:
+            self.norm2.weight = assign(
+                self.norm2.weight,
             norm2,
             f"model.layers.{l}.post_attention_layernorm.weight",
         )

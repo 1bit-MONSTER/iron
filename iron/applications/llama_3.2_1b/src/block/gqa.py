@@ -598,10 +598,10 @@ class GroupedQueryAttention(nn.Module):
             
             # Populate weight matrices (arg 0) if they were set before prepare was called
             if hasattr(self, '_pending_weights'):
-                self._aie_buffers["query_gemv_weight"].from_np(torch_to_numpy(self._pending_weights['query']))
-                self._aie_buffers["key_gemv_weight"].from_np(torch_to_numpy(self._pending_weights['key']))
-                self._aie_buffers["value_gemv_weight"].from_np(torch_to_numpy(self._pending_weights['value']))
-                self._aie_buffers["out_proj_gemv_weight"].from_np(torch_to_numpy(self._pending_weights['out_proj']))
+                self._aie_buffers["query_gemv_weight"].data[:] = torch_to_numpy(self._pending_weights['query'])
+                self._aie_buffers["key_gemv_weight"].data[:] = torch_to_numpy(self._pending_weights['key'])
+                self._aie_buffers["value_gemv_weight"].data[:] = torch_to_numpy(self._pending_weights['value'])
+                self._aie_buffers["out_proj_gemv_weight"].data[:] = torch_to_numpy(self._pending_weights['out_proj'])
         
         # Query, Key, Value, Out Proj GEMM operators (prefill phase)
         if self.cfg["use_aie_attn_projection_gemm"]:
@@ -630,11 +630,13 @@ class GroupedQueryAttention(nn.Module):
             self._aie_buffers["out_proj_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
             
             # Populate weights if they were set before prepare was called
+            # PyTorch weights are (out_features, in_features) but GEMM expects (K, N) = (in_features, out_features)
+            # So we need to transpose
             if hasattr(self, '_pending_weights'):
-                self._aie_buffers["query_weight"].from_np(torch_to_numpy(self._pending_weights['query']))
-                self._aie_buffers["key_weight"].from_np(torch_to_numpy(self._pending_weights['key']))
-                self._aie_buffers["value_weight"].from_np(torch_to_numpy(self._pending_weights['value']))
-                self._aie_buffers["out_proj_weight"].from_np(torch_to_numpy(self._pending_weights['out_proj']))
+                self._aie_buffers["query_weight"].data[:] = torch_to_numpy(self._pending_weights['query'].T)
+                self._aie_buffers["key_weight"].data[:] = torch_to_numpy(self._pending_weights['key'].T)
+                self._aie_buffers["value_weight"].data[:] = torch_to_numpy(self._pending_weights['value'].T)
+                self._aie_buffers["out_proj_weight"].data[:] = torch_to_numpy(self._pending_weights['out_proj'].T)
         
         # RoPE operators
         if self.cfg["use_aie_rope"]:

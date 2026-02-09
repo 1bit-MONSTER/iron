@@ -148,24 +148,27 @@ class Llama3ModelWithJSONConfig(nn.Module):
                 max_prefill_size = prompt_length * self.cfg["emb_dim"]
             else:
                 max_prefill_size = (prompt_length + num_tokens) * self.cfg["emb_dim"]
+            # tile_size must equal emb_dim for weighted RMSNorm to work correctly
+            # (weights are per-tile and all tiles share the same weights)
             self.aie_final_norm_prefill = AIERMSNorm(
                 size=max_prefill_size,
                 eps=1e-5,
-                num_aie_columns=8,
+                num_aie_columns=1,
                 num_channels=2,
                 tile_size=self.cfg["emb_dim"],
+                weighted=True,
             )
             # For decode phase - single token (only when using KV cache)
             if self.cfg["use_kv_cache"]:
                 decode_size = self.cfg["emb_dim"]  # 1 token * emb_dim
-                # Use smaller tile_size to avoid timeout (tile_size=emb_dim causes timeout)
-                decode_tile_size = min(1024, self.cfg["emb_dim"])
+                # tile_size must equal emb_dim for weighted RMSNorm
                 self.aie_final_norm_decode = AIERMSNorm(
                     size=decode_size,
                     eps=1e-5,
                     num_aie_columns=1,
                     num_channels=2,
-                    tile_size=decode_tile_size,
+                    tile_size=self.cfg["emb_dim"],
+                    weighted=True,
                 )
             else:
                 # When not using KV cache, use same operator for both phases
@@ -256,7 +259,9 @@ class Llama3ModelWithJSONConfig(nn.Module):
         This should be called once after compile_all().
         """
         from iron.common import AIEBuffer
+        from iron.common.utils import torch_to_numpy
         from .aie_buffer_manager import copy_and_run
+        import numpy as np
         
         # Store the copy_and_run helper for use in forward pass
         self._copy_and_run = copy_and_run
@@ -272,23 +277,38 @@ class Llama3ModelWithJSONConfig(nn.Module):
         if self.cfg.get("use_aie_final_norm", False):
             self._aie_callables["final_norm_prefill"] = self.aie_final_norm_prefill.get_callable()
             # Allocate buffers for final norm prefill
+            # Weighted RMSNorm arg spec: (in, weight, out)
             arg_spec = self.aie_final_norm_prefill.get_arg_spec()
             self._aie_buffers["final_norm_prefill_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
-            self._aie_buffers["final_norm_prefill_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            self._aie_buffers["final_norm_prefill_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            self._aie_buffers["final_norm_prefill_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
             
             if self.cfg["use_kv_cache"]:
                 self._aie_callables["final_norm_decode"] = self.aie_final_norm_decode.get_callable()
+                # Weighted RMSNorm arg spec: (in, weight, out)
                 arg_spec = self.aie_final_norm_decode.get_arg_spec()
                 self._aie_buffers["final_norm_decode_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
-                self._aie_buffers["final_norm_decode_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+                self._aie_buffers["final_norm_decode_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+                self._aie_buffers["final_norm_decode_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+            
+            # Populate weights if they were set before prepare was called
+            if hasattr(self, '_pending_final_norm_weight'):
+                weight_np = torch_to_numpy(self._pending_final_norm_weight)
+                self._aie_buffers["final_norm_prefill_weight"].data[:] = weight_np
+                if self.cfg["use_kv_cache"]:
+                    self._aie_buffers["final_norm_decode_weight"].data[:] = weight_np
         
         if self.cfg["use_aie_final_gemm"]:
             self._aie_callables["out_head_prefill"] = self.out_head_prefill.get_callable()
             # Allocate buffers for out_head prefill
+            # With partition_N=4, we need 4 separate weight buffers
             arg_spec = self.out_head_prefill.get_arg_spec()
+            partition_N = 4  # As configured in aie_config_prefill
             self._aie_buffers["out_head_prefill_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
-            self._aie_buffers["out_head_prefill_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
-            self._aie_buffers["out_head_prefill_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+            # Create separate weight buffer for each partition
+            for i in range(partition_N):
+                self._aie_buffers[f"out_head_prefill_weight_{i}"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+                self._aie_buffers[f"out_head_prefill_out_{i}"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
             
             if self.cfg.get("use_aie_final_gemv", False):
                 self._aie_callables["out_head_decode"] = self.out_head_decode.get_callable()
@@ -299,11 +319,20 @@ class Llama3ModelWithJSONConfig(nn.Module):
                 self._aie_buffers["out_head_decode_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
             
             # Populate weights if they were set before prepare was called
-            from iron.common.utils import torch_to_numpy
+            # PyTorch weights are (out_features, in_features) but GEMM expects (K, N) = (in_features, out_features)
             if hasattr(self, '_pending_out_head_weight'):
-                self._aie_buffers["out_head_prefill_weight"].from_np(torch_to_numpy(self._pending_out_head_weight))
-                if self.cfg.get("use_aie_final_gemv", False):
-                    self._aie_buffers["out_head_decode_weight"].from_np(torch_to_numpy(self._pending_out_head_weight))
+                # Transpose weight and partition it using GEMM's partition_B method
+                weight_transposed = torch_to_numpy(self._pending_out_head_weight.T)
+                # partition_B expects B matrix and partition_N count
+                partition_N = 4  # As configured in aie_config_prefill
+                partitioned_weights = self.out_head_prefill.partition_B(weight_transposed, partition_N)
+                # Populate each partition into its own buffer
+                for i in range(partition_N):
+                    self._aie_buffers[f"out_head_prefill_weight_{i}"].data[:] = partitioned_weights[i]
+            
+            if self.cfg.get("use_aie_final_gemv", False) and hasattr(self, '_pending_out_head_weight'):
+                # GEMV expects (M, K) = (vocab_size, emb_dim), need to transpose
+                self._aie_buffers["out_head_decode_weight"].data[:] = torch_to_numpy(self._pending_out_head_weight.T)
 
     def forward(self, in_idx, input_pos=None, use_kv_cache=False):
         # Forward pass
@@ -348,13 +377,13 @@ class Llama3ModelWithJSONConfig(nn.Module):
                 x = self._copy_and_run(
                     self._aie_callables["final_norm_decode"],
                     self._aie_buffers,
-                    {"final_norm_decode_in": x, "final_norm_decode_out": None}
+                    {"final_norm_decode_in": x, "final_norm_decode_weight": None, "final_norm_decode_out": None}
                 )
             else:
                 x = self._copy_and_run(
                     self._aie_callables["final_norm_prefill"],
                     self._aie_buffers,
-                    {"final_norm_prefill_in": x, "final_norm_prefill_out": None}
+                    {"final_norm_prefill_in": x, "final_norm_prefill_weight": None, "final_norm_prefill_out": None}
                 )
         else:
             x = self.final_norm(x)
@@ -370,11 +399,22 @@ class Llama3ModelWithJSONConfig(nn.Module):
                     output_shape=(1, 1, self.cfg["vocab_size"])  # Restore 3D shape
                 )
             else:
-                logits = self._copy_and_run(
-                    self._aie_callables["out_head_prefill"],
-                    self._aie_buffers,
-                    {"out_head_prefill_in": x, "out_head_prefill_weight": None, "out_head_prefill_out": None}
-                )
+                # Execute partitioned GEMM 4 times, once per partition
+                partition_N = 4
+                partition_outputs = []
+                for i in range(partition_N):
+                    partition_out = self._copy_and_run(
+                        self._aie_callables["out_head_prefill"],
+                        self._aie_buffers,
+                        {
+                            "out_head_prefill_in": x, 
+                            f"out_head_prefill_weight_{i}": None, 
+                            f"out_head_prefill_out_{i}": None
+                        }
+                    )
+                    partition_outputs.append(partition_out)
+                # Concatenate partition outputs along vocab dimension (last axis)
+                logits = torch.cat(partition_outputs, dim=-1)
         else:
             logits = self.out_head(x)
 
@@ -382,9 +422,8 @@ class Llama3ModelWithJSONConfig(nn.Module):
 
     def assign_weights(self, final_norm, out_head, out_head_name):
         if self.cfg.get("use_aie_final_norm", False):
-            self.aie_final_norm_prefill.weight = final_norm
-            if self.cfg["use_kv_cache"]:
-                self.aie_final_norm_decode.weight = final_norm
+            # Store weights for later population in prepare_aie_operators
+            self._pending_final_norm_weight = final_norm
         else:
             self.final_norm.weight = assign(
                 self.final_norm.weight,
