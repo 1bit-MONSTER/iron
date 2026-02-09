@@ -14,11 +14,10 @@ from iron.common.test_utils import run_test
 
 def get_params():
     params_list = [(16384, 64, 1, 8)]
-    names = ["mha"]
 
     params = []
-    for p, name in zip(params_list, names):
-        params.append(pytest.param(*p, id=name))
+    for p in params_list:
+        params.append(pytest.param(*p))
     return params
 
 
