@@ -54,12 +54,14 @@ class TransformerBlock(nn.Module):
             # For decode phase - single token (only when using KV cache)
             if self.cfg["use_kv_cache"]:
                 decode_size = self.cfg["emb_dim"]  # 1 token * emb_dim
+                # Use smaller tile_size to avoid timeout (tile_size=emb_dim causes timeout)
+                decode_tile_size = min(1024, self.cfg["emb_dim"])
                 self.aie_norm1_decode = AIERMSNorm(
                     size=decode_size,
                     eps=1e-5,
                     num_aie_columns=1,
                     num_channels=2,
-                    tile_size=self.cfg["emb_dim"],
+                    tile_size=decode_tile_size,
                 )
             else:
                 # When not using KV cache, use same operator for both phases
@@ -82,12 +84,14 @@ class TransformerBlock(nn.Module):
             # For decode phase - single token (only when using KV cache)
             if self.cfg["use_kv_cache"]:
                 decode_size = self.cfg["emb_dim"]  # 1 token * emb_dim
+                # Use smaller tile_size to avoid timeout (tile_size=emb_dim causes timeout)
+                decode_tile_size = min(1024, self.cfg["emb_dim"])
                 self.aie_norm2_decode = AIERMSNorm(
                     size=decode_size,
                     eps=1e-5,
                     num_aie_columns=1,
                     num_channels=2,
-                    tile_size=self.cfg["emb_dim"],
+                    tile_size=decode_tile_size,
                 )
             else:
                 # When not using KV cache, use same operator for both phases
@@ -133,9 +137,17 @@ class TransformerBlock(nn.Module):
         shortcut = x
         if self.cfg["use_aie_norm1"]:
             if is_decode_with_kv:
-                x = self.aie_norm1_decode(x)
+                x = self._copy_and_run(
+                    self._aie_callables["norm1_decode"],
+                    self._aie_buffers,
+                    {"norm1_decode_in": x, "norm1_decode_out": None}
+                )
             else:
-                x = self.aie_norm1_prefill(x)
+                x = self._copy_and_run(
+                    self._aie_callables["norm1_prefill"],
+                    self._aie_buffers,
+                    {"norm1_prefill_in": x, "norm1_prefill_out": None}
+                )
         else:
             x = self.norm1(x)
 
@@ -143,9 +155,17 @@ class TransformerBlock(nn.Module):
 
         if self.cfg["use_aie_residual"]:
             if is_decode_with_kv:
-                x = self.aie_residual_add_decode(x, shortcut)
+                x = self._copy_and_run(
+                    self._aie_callables["residual_add_decode"],
+                    self._aie_buffers,
+                    {"residual_add_decode_in0": x, "residual_add_decode_in1": shortcut, "residual_add_decode_out": None}
+                )
             else:
-                x = self.aie_residual_add_prefill(x, shortcut)
+                x = self._copy_and_run(
+                    self._aie_callables["residual_add_prefill"],
+                    self._aie_buffers,
+                    {"residual_add_prefill_in0": x, "residual_add_prefill_in1": shortcut, "residual_add_prefill_out": None}
+                )
         else:
             x = x + shortcut
 
@@ -153,22 +173,92 @@ class TransformerBlock(nn.Module):
         shortcut = x
         if self.cfg["use_aie_norm2"]:
             if is_decode_with_kv:
-                x = self.aie_norm2_decode(x)
+                x = self._copy_and_run(
+                    self._aie_callables["norm2_decode"],
+                    self._aie_buffers,
+                    {"norm2_decode_in": x, "norm2_decode_out": None}
+                )
             else:
-                x = self.aie_norm2_prefill(x)
+                x = self._copy_and_run(
+                    self._aie_callables["norm2_prefill"],
+                    self._aie_buffers,
+                    {"norm2_prefill_in": x, "norm2_prefill_out": None}
+                )
         else:
             x = self.norm2(x)
         x = self.ff(x)
 
         if self.cfg["use_aie_residual"]:
             if is_decode_with_kv:
-                x = self.aie_residual_add_decode(x, shortcut)
+                x = self._copy_and_run(
+                    self._aie_callables["residual_add_decode"],
+                    self._aie_buffers,
+                    {"residual_add_decode_in0": x, "residual_add_decode_in1": shortcut, "residual_add_decode_out": None}
+                )
             else:
-                x = self.aie_residual_add_prefill(x, shortcut)
+                x = self._copy_and_run(
+                    self._aie_callables["residual_add_prefill"],
+                    self._aie_buffers,
+                    {"residual_add_prefill_in0": x, "residual_add_prefill_in1": shortcut, "residual_add_prefill_out": None}
+                )
         else:
             x = x + shortcut
 
         return x
+
+    def prepare_aie_operators(self):
+        """Prepare AIE operators by getting callables and allocating buffers."""
+        from iron.common import AIEBuffer
+        from ..aie_buffer_manager import copy_and_run
+        
+        self._copy_and_run = copy_and_run
+        self._aie_callables = {}
+        self._aie_buffers = {}
+        
+        # Prepare norm1 operators
+        if self.cfg["use_aie_norm1"]:
+            self._aie_callables["norm1_prefill"] = self.aie_norm1_prefill.get_callable()
+            arg_spec = self.aie_norm1_prefill.get_arg_spec()
+            self._aie_buffers["norm1_prefill_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["norm1_prefill_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            
+            if self.cfg["use_kv_cache"]:
+                self._aie_callables["norm1_decode"] = self.aie_norm1_decode.get_callable()
+                arg_spec = self.aie_norm1_decode.get_arg_spec()
+                self._aie_buffers["norm1_decode_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+                self._aie_buffers["norm1_decode_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+        
+        # Prepare norm2 operators
+        if self.cfg["use_aie_norm2"]:
+            self._aie_callables["norm2_prefill"] = self.aie_norm2_prefill.get_callable()
+            arg_spec = self.aie_norm2_prefill.get_arg_spec()
+            self._aie_buffers["norm2_prefill_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["norm2_prefill_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            
+            if self.cfg["use_kv_cache"]:
+                self._aie_callables["norm2_decode"] = self.aie_norm2_decode.get_callable()
+                arg_spec = self.aie_norm2_decode.get_arg_spec()
+                self._aie_buffers["norm2_decode_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+                self._aie_buffers["norm2_decode_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+        
+        # Prepare residual add operators
+        if self.cfg["use_aie_residual"]:
+            self._aie_callables["residual_add_prefill"] = self.aie_residual_add_prefill.get_callable()
+            arg_spec = self.aie_residual_add_prefill.get_arg_spec()
+            self._aie_buffers["residual_add_prefill_in0"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["residual_add_prefill_in1"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            self._aie_buffers["residual_add_prefill_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+            
+            if self.cfg["use_kv_cache"]:
+                self._aie_callables["residual_add_decode"] = self.aie_residual_add_decode.get_callable()
+                arg_spec = self.aie_residual_add_decode.get_arg_spec()
+                self._aie_buffers["residual_add_decode_in0"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+                self._aie_buffers["residual_add_decode_in1"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+                self._aie_buffers["residual_add_decode_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+        
+        # Propagate to sub-modules
+        self.att.prepare_aie_operators()
+        self.ff.prepare_aie_operators()
 
     def assign_weights(self, l, norm1, norm2):
         if self.cfg["use_aie_norm1"]:

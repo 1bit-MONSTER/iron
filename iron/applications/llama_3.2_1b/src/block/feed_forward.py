@@ -95,14 +95,29 @@ class FeedForward(nn.Module):
                 "use_static_weight": True,
             }
 
+            # Compute required padding for GEMM dimensions (matching GEMM operator's requirements)
+            num_aie_rows = 4
+            tile_m = aie_config_prefill["tile_m"]
+            tile_k = aie_config_prefill["tile_k"]
+            tile_n = aie_config_prefill["tile_n"]
+            num_cols = aie_config_prefill["num_aie_columns"]
+            
+            # Pad to multiples using same formula as GEMM.pad_A/pad_B
+            min_M = tile_m * num_aie_rows
+            min_K = tile_k
+            min_N = tile_n * num_cols
+            M_padded = ((M_prefill + min_M - 1) // min_M) * min_M
+            emb_dim_padded = ((self.emb_dim + min_K - 1) // min_K) * min_K
+            hidden_dim_padded = ((self.hidden_dim + min_N - 1) // min_N) * min_N
+
             self.fc1 = AIEGEMM(
-                M=M_prefill, K=self.emb_dim, N=self.hidden_dim, **aie_config_prefill
+                M=M_padded, K=emb_dim_padded, N=hidden_dim_padded, **aie_config_prefill
             )
             self.fc2 = AIEGEMM(
-                M=M_prefill, K=self.emb_dim, N=self.hidden_dim, **aie_config_prefill
+                M=M_padded, K=emb_dim_padded, N=hidden_dim_padded, **aie_config_prefill
             )
             self.fc3 = AIEGEMM(
-                M=M_prefill, K=self.hidden_dim, N=self.emb_dim, **aie_config_prefill
+                M=M_padded, K=hidden_dim_padded, N=emb_dim_padded, **aie_config_prefill
             )
         else:
             self.fc1 = nn.Linear(
@@ -184,44 +199,164 @@ class FeedForward(nn.Module):
 
         if self.cfg["use_aie_ffn_swiglu"]:
             if is_prefill:
-                return self.aie_swiglu_prefill(x)
+                return self._copy_and_run(
+                    self._aie_callables["swiglu_prefill"],
+                    self._aie_buffers,
+                    {"swiglu_prefill_in": x, "swiglu_prefill_out": None}
+                )
             else:
-                return self.aie_swiglu_decode(x)
+                return self._copy_and_run(
+                    self._aie_callables["swiglu_decode"],
+                    self._aie_buffers,
+                    {"swiglu_decode_in": x, "swiglu_decode_out": None}
+                )
 
         if is_decode_with_kv and self.cfg["use_aie_ffn_gemv"]:
-            x_fc1 = self.aie_fc1_gemv(x)
-            x_fc2 = self.aie_fc2_gemv(x)
+            # Flatten to 1D for GEMV
+            # GEMV arg order: [weight_matrix, input_vector, output_vector]
+            x_flat = x.reshape(-1)
+            x_fc1 = self._copy_and_run(
+                self._aie_callables["fc1_gemv"],
+                self._aie_buffers,
+                {"fc1_gemv_weight": None, "fc1_gemv_in": x_flat, "fc1_gemv_out": None}
+            )
+            x_fc2 = self._copy_and_run(
+                self._aie_callables["fc2_gemv"],
+                self._aie_buffers,
+                {"fc2_gemv_weight": None, "fc2_gemv_in": x_flat, "fc2_gemv_out": None}
+            )
         else:
             x_fc1 = self.fc1(x)
             x_fc2 = self.fc2(x)
 
         if self.cfg["use_aie_ffn_silu"]:
             if is_decode_with_kv:
-                x_fc1_silu = self.aie_silu_decode(x_fc1)
+                x_fc1_silu = self._copy_and_run(
+                    self._aie_callables["silu_decode"],
+                    self._aie_buffers,
+                    {"silu_decode_in": x_fc1, "silu_decode_out": None}
+                )
             else:
-                x_fc1_silu = self.aie_silu_prefill(x_fc1)
+                x_fc1_silu = self._copy_and_run(
+                    self._aie_callables["silu_prefill"],
+                    self._aie_buffers,
+                    {"silu_prefill_in": x_fc1, "silu_prefill_out": None}
+                )
         else:
             x_fc1_silu = self.silu(x_fc1)
 
         if self.cfg["use_aie_ffn_mul"]:
             if is_decode_with_kv:
-                x = self.aie_mul_decode(x_fc1_silu, x_fc2)
+                x = self._copy_and_run(
+                    self._aie_callables["mul_decode"],
+                    self._aie_buffers,
+                    {"mul_decode_in0": x_fc1_silu, "mul_decode_in1": x_fc2, "mul_decode_out": None}
+                )
             else:
-                x = self.aie_mul_prefill(x_fc1_silu, x_fc2)
+                x = self._copy_and_run(
+                    self._aie_callables["mul_prefill"],
+                    self._aie_buffers,
+                    {"mul_prefill_in0": x_fc1_silu, "mul_prefill_in1": x_fc2, "mul_prefill_out": None}
+                )
         else:
             x = x_fc1_silu * x_fc2
 
         if is_decode_with_kv and self.cfg["use_aie_ffn_gemv"]:
-            result = self.aie_fc3_gemv(x)
+            x_flat = x.reshape(-1)
+            result = self._copy_and_run(
+                self._aie_callables["fc3_gemv"],
+                self._aie_buffers,
+                {"fc3_gemv_weight": None, "fc3_gemv_in": x_flat, "fc3_gemv_out": None}
+            )
             return result.view(original_shape)
         else:
             return self.fc3(x).view(original_shape)
 
+    def prepare_aie_operators(self):
+        """Prepare AIE operators by getting callables and allocating buffers."""
+        from iron.common import AIEBuffer
+        from ..aie_buffer_manager import copy_and_run
+        from iron.common.utils import torch_to_numpy
+        
+        self._copy_and_run = copy_and_run
+        self._aie_callables = {}
+        self._aie_buffers = {}
+        
+        # SwiGLU operators
+        if self.cfg["use_aie_ffn_swiglu"]:
+            self._aie_callables["swiglu_prefill"] = self.aie_swiglu_prefill.get_callable()
+            arg_spec = self.aie_swiglu_prefill.get_arg_spec()
+            self._aie_buffers["swiglu_prefill_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["swiglu_prefill_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            
+            if self.cfg["use_kv_cache"]:
+                self._aie_callables["swiglu_decode"] = self.aie_swiglu_decode.get_callable()
+                arg_spec = self.aie_swiglu_decode.get_arg_spec()
+                self._aie_buffers["swiglu_decode_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+                self._aie_buffers["swiglu_decode_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+        
+        # GEMV operators (decode phase)
+        if self.cfg["use_kv_cache"] and self.cfg["use_aie_ffn_gemv"]:
+            self._aie_callables["fc1_gemv"] = self.aie_fc1_gemv.get_callable()
+            arg_spec = self.aie_fc1_gemv.get_arg_spec()
+            self._aie_buffers["fc1_gemv_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["fc1_gemv_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            self._aie_buffers["fc1_gemv_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+            
+            self._aie_callables["fc2_gemv"] = self.aie_fc2_gemv.get_callable()
+            arg_spec = self.aie_fc2_gemv.get_arg_spec()
+            self._aie_buffers["fc2_gemv_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["fc2_gemv_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            self._aie_buffers["fc2_gemv_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+            
+            self._aie_callables["fc3_gemv"] = self.aie_fc3_gemv.get_callable()
+            arg_spec = self.aie_fc3_gemv.get_arg_spec()
+            self._aie_buffers["fc3_gemv_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["fc3_gemv_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            self._aie_buffers["fc3_gemv_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+            
+            # Populate weights if they were set before prepare was called
+            if hasattr(self, '_pending_weights'):
+                self._aie_buffers["fc1_gemv_weight"].from_np(torch_to_numpy(self._pending_weights['fc1']))
+                self._aie_buffers["fc2_gemv_weight"].from_np(torch_to_numpy(self._pending_weights['fc2']))
+                self._aie_buffers["fc3_gemv_weight"].from_np(torch_to_numpy(self._pending_weights['fc3']))
+        
+        # SiLU operators
+        if self.cfg["use_aie_ffn_silu"]:
+            self._aie_callables["silu_prefill"] = self.aie_silu_prefill.get_callable()
+            arg_spec = self.aie_silu_prefill.get_arg_spec()
+            self._aie_buffers["silu_prefill_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["silu_prefill_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            
+            if self.cfg["use_kv_cache"]:
+                self._aie_callables["silu_decode"] = self.aie_silu_decode.get_callable()
+                arg_spec = self.aie_silu_decode.get_arg_spec()
+                self._aie_buffers["silu_decode_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+                self._aie_buffers["silu_decode_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+        
+        # Elementwise multiply operators
+        if self.cfg["use_aie_ffn_mul"]:
+            self._aie_callables["mul_prefill"] = self.aie_mul_prefill.get_callable()
+            arg_spec = self.aie_mul_prefill.get_arg_spec()
+            self._aie_buffers["mul_prefill_in0"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["mul_prefill_in1"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            self._aie_buffers["mul_prefill_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+            
+            if self.cfg["use_kv_cache"]:
+                self._aie_callables["mul_decode"] = self.aie_mul_decode.get_callable()
+                arg_spec = self.aie_mul_decode.get_arg_spec()
+                self._aie_buffers["mul_decode_in0"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+                self._aie_buffers["mul_decode_in1"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+                self._aie_buffers["mul_decode_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+
     def assign_weights(self, l, fc1, fc2, fc3):
         if self.cfg["use_kv_cache"] and self.cfg["use_aie_ffn_gemv"]:
-            self.aie_fc1_gemv.weight = fc1
-            self.aie_fc2_gemv.weight = fc2
-            self.aie_fc3_gemv.weight = fc3
+            # Store weights to be populated in prepare_aie_operators
+            self._pending_weights = {
+                'fc1': fc1,
+                'fc2': fc2,
+                'fc3': fc3
+            }
 
         if self.cfg["use_aie_ffn_swiglu"]:
             self.aie_swiglu_prefill.weights_1 = fc1

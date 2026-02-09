@@ -13,6 +13,8 @@ from pathlib import Path
 from src.block.transformer import TransformerBlock
 from iron.operators.rope.rope_utils import compute_rope_params
 from iron.operators import AIERMSNorm, AIEGEMM, AIEGEMV
+from iron.common import AIEBuffer
+from ml_dtypes import bfloat16
 from rich.console import Console
 from rich.text import Text
 
@@ -156,12 +158,14 @@ class Llama3ModelWithJSONConfig(nn.Module):
             # For decode phase - single token (only when using KV cache)
             if self.cfg["use_kv_cache"]:
                 decode_size = self.cfg["emb_dim"]  # 1 token * emb_dim
+                # Use smaller tile_size to avoid timeout (tile_size=emb_dim causes timeout)
+                decode_tile_size = min(1024, self.cfg["emb_dim"])
                 self.aie_final_norm_decode = AIERMSNorm(
                     size=decode_size,
                     eps=1e-5,
                     num_aie_columns=1,
                     num_channels=2,
-                    tile_size=self.cfg["emb_dim"],
+                    tile_size=decode_tile_size,
                 )
             else:
                 # When not using KV cache, use same operator for both phases
@@ -189,10 +193,30 @@ class Llama3ModelWithJSONConfig(nn.Module):
                 M_for_gemm = self.prompt_length
             else:
                 M_for_gemm = self.prompt_length + self.num_tokens
+            
+            # Pad dimensions to meet GEMM requirements
+            # When using partition_N, the GEMM operator works on N_per_partition, not total N
+            num_aie_rows = 4
+            tile_m = aie_config_prefill["tile_m"]
+            tile_k = aie_config_prefill["tile_k"]
+            tile_n = aie_config_prefill["tile_n"]
+            num_cols = aie_config_prefill["num_aie_columns"]
+            partition_N = aie_config_prefill["partition_N"]
+            min_M = tile_m * num_aie_rows
+            min_K = tile_k
+            min_N = tile_n * num_cols
+            
+            M_padded = ((M_for_gemm + min_M - 1) // min_M) * min_M
+            emb_dim_padded = ((self.cfg["emb_dim"] + min_K - 1) // min_K) * min_K
+            
+            # For partitioned N: each partition is N_per_partition, so create GEMM for that size
+            vocab_per_partition = (self.cfg["vocab_size"] + partition_N - 1) // partition_N
+            vocab_per_partition_padded = ((vocab_per_partition + min_N - 1) // min_N) * min_N
+            
             self.out_head_prefill = AIEGEMM(
-                M=M_for_gemm,
-                K=self.cfg["emb_dim"],
-                N=self.cfg["vocab_size"],
+                M=M_padded,
+                K=emb_dim_padded,
+                N=vocab_per_partition_padded,  # N is per partition, not total
                 **aie_config_prefill,
             )
             aie_gemv_config = {
@@ -225,6 +249,61 @@ class Llama3ModelWithJSONConfig(nn.Module):
         angles[:, ::2] = cos
         angles[:, 1::2] = sin
         self.register_buffer("angles", angles, persistent=False)
+
+    def prepare_aie_operators(self):
+        """Prepare AIE operators by getting callables and allocating buffers.
+        
+        This should be called once after compile_all().
+        """
+        from iron.common import AIEBuffer
+        from .aie_buffer_manager import copy_and_run
+        
+        # Store the copy_and_run helper for use in forward pass
+        self._copy_and_run = copy_and_run
+        
+        # Get callables for operators that are used
+        self._aie_callables = {}
+        self._aie_buffers = {}
+        
+        # Prepare operators in transformer blocks
+        for block in self.trf_blocks:
+            block.prepare_aie_operators()
+        
+        if self.cfg.get("use_aie_final_norm", False):
+            self._aie_callables["final_norm_prefill"] = self.aie_final_norm_prefill.get_callable()
+            # Allocate buffers for final norm prefill
+            arg_spec = self.aie_final_norm_prefill.get_arg_spec()
+            self._aie_buffers["final_norm_prefill_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["final_norm_prefill_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            
+            if self.cfg["use_kv_cache"]:
+                self._aie_callables["final_norm_decode"] = self.aie_final_norm_decode.get_callable()
+                arg_spec = self.aie_final_norm_decode.get_arg_spec()
+                self._aie_buffers["final_norm_decode_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+                self._aie_buffers["final_norm_decode_out"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+        
+        if self.cfg["use_aie_final_gemm"]:
+            self._aie_callables["out_head_prefill"] = self.out_head_prefill.get_callable()
+            # Allocate buffers for out_head prefill
+            arg_spec = self.out_head_prefill.get_arg_spec()
+            self._aie_buffers["out_head_prefill_in"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)
+            self._aie_buffers["out_head_prefill_weight"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)
+            self._aie_buffers["out_head_prefill_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+            
+            if self.cfg.get("use_aie_final_gemv", False):
+                self._aie_callables["out_head_decode"] = self.out_head_decode.get_callable()
+                # NOTE: GEMV arg order is [weight_matrix(MxK), input_vector(K), output_vector(M)]
+                arg_spec = self.out_head_decode.get_arg_spec()
+                self._aie_buffers["out_head_decode_weight"] = AIEBuffer(shape=arg_spec[0].shape, dtype=arg_spec[0].dtype)  # Weight matrix
+                self._aie_buffers["out_head_decode_in"] = AIEBuffer(shape=arg_spec[1].shape, dtype=arg_spec[1].dtype)  # Input vector
+                self._aie_buffers["out_head_decode_out"] = AIEBuffer(shape=arg_spec[2].shape, dtype=arg_spec[2].dtype)
+            
+            # Populate weights if they were set before prepare was called
+            from iron.common.utils import torch_to_numpy
+            if hasattr(self, '_pending_out_head_weight'):
+                self._aie_buffers["out_head_prefill_weight"].from_np(torch_to_numpy(self._pending_out_head_weight))
+                if self.cfg.get("use_aie_final_gemv", False):
+                    self._aie_buffers["out_head_decode_weight"].from_np(torch_to_numpy(self._pending_out_head_weight))
 
     def forward(self, in_idx, input_pos=None, use_kv_cache=False):
         # Forward pass
@@ -266,17 +345,36 @@ class Llama3ModelWithJSONConfig(nn.Module):
         # Sequence length of 1 from input shape means we're in the decode stage, which can use KV cache
         if self.cfg.get("use_aie_final_norm", False):
             if (x.shape[-2] == 1) and self.cfg.get("use_kv_cache", False):
-                x = self.aie_final_norm_decode(x)
+                x = self._copy_and_run(
+                    self._aie_callables["final_norm_decode"],
+                    self._aie_buffers,
+                    {"final_norm_decode_in": x, "final_norm_decode_out": None}
+                )
             else:
-                x = self.aie_final_norm_prefill(x)
+                x = self._copy_and_run(
+                    self._aie_callables["final_norm_prefill"],
+                    self._aie_buffers,
+                    {"final_norm_prefill_in": x, "final_norm_prefill_out": None}
+                )
         else:
             x = self.final_norm(x)
 
         if self.cfg["use_aie_final_gemm"]:
             if is_decode_with_kv and self.cfg["use_aie_final_gemv"]:
-                logits = self.out_head_decode(x)
+                # GEMV arg order: [weight_matrix, input_vector, output_vector]
+                x_flat = x.reshape(-1)  # Flatten to 1D for GEMV
+                logits = self._copy_and_run(
+                    self._aie_callables["out_head_decode"],
+                    self._aie_buffers,
+                    {"out_head_decode_weight": None, "out_head_decode_in": x_flat, "out_head_decode_out": None},
+                    output_shape=(1, 1, self.cfg["vocab_size"])  # Restore 3D shape
+                )
             else:
-                logits = self.out_head_prefill(x)
+                logits = self._copy_and_run(
+                    self._aie_callables["out_head_prefill"],
+                    self._aie_buffers,
+                    {"out_head_prefill_in": x, "out_head_prefill_weight": None, "out_head_prefill_out": None}
+                )
         else:
             logits = self.out_head(x)
 
@@ -295,10 +393,8 @@ class Llama3ModelWithJSONConfig(nn.Module):
             )
 
         if self.cfg["use_aie_final_gemm"]:
-            # Want column-major for B
-            self.out_head_prefill.weight = out_head.T
-            if self.cfg["use_aie_final_gemv"]:
-                self.out_head_decode.weight = out_head.T
+            # Store weight to be populated in prepare_aie_operators (want column-major for B)
+            self._pending_out_head_weight = out_head.T
         else:
             self.out_head.weight = assign(
                 self.out_head.weight,
