@@ -176,95 +176,6 @@ class AIERuntimeArgSpec:
         self.direction = direction
 
 
-class AIEBuffer(XRTTensor):
-    def __init__(self, shape, dtype=bfloat16, bo=None, device_manager=None):
-        self.device_manager = device_manager or AIEDeviceManager()
-        self.subviews = []
-
-        if bo is not None:
-            Tensor.__init__(self, shape, dtype=dtype, device="cpu")
-            self._shape = shape
-            self.xrt_device = self.device_manager.device
-            self._bo = bo
-            ptr = self._bo.map()
-            self._data = np.frombuffer(ptr, dtype=self.dtype).reshape(self._shape)
-        else:
-            super().__init__(shape, dtype=dtype, device="cpu")
-
-    @property
-    def bo(self):
-        return self._bo
-
-    @property
-    def on(self):
-        return self.device
-
-    @on.setter
-    def on(self, value):
-        self.device = value
-
-    def subbuffer(self, length, offset, shape, dtype=None):
-        if dtype is None:
-            dtype = self.dtype
-        assert np.prod(shape) == length
-        itemsize = np.dtype(dtype).itemsize
-        assert offset >= 0
-        assert offset * itemsize <= np.prod(self.shape) * np.dtype(self.dtype).itemsize
-        assert (
-            length * itemsize + offset * itemsize
-            <= np.prod(self.shape) * np.dtype(self.dtype).itemsize
-        )
-        sub_bo = pyxrt.bo(
-            self.bo,  # parent bo
-            length * itemsize,  # size
-            offset * itemsize,  # offset
-        )
-        sub_buffer = AIEBuffer(
-            shape=shape, dtype=dtype, bo=sub_bo, device_manager=self.device_manager
-        )
-        sub_buffer.on = self.on
-        self.subviews.append(sub_buffer)
-        return sub_buffer
-
-    def view(self, shape):
-        assert np.prod(shape) == np.prod(self.shape)
-        sub_buffer = AIEBuffer(
-            shape=shape,
-            dtype=self.dtype,
-            bo=self.bo,
-            device_manager=self.device_manager,
-        )
-        sub_buffer.on = self.on
-        self.subviews.append(sub_buffer)
-        return sub_buffer
-
-    def view_as_np(self):
-        return self.numpy()
-
-    def view_as_torch(self):
-        return numpy_to_torch(self.numpy())
-
-    def to(self, dest):
-        super().to(dest)
-        todo = self.subviews.copy()
-        while todo:
-            sub_buffer = todo.pop()
-            sub_buffer.device = dest
-            todo.extend(sub_buffer.subviews)
-        return self
-
-    @staticmethod
-    def from_np(buffer):
-        aie_buffer = AIEBuffer(buffer.shape, dtype=buffer.dtype)
-        aie_buffer.data[:] = buffer
-        aie_buffer.to("npu")
-        return aie_buffer
-
-    @staticmethod
-    def from_torch(tensor):
-        return AIEBuffer.from_np(torch_to_numpy(tensor))
-
-
 class SingleXclbinCallable:
     def __init__(
         self, xclbin_path, kernel_name, insts_bin_path, args_spec, device_manager=None
@@ -275,17 +186,12 @@ class SingleXclbinCallable:
         )
         with open(str(insts_bin_path), "rb") as f:
             instructions = np.frombuffer(f.read(), dtype=np.uint32)
-        insts_bo = pyxrt.bo(
-            self.device_manager.device,
-            instructions.nbytes,
-            pyxrt.bo.cacheable,
-            self.xrt_kernel.group_id(1),
+        self.insts_buffer = XRTTensor(
+            instructions,
+            dtype=np.uint32,
+            flags=pyxrt.bo.cacheable,
+            group_id=self.xrt_kernel.group_id(1),
         )
-        insts_bo.write(instructions.view(np.uint8), 0)
-        self.insts_buffer = AIEBuffer(
-            shape=(len(instructions),), dtype=np.uint32, bo=insts_bo
-        )
-        self.insts_buffer.to("npu")
         self.args_spec = args_spec
 
     def __call__(self, *buffers):
@@ -298,9 +204,12 @@ class SingleXclbinCallable:
         for buf in buffers:
             buf.to("npu")
         opcode = 3
-        bos = [buffer.bo for buffer in buffers]
+        bos = [buffer.buffer_object() for buffer in buffers]
         run = self.xrt_kernel(
-            opcode, self.insts_buffer.bo, self.insts_buffer.shape[0], *bos
+            opcode,
+            self.insts_buffer.buffer_object(),
+            self.insts_buffer.shape[0],
+            *bos,
         )
         ret_code = run.wait()
         if ret_code != pyxrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
@@ -315,7 +224,7 @@ class CompositeCallable:
         Args:
             sequence: List of (callable, args_indices) tuples.
                       args_indices is a list of indices into the combined list of [inputs, outputs, intermediates].
-            intermediate_buffers: List of AIEBuffer objects for intermediate results.
+            intermediate_buffers: List of XRTTensor objects for intermediate results.
         """
         self.sequence = sequence
         self.intermediate_buffers = intermediate_buffers or []

@@ -8,8 +8,8 @@ from pathlib import Path
 
 
 from ml_dtypes import bfloat16
-from iron.common.base import AIEBuffer
-from iron.common.utils import torch_to_numpy
+from aie.utils.hostruntime.xrtruntime.tensor import XRTTensor
+from iron.common.utils import torch_to_numpy, numpy_to_torch
 from iron.operators.swiglu_prefill.op import AIESwiGLUPrefill
 from iron.operators.swiglu_decode.reference import generate_golden_reference
 from iron.common.test_utils import verify_buffer
@@ -47,9 +47,10 @@ def test_swiglu_prefill(seq_len, embedding_dim, hidden_dim, prio_accuracy, aie_c
     operator.compile()
     op_func = operator.get_callable()
 
-    input_buf = AIEBuffer.from_np(torch_to_numpy(golden_ref["input"]))
-    output_buf = AIEBuffer(
-        shape=(seq_len * embedding_dim,), dtype=bfloat16
+    input_np = torch_to_numpy(golden_ref["input"])
+    input_buf = XRTTensor(input_np, dtype=input_np.dtype)
+    output_buf = XRTTensor(
+        (seq_len * embedding_dim,), dtype=bfloat16
     )  # Output is flattened
 
     op_func(input_buf, output_buf)
@@ -57,12 +58,16 @@ def test_swiglu_prefill(seq_len, embedding_dim, hidden_dim, prio_accuracy, aie_c
     errors = {}
 
     # Verify intermediate result (left_swished * right)
-    left_swished = op_func.left_swished.view_as_torch().reshape((seq_len, hidden_dim))
-    right = op_func.right.view_as_torch().reshape((seq_len, hidden_dim))
+    left_swished = numpy_to_torch(op_func.left_swished.numpy()).reshape(
+        (seq_len, hidden_dim)
+    )
+    right = numpy_to_torch(op_func.right.numpy()).reshape((seq_len, hidden_dim))
     ref_2 = left_swished * right
 
     # Note: intermediate buffer in op_func stores the result of eltwise_mul
-    intermediate = op_func.intermediate.view_as_torch().reshape((seq_len, hidden_dim))
+    intermediate = numpy_to_torch(op_func.intermediate.numpy()).reshape(
+        (seq_len, hidden_dim)
+    )
     errors_2 = verify_buffer(
         intermediate, "intermediate", ref_2, rel_tol=0.04, abs_tol=0.4
     )
@@ -71,7 +76,7 @@ def test_swiglu_prefill(seq_len, embedding_dim, hidden_dim, prio_accuracy, aie_c
 
     # Verify output using intermediate result
     ref_3 = intermediate @ golden_ref["w_down"]
-    output = output_buf.view_as_torch().reshape((seq_len, embedding_dim))
+    output = numpy_to_torch(output_buf.numpy()).reshape((seq_len, embedding_dim))
     errors_3 = verify_buffer(output, "output", ref_3, rel_tol=0.04, abs_tol=0.4)
     if errors_3:
         errors["output"] = errors_3
