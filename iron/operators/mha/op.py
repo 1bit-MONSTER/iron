@@ -53,6 +53,7 @@ class AIEMHA(AIEOperatorBase):
 
         kv_heads = self.num_KV_heads if self.num_KV_heads > 0 else self.num_heads
         file_name_base = f"mha_{self.num_heads}h_{kv_heads}kv_{self.seq_len}s_{self.d}d"
+        mlir_verbose = getattr(self.context, "mlir_verbose", False)
 
         # Define source files
         mm_source = str(self.context.base_dir / "aie_kernels" / "aie2p" / "mm.cc")
@@ -98,12 +99,12 @@ class AIEMHA(AIEOperatorBase):
                 "number_of_pipelines": self.num_of_pipelines,
                 "emulate_bf16_mmul_with_bfp16": True,
                 "trace_size": 0,
-                "verbose": False,
+                "verbose": mlir_verbose,
             },
         )
 
         xclbin_artifact = XclbinArtifact.new(
-            f"mha.xclbin",
+            f"{file_name_base}.xclbin",
             depends=[
                 mlir_artifact,
                 KernelArchiveArtifact.new(
@@ -139,7 +140,9 @@ class AIEMHA(AIEOperatorBase):
         )
 
         insts_artifact = InstsBinArtifact.new(
-            f"mha.bin", depends=[mlir_artifact], extra_flags=["--dynamic-objFifos"]
+            f"{file_name_base}.bin",
+            depends=[mlir_artifact],
+            extra_flags=["--dynamic-objFifos"],
         )
 
         self.xclbin_artifact = xclbin_artifact
