@@ -1,25 +1,19 @@
 // SPDX-FileCopyrightText: Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Fused dual-GEMV + SiLU + elementwise multiply kernel for AIE2+.
-//
-// Computes: output = silu(W1 @ x) * (W2 @ x)
-//
-// Two entry points called from the NPU design's core body:
-//   1. dual_gemv_matvec_bf16: GEMV writing to FIFO buffer c_out + row_offset
-//   2. dual_gemv_silu_mul_bf16: reads from static left_buf/right_buf, writes to FIFO c_out
-//
-// The static buffers are written via scalar stores (from matvec) and read
-// via aie::load_v in the silu_mul phase. Aligned to 64 bytes for safe vector access.
+// Fused SwiGLU decode kernel for AIE2.
+// Same structure as AIE2+ variant but uses LUT-based getTanhBf16.
 
 #define NOCPP
 
 #include "../aie_kernel_utils.h"
+#include "lut_based_ops.h"
 
 #include <aie_api/aie.hpp>
 #include <stdint.h>
 #include <type_traits>
 
+// Stage 1 static buffers for dual-GEMV accumulation
 static bfloat16 left_buf[2048] __attribute__((aligned(64)));
 static bfloat16 right_buf[2048] __attribute__((aligned(64)));
 
@@ -47,22 +41,22 @@ void matvec_vectorized(uint32_t m,
 
 extern "C" {
 
-// Phase 1 & 2: GEMV writing to a static buffer (left_buf or right_buf)
+// Stage 1, Phase 1 & 2: GEMV writing to a static buffer (left_buf or right_buf)
 // phase=0 writes to left_buf, phase=1 writes to right_buf
-void dual_gemv_matvec_bf16(uint32_t m,
-                           uint32_t k,
-                           uint32_t row_offset,
-                           const bfloat16 *__restrict a_in,
-                           const bfloat16 *__restrict b_in,
-                           uint32_t phase)
+void swiglu_fused_dual_gemv_bf16(uint32_t m,
+                                 uint32_t k,
+                                 uint32_t row_offset,
+                                 const bfloat16 *__restrict a_in,
+                                 const bfloat16 *__restrict b_in,
+                                 uint32_t phase)
 {
     bfloat16 *dst = (phase == 0) ? left_buf : right_buf;
     dst += row_offset;
     matvec_vectorized<64>(m, k, a_in, b_in, dst);
 }
 
-// Phase 3: silu(left_buf) * right_buf -> c_out (FIFO buffer)
-void dual_gemv_silu_mul_bf16(bfloat16 *__restrict c_out, int32_t m_output)
+// Stage 1, Phase 3: silu(left_buf) * right_buf -> c_out (inter-tile FIFO buffer)
+void swiglu_fused_silu_mul_bf16(bfloat16 *__restrict c_out, int32_t m_output)
 {
     event0();
 
@@ -73,9 +67,8 @@ void dual_gemv_silu_mul_bf16(bfloat16 *__restrict c_out, int32_t m_output)
         aie::vector<bfloat16, 16> left_val = aie::load_v<16>(left_buf + i);
         aie::vector<bfloat16, 16> right_val = aie::load_v<16>(right_buf + i);
 
-        // SiLU(x) = x * sigmoid(x) = x * 0.5 * (1 + tanh(x/2))
-        auto half_x = aie::mul(left_val, register_0_5);
-        auto tanh_half_x = aie::tanh<bfloat16>(half_x.to_vector<float>());
+        aie::vector<bfloat16, 16> half_x = aie::mul(left_val, register_0_5);
+        aie::vector<bfloat16, 16> tanh_half_x = getTanhBf16(half_x);
         auto tanh_half_x_approx = aie::add(tanh_half_x, register_1);
         aie::vector<bfloat16, 16> sigmoid_approx = aie::mul(tanh_half_x_approx, register_0_5);
         auto silu_output = aie::mul(left_val, sigmoid_approx);
@@ -85,6 +78,17 @@ void dual_gemv_silu_mul_bf16(bfloat16 *__restrict c_out, int32_t m_output)
     }
 
     event1();
+}
+
+// Stage 2: Down-projection GEMV (standard matvec with row offset)
+void swiglu_fused_down_gemv_bf16(uint32_t m,
+                                 uint32_t k,
+                                 uint32_t row_offset,
+                                 const bfloat16 *__restrict a_in,
+                                 const bfloat16 *__restrict b_in,
+                                 bfloat16 *__restrict c_out)
+{
+    matvec_vectorized<64>(m, k, a_in, b_in, c_out + row_offset);
 }
 
 } // extern "C"

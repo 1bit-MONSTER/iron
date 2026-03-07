@@ -14,6 +14,8 @@ from iron.common.test_utils import run_test, verify_buffer
 
 def generate_test_params(extensive=False):
     params = [(2048, 2048)]
+    if extensive:
+        params += [(2048, 8192)]
     names = [f"swiglu_decode_1x{emb}x{hid}" for emb, hid in params]
     return params, names
 

@@ -13,8 +13,8 @@
 #include <stdint.h>
 #include <type_traits>
 
-static bfloat16 left_buf[1024] __attribute__((aligned(64)));
-static bfloat16 right_buf[1024] __attribute__((aligned(64)));
+static bfloat16 left_buf[2048] __attribute__((aligned(64)));
+static bfloat16 right_buf[2048] __attribute__((aligned(64)));
 
 template <uint32_t r>
 void matvec_vectorized(uint32_t m,
