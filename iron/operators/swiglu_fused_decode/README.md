@@ -847,12 +847,27 @@ Weight traffic        100.7 MB                  100.7 MB              (same)
 MLP-only tok/s        11.6                      15.2                  +31%
 ```
 
+#### With on-chip MemTile reduction (3-stage pipeline, current)
+
+```
+                      Baseline (2 runlists)     Fused + on-chip reduce  Improvement
+                      =======================   ======================  ===========
+Median latency        5410 us                   4510 us                 1.20x
+DDR output traffic    4 KB                      4 KB (single output)    (same)
+DDR intermediate      32 KB round-trip          0 KB (on-chip)          Eliminated
+16-layer MLP time     86.6 ms                   72.2 ms                 14.4 ms saved
+MLP-only tok/s        11.6                      13.9                    +20%
+```
+
 ### Key Takeaways
 
-- **1.32x speedup** at Llama production dims from eliminating the 32 KB DDR
-  intermediate round-trip and one kernel launch overhead
-- **24.5 GB/s effective bandwidth** -- approaching DDR theoretical limits
-- **31% improvement in MLP tok/s** (11.6 -> 15.2) for the SwiGLU portion of
-  each transformer layer
+- **1.20-1.32x speedup** at Llama production dims depending on reduction
+  strategy (on-chip vs DDR partials)
+- **22-24 GB/s effective bandwidth** -- approaching DDR theoretical limits
+- **20-31% improvement in MLP tok/s** for the SwiGLU portion of each
+  transformer layer
+- The on-chip MemTile reduction eliminates host-side summation but adds a
+  serialized reduction tile; at small intermediate sizes the DDR partial
+  approach with host reduction may be faster due to lower pipeline depth
 - The speedup is larger at smaller dims (1.88x) because kernel launch overhead
   is a bigger fraction; at production dims the weight streaming dominates
