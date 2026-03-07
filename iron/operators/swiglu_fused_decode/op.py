@@ -23,22 +23,17 @@ class AIESwiGLUFusedDecode(AIEOperatorBase):
 
     Computes: output = Wdown @ (silu(Wgate @ x) * (Wup @ x))
 
-    Fuses the entire SwiGLU MLP into a single NPU design with a 3-stage
-    tile pipeline. The intermediate vector between the dual-GEMV stage
-    and the down-projection GEMV stage stays on-chip via inter-tile
+    Fuses the entire SwiGLU MLP into a single NPU design with a 2-stage
+    tile pipeline per column. The intermediate vector between the dual-GEMV
+    stage and the down-projection GEMV stage stays on-chip via inter-tile
     ObjectFIFOs, eliminating DDR round-trips.
 
     Architecture (per column):
-      Stage 1: Dual-GEMV + SiLU + Mul -> intermediate chunk (on-chip)
-      Stage 2: Down-projection GEMV consuming intermediate on-chip
+      Stage 1 (row 2): Dual-GEMV + SiLU + Mul -> intermediate chunk
+      Stage 2 (row 3): Down-projection GEMV consuming intermediate on-chip
 
-    Stage 3 (single tile): Reduction
-      - All column partials are joined via MemTile into a single buffer
-      - A dedicated reduction tile sums them element-wise
-      - Only the final reduced output is written to DDR
-
-    Output DDR traffic: 1 * embedding_dim * 2B (vs. cols * embedding_dim
-    * 2B in the previous design). No host-side reduction needed.
+    Each of 4 columns produces a PARTIAL output vector. The host reduces
+    the 4 partials by element-wise addition to get the final output.
     """
 
     def __init__(
@@ -176,7 +171,10 @@ class AIESwiGLUFusedDecode(AIEOperatorBase):
             static_data=torch_to_numpy(combined_weights),
         )
         self.add_buffer("input", self.embedding_dim)
-        self.add_buffer("output", self.embedding_dim)
+        self.add_buffer(
+            "output_partials",
+            self.embedding_dim * self.num_aie_columns,
+        )
 
         self.add_kernel(
             "swiglu_fused_decode",
@@ -184,7 +182,9 @@ class AIESwiGLUFusedDecode(AIEOperatorBase):
             self.xclbin_artifact.kernel_name,
             self.insts_artifact,
         )
-        self.add_to_runlist("swiglu_fused_decode", "weights_all", "input", "output")
+        self.add_to_runlist(
+            "swiglu_fused_decode", "weights_all", "input", "output_partials"
+        )
 
     def forward(self, x):
         """Forward pass: computes Wdown @ (silu(Wgate @ x) * (Wup @ x))
@@ -202,7 +202,11 @@ class AIESwiGLUFusedDecode(AIEOperatorBase):
         self.write_buffer("input", x_flat)
         self.run_runlist()
 
-        # Read fully-reduced output directly (on-chip reduction)
-        result = self.read_buffer_as_torch("output", (self.embedding_dim,))
+        # Read partial outputs and reduce by summation
+        partials = self.read_buffer_as_torch(
+            "output_partials",
+            (self.num_aie_columns, self.embedding_dim),
+        )
+        result = partials.sum(dim=0)
 
         return result.view(original_shape)

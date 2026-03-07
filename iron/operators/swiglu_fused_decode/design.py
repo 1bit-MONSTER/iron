@@ -15,9 +15,9 @@ from aie.iron.placers import SequentialPlacer
 from aie.iron.device import NPU1, NPU2
 
 """
-Fused SwiGLU decode design: 3-stage tile pipeline with on-chip reduction.
+Fused SwiGLU decode design: 2-stage tile pipeline.
 
-Computes: output = Wdown @ (silu(Wgate @ x) * (Wup @ x))
+Computes: output_partials[col] = Wdown_col @ (silu(Wgate_col @ x) * (Wup_col @ x))
 
 Stage 1 (per column): Dual-GEMV + SiLU + Mul
   - Reads interleaved Wgate/Wup rows from DDR, x vector from DDR
@@ -28,20 +28,14 @@ Stage 2 (per column): Down-projection GEMV
   - Reads intermediate chunk from stage 1 via on-chip ObjectFIFO
   - Reads Wdown column-slice from DDR
   - Computes partial GEMV: Wdown_slice @ intermediate_chunk
-  - Outputs partial result to MemTile via ObjectFIFO (ON-CHIP)
+  - Outputs partial result to DDR
 
-Stage 3 (single tile): Reduction
-  - Reads concatenated partials from all columns via MemTile join
-  - Sums them element-wise to produce the final output
-  - Writes final result to DDR
-
-The reduction eliminates host-side partial summation and reduces
-DDR output traffic from 4*embedding_dim to 1*embedding_dim.
+Host reduces 4 partial results by element-wise addition.
 
 Runtime.sequence args:
   - arg0: all weights packed [interleaved_gate_up | down_col0 | down_col1 | ...]
   - arg1: input vector x
-  - arg2: output (embedding_dim elements, fully reduced)
+  - arg2: output partials (cols * embedding_dim)
 """
 
 
@@ -90,9 +84,6 @@ def my_swiglu_fused_decode(
     assert embedding_dim % m_output_stage2 == 0
     assert embedding_dim % m_input_stage2 == 0
 
-    # Reduction chunk must be 16-aligned for vectorized add
-    assert m_output_stage2 % 16 == 0
-
     assert hidden_dim % cols == 0
 
     dtype_in = np.dtype[bfloat16]
@@ -109,13 +100,9 @@ def my_swiglu_fused_decode(
     # Inter-stage: intermediate vector chunk (on-chip transfer)
     L1_inter_ty = np.ndarray[(m_output_stage1,), dtype_out]
 
-    # Stage 2: down-projection weight tile and output chunk
+    # Stage 2: down-projection weight tile and output
     L1_A2_ty = np.ndarray[(m_input_stage2, inter_dim_per_col), dtype_in]
     L1_C_ty = np.ndarray[(m_output_stage2,), dtype_out]
-
-    # Reduction: concatenated partials from all columns and final output
-    L1_concat_ty = np.ndarray[(cols * m_output_stage2,), dtype_out]
-    L1_out_ty = np.ndarray[(m_output_stage2,), dtype_out]
 
     # --- L3 (DDR) buffer types ---
 
@@ -126,7 +113,7 @@ def my_swiglu_fused_decode(
     )
     L3_W_ty = np.ndarray[(total_weight_elems,), dtype_in]
     L3_B_ty = np.ndarray[(embedding_dim,), dtype_in]
-    L3_C_ty = np.ndarray[(embedding_dim,), dtype_out]
+    L3_C_ty = np.ndarray[(cols * embedding_dim,), dtype_out]
 
     # --- Kernel declarations ---
 
@@ -151,13 +138,6 @@ def my_swiglu_fused_decode(
         [np.int32, np.int32, np.int32, L1_A2_ty, L1_inter_ty, L1_C_ty],
     )
 
-    # Stage 3: Reduction kernel
-    reduce_fn = Kernel(
-        "swiglu_fused_reduce_bf16",
-        "swiglu_fused.o",
-        [L1_concat_ty, L1_out_ty, np.int32, np.int32],
-    )
-
     # --- ObjectFIFOs ---
 
     # Stage 1 input FIFOs (2 per column: weights + vector)
@@ -173,23 +153,8 @@ def my_swiglu_fused_decode(
     # Stage 2 input FIFO (down weights from DDR)
     A2_fifos = [ObjectFifo(L1_A2_ty, name=f"A2_{i}", depth=2) for i in range(cols)]
 
-    # --- MemTile join for reduction ---
-    # Create a concatenated FIFO that joins partials from all columns.
-    # The MemTile DMA concatenates cols partial chunks (each m_output_stage2)
-    # into a single buffer (cols * m_output_stage2 elements).
-    concat_fifo = ObjectFifo(L1_concat_ty, name="concat", depth=2)
-
-    # join() creates per-column sub-FIFOs whose consumers feed into the
-    # MemTile link. The producers of these sub-FIFOs are the stage2 Workers.
-    C_fifos = concat_fifo.prod().join(
-        offsets=[i * m_output_stage2 for i in range(cols)],
-        obj_types=[L1_C_ty] * cols,
-        names=[f"C_{i}" for i in range(cols)],
-        depths=[2] * cols,
-    )
-
-    # Output FIFO: reduction tile -> DDR
-    out_fifo = ObjectFifo(L1_out_ty, name="out", depth=2)
+    # Stage 2 output FIFO (partial results to DDR)
+    C_fifos = [ObjectFifo(L1_C_ty, name=f"C_{i}", depth=2) for i in range(cols)]
 
     # --- Core bodies ---
 
@@ -203,28 +168,14 @@ def my_swiglu_fused_decode(
                     j_i32 = index.casts(T.i32(), j_idx)
                     row_offset = j_i32 * m_input_stage1
                     a = A1_fifo.acquire(1)
-                    matvec_fn(
-                        m_input_stage1,
-                        embedding_dim,
-                        row_offset,
-                        a,
-                        b,
-                        0,
-                    )
+                    matvec_fn(m_input_stage1, embedding_dim, row_offset, a, b, 0)
                     A1_fifo.release(1)
                 # Phase 2: Wup rows -> right_buf (phase=1)
                 for j_idx in range_(m_output_stage1 // m_input_stage1):
                     j_i32 = index.casts(T.i32(), j_idx)
                     row_offset = j_i32 * m_input_stage1
                     a = A1_fifo.acquire(1)
-                    matvec_fn(
-                        m_input_stage1,
-                        embedding_dim,
-                        row_offset,
-                        a,
-                        b,
-                        1,
-                    )
+                    matvec_fn(m_input_stage1, embedding_dim, row_offset, a, b, 1)
                     A1_fifo.release(1)
                 # Phase 3: silu(left_buf) * right_buf -> inter FIFO
                 inter = inter_fifo.acquire(1)
@@ -233,8 +184,9 @@ def my_swiglu_fused_decode(
             B_fifo.release(1)
 
     def stage2_core_body(A2_fifo, inter_fifo, C_fifo, matvec_fn):
-        """Stage 2: Down-projection GEMV, output to per-column C FIFO."""
+        """Stage 2: Down-projection GEMV consuming from inter-tile FIFO."""
         for _ in range_(0xFFFFFFFF):
+            # Acquire intermediate vector from stage 1 (hold for all rows)
             inter = inter_fifo.acquire(1)
             for i_idx in range_(embedding_dim // m_output_stage2):
                 c = C_fifo.acquire(1)
@@ -254,17 +206,7 @@ def my_swiglu_fused_decode(
                 C_fifo.release(1)
             inter_fifo.release(1)
 
-    def reduce_core_body(concat_in, out_fifo, reduce_kernel):
-        """Stage 3: Sum concatenated partials and write final output."""
-        for _ in range_(0xFFFFFFFF):
-            for _ in range_(embedding_dim // m_output_stage2):
-                partials = concat_in.acquire(1)
-                out = out_fifo.acquire(1)
-                reduce_kernel(partials, out, m_output_stage2, cols)
-                out_fifo.release(1)
-                concat_in.release(1)
-
-    # --- Workers ---
+    # --- Workers: 2 per column ---
 
     stage1_workers = [
         Worker(
@@ -293,11 +235,6 @@ def my_swiglu_fused_decode(
         for i in range(cols)
     ]
 
-    reduce_worker = Worker(
-        reduce_core_body,
-        [concat_fifo.cons(), out_fifo.prod(), reduce_fn],
-    )
-
     # --- TensorAccessPatterns ---
 
     # Offset into the packed weight buffer where down weights start
@@ -305,6 +242,8 @@ def my_swiglu_fused_decode(
     rows_per_col = hidden_dim // cols
 
     # Stage 1: interleaved gate+up weights per column
+    # Layout in DDR: [Wgate_col0, Wup_col0, Wgate_col1, Wup_col1, ...]
+    # Each column gets 2 * rows_per_col rows of embedding_dim elements
     A1_taps = [
         TensorAccessPattern(
             tensor_dims=(total_weight_elems,),
@@ -316,6 +255,8 @@ def my_swiglu_fused_decode(
     ]
 
     # Stage 2: down weights per column
+    # Layout in DDR after gate+up: [Wdown_col0, Wdown_col1, ...]
+    # Each column's slice is (embedding_dim, inter_dim_per_col) row-major
     A2_taps = [
         TensorAccessPattern(
             tensor_dims=(total_weight_elems,),
@@ -326,17 +267,29 @@ def my_swiglu_fused_decode(
         for col in range(cols)
     ]
 
+    # Output: each column writes embedding_dim partial results
+    C_taps = [
+        TensorAccessPattern(
+            tensor_dims=(1, cols * embedding_dim),
+            offset=col * embedding_dim,
+            sizes=[1, 1, 1, embedding_dim],
+            strides=[0, 0, 0, 1],
+        )
+        for col in range(cols)
+    ]
+
     # --- Runtime sequence ---
 
     rt = Runtime()
     with rt.sequence(L3_W_ty, L3_B_ty, L3_C_ty) as (W, B, C):
-        rt.start(*stage1_workers, *stage2_workers, reduce_worker)
+        rt.start(*stage1_workers, *stage2_workers)
         tg = rt.task_group()
         for i in range(cols):
             rt.fill(A1_fifos[i].prod(), W, A1_taps[i], task_group=tg)
             rt.fill(B_fifos[i].prod(), B, task_group=tg)
             rt.fill(A2_fifos[i].prod(), W, A2_taps[i], task_group=tg)
-        rt.drain(out_fifo.cons(), C, task_group=tg, wait=True)
+        for i in range(cols):
+            rt.drain(C_fifos[i].cons(), C, C_taps[i], task_group=tg, wait=True)
         rt.finish_task_group(tg)
 
     return Program(dev_ty, rt).resolve_program(SequentialPlacer())
@@ -350,28 +303,16 @@ if __name__ == "__main__":
     argparser.add_argument("--embedding-dim", type=int, required=True)
     argparser.add_argument("--hidden-dim", type=int, required=True)
     argparser.add_argument(
-        "--m-input-stage1",
-        type=int,
-        required=True,
-        dest="m_input_stage1",
+        "--m-input-stage1", type=int, required=True, dest="m_input_stage1"
     )
     argparser.add_argument(
-        "--m-output-stage1",
-        type=int,
-        default=None,
-        dest="m_output_stage1",
+        "--m-output-stage1", type=int, default=None, dest="m_output_stage1"
     )
     argparser.add_argument(
-        "--m-input-stage2",
-        type=int,
-        default=1,
-        dest="m_input_stage2",
+        "--m-input-stage2", type=int, default=1, dest="m_input_stage2"
     )
     argparser.add_argument(
-        "--m-output-stage2",
-        type=int,
-        default=None,
-        dest="m_output_stage2",
+        "--m-output-stage2", type=int, default=None, dest="m_output_stage2"
     )
     argparser.add_argument("--cols", type=int, required=True)
     argparser.add_argument(

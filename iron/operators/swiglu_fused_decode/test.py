@@ -56,15 +56,48 @@ def test_swiglu_fused_decode(embedding_dim, hidden_dim, aie_context):
     operator.weights_down = golden_ref["w_down"]
 
     input_buffers = {"input": golden_ref["x"]}
-    output_buffers = {"output": golden_ref["output"]}
+    # We verify by reading partials and reducing, so no direct output buffer
+    output_buffers = {}
 
     errors, latency_us, bandwidth_gbps = run_test(
         operator,
         input_buffers,
         output_buffers,
-        rel_tol=0.35,
+        rel_tol=0.07,
         abs_tol=1.0,
     )
+
+    # Verify the reduced output matches golden reference
+    from iron.common.test_utils import verify_buffer
+
+    partials = operator.read_buffer_as_torch(
+        "output_partials",
+        (operator.num_aie_columns, embedding_dim),
+    )
+    reduced_output = partials.sum(dim=0)
+
+    # Compare reduced output against golden reference
+    import numpy as np
+    from iron.common.utils import torch_to_numpy
+
+    output_np = torch_to_numpy(reduced_output).reshape((-1,))
+    expected_np = torch_to_numpy(golden_ref["output"]).reshape((-1,))
+
+    from iron.common.test_utils import nearly_equal
+
+    output_errors = []
+    for i in range(len(output_np)):
+        if not nearly_equal(float(output_np[i]), float(expected_np[i]), 0.30, 1.0):
+            output_errors.append(i)
+            if len(output_errors) <= 10:
+                print(
+                    f"Mismatch in output[{i}]: "
+                    f"expected {float(expected_np[i]):.6f}, "
+                    f"got {float(output_np[i]):.6f}"
+                )
+
+    if output_errors:
+        errors["output"] = output_errors
 
     print(f"\nLatency (us): {latency_us:.1f}")
     print(f"Effective Bandwidth: {bandwidth_gbps:.6e} GB/s\n")
