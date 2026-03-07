@@ -76,7 +76,8 @@ void fused_dequant_matvec(uint32_t m,
                 aie::vector<bfloat16, block_size> as_bf16 = aie::to_float<bfloat16>(as_int16, 0);
 
                 // Dequantize: w_bf16 = scale * uint4_as_bf16
-                aie::vector<bfloat16, block_size> w_dequant = aie::mul(as_bf16, sf_broadcast).template to_vector<bfloat16>();
+                aie::vector<bfloat16, block_size> w_dequant =
+                    aie::mul(as_bf16, sf_broadcast).template to_vector<bfloat16>();
 
                 // Load activation vector chunk
                 aie::vector<bfloat16, block_size> b_vec = aie::load_v<block_size>(b_ptr);

@@ -69,11 +69,8 @@ void flowkv_score_init_bf16(int32_t num_q_heads)
 //   [0 .. cs*gs-1]: F_c scores in (chunk_size, num_q_heads) layout
 //   [cs*gs .. cs*gs+gs-1]: C_c correction factors
 //   [cs*gs+gs .. cs*gs+2*gs-1]: l denominators
-void flowkv_score_chunk_bf16(const bfloat16 *__restrict q_in,
-                              const bfloat16 *__restrict k_chunk,
-                              bfloat16 *__restrict packed_out,
-                              int32_t num_q_heads,
-                              int32_t head_dim,
+void flowkv_score_chunk_bf16(const bfloat16 *__restrict q_in, const bfloat16 *__restrict k_chunk,
+                              bfloat16 *__restrict packed_out, int32_t num_q_heads, int32_t head_dim,
                               int32_t chunk_size)
 {
     event0();
@@ -180,11 +177,8 @@ void flowkv_value_init_bf16(int32_t num_q_heads, int32_t head_dim)
 //   [cs*gs..cs*gs+gs-1]: C_c correction
 //   [cs*gs+gs..cs*gs+2*gs-1]: l denom
 // v_chunk: (chunk_size, head_dim) -- V cache chunk from DDR
-void flowkv_value_accum_bf16(const bfloat16 *__restrict packed_in,
-                              const bfloat16 *__restrict v_chunk,
-                              int32_t num_q_heads,
-                              int32_t head_dim,
-                              int32_t chunk_size)
+void flowkv_value_accum_bf16(const bfloat16 *__restrict packed_in, const bfloat16 *__restrict v_chunk,
+                              int32_t num_q_heads, int32_t head_dim, int32_t chunk_size)
 {
     event0();
     ::aie::set_rounding(aie::rounding_mode::conv_even);
@@ -234,9 +228,7 @@ void flowkv_value_accum_bf16(const bfloat16 *__restrict packed_in,
 // Reads the denominator from saved_denom (set by the last accum call).
 //
 // output: (num_q_heads, head_dim) -- final attention output in bf16
-void flowkv_value_normalize_bf16(bfloat16 *__restrict output,
-                                  int32_t num_q_heads,
-                                  int32_t head_dim)
+void flowkv_value_normalize_bf16(bfloat16 *__restrict output, int32_t num_q_heads, int32_t head_dim)
 {
     ::aie::set_rounding(aie::rounding_mode::conv_even);
 
