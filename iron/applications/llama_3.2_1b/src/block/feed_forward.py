@@ -123,7 +123,12 @@ class FeedForward(nn.Module):
                 cfg["hidden_dim"], cfg["emb_dim"], dtype=cfg["dtype"], bias=False
             )
 
-        if self.cfg["use_kv_cache"] and self.cfg["use_aie_ffn_gemv"]:
+        # Skip creating separate decode GEMVs when fused SwiGLU handles everything
+        if (
+            self.cfg["use_kv_cache"]
+            and self.cfg["use_aie_ffn_gemv"]
+            and not self.cfg.get("use_aie_ffn_swiglu_fused", False)
+        ):
             aie_gemv_config = {"num_aie_columns": 8, "is_mv": False}
             # FC1 and FC2: emb_dim -> hidden_dim
             self.aie_fc1_gemv = AIEGEMV(

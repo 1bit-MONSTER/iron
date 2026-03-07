@@ -94,7 +94,9 @@ def print_config(cfg, console=Console()):
             "use_aie_ffn_mul",
             "use_aie_ffn_silu",
         }
-        if not cfg.get("use_aie_ffn_swiglu_fused", False):
+        if cfg.get("use_aie_ffn_swiglu_fused", False):
+            dont_print |= {"use_aie_ffn_gemv"}
+        else:
             dont_print |= {"use_aie_ffn_swiglu_fused"}
     else:
         dont_print |= {"use_aie_ffn_swiglu", "use_aie_ffn_swiglu_fused"}
