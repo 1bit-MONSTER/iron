@@ -16,6 +16,7 @@ from iron.operators import (
     AIESiLU,
     AIESwiGLUPrefill,
     AIESwiGLUDecode,
+    AIESwiGLUFusedDecode,
 )
 from ml_dtypes import bfloat16
 
@@ -77,9 +78,16 @@ class FeedForward(nn.Module):
                 hidden_dim=self.hidden_dim,
             )
             if self.cfg["use_kv_cache"]:
-                self.aie_swiglu_decode = AIESwiGLUDecode(
-                    embedding_dim=self.emb_dim, hidden_dim=self.hidden_dim
-                )
+                if self.cfg.get("use_aie_ffn_swiglu_fused", False):
+                    self.aie_swiglu_decode = AIESwiGLUFusedDecode(
+                        embedding_dim=self.emb_dim,
+                        hidden_dim=self.hidden_dim,
+                    )
+                else:
+                    self.aie_swiglu_decode = AIESwiGLUDecode(
+                        embedding_dim=self.emb_dim,
+                        hidden_dim=self.hidden_dim,
+                    )
 
         if self.cfg["use_aie_ffn_gemm"]:
             if self.cfg["use_kv_cache"]:
@@ -228,9 +236,14 @@ class FeedForward(nn.Module):
             self.aie_swiglu_prefill.weights_2 = fc2
             self.aie_swiglu_prefill.weights_3 = fc3
             if self.cfg["use_kv_cache"]:
-                self.aie_swiglu_decode.weights_1 = fc1
-                self.aie_swiglu_decode.weights_2 = fc2
-                self.aie_swiglu_decode.weights_3 = fc3
+                if self.cfg.get("use_aie_ffn_swiglu_fused", False):
+                    self.aie_swiglu_decode.weights_gate = fc1
+                    self.aie_swiglu_decode.weights_up = fc2
+                    self.aie_swiglu_decode.weights_down = fc3
+                else:
+                    self.aie_swiglu_decode.weights_1 = fc1
+                    self.aie_swiglu_decode.weights_2 = fc2
+                    self.aie_swiglu_decode.weights_3 = fc3
             return
 
         self.fc1.weight = assign(
