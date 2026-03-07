@@ -23,9 +23,9 @@ flow tile-to-tile via on-chip ObjectFIFOs and never touch DDR.
 Architecture (per KV head group, processing `group_size` query heads):
 
   Score Tile (CT0):
-    Inputs:  Q vector (group_size * head_dim bf16) from DDR
+    Inputs:  Q vector + RoPE angles (group_size * head_dim + head_dim bf16) from DDR
              K chunk  (chunk_size * head_dim bf16) streamed from KV cache
-    Compute: Q * K^T / sqrt(d), online softmax tracking
+    Compute: RoPE(Q) * K^T / sqrt(d), online softmax tracking
     Output:  Packed [F_c | C_c | l] to Value Tile via on-chip FIFO
 
   Value Tile (CT1):
@@ -44,8 +44,9 @@ sequence iterates over batches of `num_cols` groups.
 DDR buffer layout (3 sequence args):
   arg0: KV cache -- interleaved K and V per position per head.
         Shape: (num_kv_heads, seq_len, 2, head_dim) flattened.
-  arg1: Q vectors -- all query heads.
-        Shape: (num_heads, head_dim) flattened.
+  arg1: Q vectors + RoPE angles -- per KV group: Q heads then interleaved cos/sin.
+        Layout: [Q_group0 (gs*hd) | angles (hd) | Q_group1 (gs*hd) | angles (hd) | ...]
+        Shape: (num_kv_heads * (group_size * head_dim + head_dim),) flattened.
   arg2: Output -- attention result.
         Shape: (num_heads, head_dim) flattened.
 """
@@ -72,8 +73,9 @@ def my_flowkv_decode(
     # -------------------------------------------------------------------------
     # L1 tile types
     # -------------------------------------------------------------------------
-    # Query vectors for one KV group
-    L1_Q_ty = np.ndarray[(group_size * head_dim,), dtype_in]
+    # Query vectors for one KV group, plus RoPE angles (head_dim interleaved
+    # cos/sin values) packed at the end.
+    L1_Q_ty = np.ndarray[(group_size * head_dim + head_dim,), dtype_in]
 
     # K or V chunk
     L1_KV_chunk_ty = np.ndarray[(chunk_size * head_dim,), dtype_in]
@@ -90,7 +92,10 @@ def my_flowkv_decode(
     # L3 (DDR) buffer types
     # -------------------------------------------------------------------------
     L3_KV_ty = np.ndarray[(num_kv_heads * seq_len * 2 * head_dim,), dtype_in]
-    L3_Q_ty = np.ndarray[(num_heads * head_dim,), dtype_in]
+    # Q DDR layout: [Q_group0 (gs*hd) | angles (hd) | Q_group1 (gs*hd) | angles (hd) | ...]
+    # Each group block = group_size * head_dim + head_dim contiguous bf16 values.
+    q_group_stride = group_size * head_dim + head_dim
+    L3_Q_ty = np.ndarray[(num_kv_heads * q_group_stride,), dtype_in]
     L3_O_ty = np.ndarray[(num_heads * head_dim,), dtype_in]
 
     # -------------------------------------------------------------------------
@@ -100,6 +105,16 @@ def my_flowkv_decode(
         "flowkv_score_init_bf16",
         "flowkv.o",
         [np.int32],
+    )
+
+    score_rope_q = Kernel(
+        "flowkv_score_rope_q_bf16",
+        "flowkv.o",
+        [
+            L1_Q_ty,  # q_in (Q heads + packed angles)
+            np.int32,  # num_q_heads
+            np.int32,  # head_dim
+        ],
     )
 
     score_chunk = Kernel(
@@ -161,13 +176,18 @@ def my_flowkv_decode(
     # -------------------------------------------------------------------------
     # Score tile core body
     # -------------------------------------------------------------------------
-    def score_core_body(q_fifo, k_fifo, inter_fifo, score_init_fn, score_chunk_fn):
+    def score_core_body(
+        q_fifo, k_fifo, inter_fifo, score_init_fn, score_rope_q_fn, score_chunk_fn
+    ):
         for _ in range_(0xFFFFFFFF):
             # Initialize softmax state
             score_init_fn(group_size)
 
             # Acquire Q (held for all chunks in this attention computation)
             q = q_fifo.acquire(1)
+
+            # Apply RoPE rotation to Q and store in static buffer
+            score_rope_q_fn(q, group_size, head_dim)
 
             # Stream through K chunks
             for _ in range_(num_chunks):
@@ -237,6 +257,7 @@ def my_flowkv_decode(
                 K_fifos[i].cons(),
                 inter_fifos[i].prod(),
                 score_init,
+                score_rope_q,
                 score_chunk,
             ],
         )
@@ -270,12 +291,16 @@ def my_flowkv_decode(
     # followed by chunk_size V rows.
 
     def make_q_tap(kv_head_idx):
-        """Q tap: select group_size query heads for this KV group."""
-        q_offset = kv_head_idx * group_size * head_dim
+        """Q tap: select group_size query heads + RoPE angles for this KV group.
+
+        DDR layout: [Q_group0 (gs*hd) | angles (hd) | Q_group1 ...].
+        Each group block is q_group_stride contiguous bf16 values.
+        """
+        q_offset = kv_head_idx * q_group_stride
         return TensorAccessPattern(
-            tensor_dims=(num_heads * head_dim,),
+            tensor_dims=(num_kv_heads * q_group_stride,),
             offset=q_offset,
-            sizes=[1, 1, 1, group_size * head_dim],
+            sizes=[1, 1, 1, q_group_stride],
             strides=[0, 0, 0, 1],
         )
 

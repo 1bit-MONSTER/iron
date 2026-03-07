@@ -91,4 +91,25 @@ void swiglu_fused_down_gemv_bf16(uint32_t m,
     matvec_vectorized<64>(m, k, a_in, b_in, c_out + row_offset);
 }
 
+// Stage 3: Reduce partial sums from multiple columns.
+// Input is cols concatenated partial vectors of chunk_size elements each.
+// Output is a single chunk_size vector containing the element-wise sum.
+void swiglu_fused_reduce_bf16(const bfloat16 *__restrict partials_in,
+                              bfloat16 *__restrict c_out,
+                              int32_t chunk_size,
+                              int32_t cols)
+{
+    event0();
+    constexpr int vec_factor = 16;
+    for (int i = 0; i < chunk_size; i += vec_factor) {
+        aie::vector<bfloat16, vec_factor> acc = aie::load_v<vec_factor>(partials_in + i);
+        for (int c = 1; c < cols; c++) {
+            aie::vector<bfloat16, vec_factor> partial = aie::load_v<vec_factor>(partials_in + c * chunk_size + i);
+            acc = aie::add(acc, partial);
+        }
+        aie::store_v(c_out + i, acc);
+    }
+    event1();
+}
+
 } // extern "C"

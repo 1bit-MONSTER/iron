@@ -16,16 +16,41 @@ from iron.common import (
 from iron.operators.flowkv_decode.reference import interleave_kv_cache
 
 
+def pack_q_with_angles(q, angles, group_size, num_kv_heads):
+    """Pack Q vectors and RoPE angles into the DDR layout for DMA.
+
+    DDR layout: [Q_group0 (gs*hd) | angles (hd) | Q_group1 (gs*hd) | angles (hd) | ...]
+
+    Args:
+        q:       Query vectors, shape (num_heads, head_dim) in bf16.
+        angles:  RoPE angles, shape (head_dim,) in bf16.
+                 Interleaved [cos0, sin0, cos1, sin1, ...].
+        group_size: Number of query heads per KV group.
+        num_kv_heads: Number of KV heads.
+
+    Returns:
+        Packed 1D tensor for the Q DDR buffer.
+    """
+    head_dim = q.shape[1]
+    chunks = []
+    for kv_h in range(num_kv_heads):
+        start = kv_h * group_size
+        end = start + group_size
+        chunks.append(q[start:end].reshape(-1))
+        chunks.append(angles)
+    return torch.cat(chunks)
+
+
 class AIEFlowKVDecode(AIEOperatorBase):
-    """AIE-accelerated FlowKV decode attention operator.
+    """AIE-accelerated FlowKV decode attention operator with fused RoPE.
 
     Implements streaming decode attention with online softmax using a 2-tile
-    pipeline per KV head group. Intermediates (exponentiated scores, correction
-    factors, denominator) flow tile-to-tile via on-chip ObjectFIFOs and never
-    touch DDR.
+    pipeline per KV head group. RoPE is applied to Q in-register on the score
+    tile before computing attention scores, eliminating a separate RoPE
+    operator invocation. K in the cache is assumed to be already rotated.
 
     Computes for each query head h:
-        O[h] = softmax(Q[h] @ K[kv_h]^T / sqrt(d)) @ V[kv_h]
+        O[h] = softmax(RoPE(Q[h]) @ K[kv_h]^T / sqrt(d)) @ V[kv_h]
 
     where kv_h = h // group_size is the corresponding KV head index.
 
@@ -37,7 +62,8 @@ class AIEFlowKVDecode(AIEOperatorBase):
     DDR buffer layout:
         KV cache:  interleaved K and V rows per head per position.
                    Shape: (num_kv_heads, seq_len, 2, head_dim) flattened.
-        Q:         all query heads. Shape: (num_heads, head_dim) flattened.
+        Q:         query heads + RoPE angles packed per KV group.
+                   Layout: [Q_group0 (gs*hd) | angles (hd) | Q_group1 ...].
         Output:    attention output. Shape: (num_heads, head_dim) flattened.
 
     Use `interleave_kv_cache(k_cache, v_cache)` from the reference module to
@@ -130,8 +156,10 @@ class AIEFlowKVDecode(AIEOperatorBase):
         kv_size = self.num_kv_heads * self.seq_len * 2 * self.head_dim
         self.add_buffer("kv_cache", kv_size)
 
-        # Q buffer: all query heads
-        q_size = self.num_heads * self.head_dim
+        # Q buffer: query heads + RoPE angles packed per KV group
+        # Layout: [Q_group0 (gs*hd) | angles (hd) | Q_group1 (gs*hd) | angles (hd) | ...]
+        q_group_stride = self.group_size * self.head_dim + self.head_dim
+        q_size = self.num_kv_heads * q_group_stride
         self.add_buffer("queries", q_size)
 
         # Output buffer: attention result
@@ -146,13 +174,20 @@ class AIEFlowKVDecode(AIEOperatorBase):
         )
         self.add_to_runlist("flowkv_decode", "kv_cache", "queries", "output")
 
-    def forward(self, q, k_cache, v_cache):
-        """Run FlowKV decode attention.
+    def forward(self, q, k_cache, v_cache, q_angles):
+        """Run FlowKV decode attention with fused RoPE on Q.
+
+        RoPE is applied to Q in-register on the score tile before computing
+        attention scores. K in the cache is assumed to be already rotated
+        (standard practice: K is rotated before being stored in the KV cache).
 
         Args:
-            q:       Query vectors, shape (num_heads, head_dim) in bf16.
-            k_cache: K cache, shape (num_kv_heads, seq_len, head_dim) in bf16.
-            v_cache: V cache, shape (num_kv_heads, seq_len, head_dim) in bf16.
+            q:        Unrotated query vectors, shape (num_heads, head_dim) bf16.
+            k_cache:  K cache (already rotated), shape
+                      (num_kv_heads, seq_len, head_dim) in bf16.
+            v_cache:  V cache, shape (num_kv_heads, seq_len, head_dim) in bf16.
+            q_angles: RoPE angles for the current decode position, shape
+                      (head_dim,) in bf16.  Interleaved [cos0, sin0, cos1, ...].
 
         Returns:
             Attention output, shape (num_heads, head_dim) in bf16.
@@ -183,12 +218,19 @@ class AIEFlowKVDecode(AIEOperatorBase):
                 f"({self.num_kv_heads}, {self.seq_len}, {self.head_dim}), "
                 f"got {v_cache.shape}"
             )
+        if q_angles.shape != (self.head_dim,):
+            raise AIEOperatorConstraintError(
+                f"Expected q_angles shape ({self.head_dim},), " f"got {q_angles.shape}"
+            )
 
         # Interleave KV cache for DMA layout
         kv_interleaved = interleave_kv_cache(k_cache, v_cache)
 
+        # Pack Q buffer: [Q_group0 | angles | Q_group1 | angles | ...]
+        q_packed = pack_q_with_angles(q, q_angles, self.group_size, self.num_kv_heads)
+
         self.write_buffer("kv_cache", kv_interleaved)
-        self.write_buffer("queries", q.reshape(-1))
+        self.write_buffer("queries", q_packed)
         self.run_runlist()
 
         result = self.read_buffer_as_torch("output", (self.num_heads, self.head_dim))

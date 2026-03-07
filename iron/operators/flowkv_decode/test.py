@@ -4,7 +4,7 @@
 
 import pytest
 
-from iron.operators.flowkv_decode.op import AIEFlowKVDecode
+from iron.operators.flowkv_decode.op import AIEFlowKVDecode, pack_q_with_angles
 from iron.operators.flowkv_decode.reference import generate_golden_reference
 from iron.common.test_utils import run_test
 
@@ -73,9 +73,17 @@ def test_flowkv_decode(
         context=aie_context,
     )
 
+    group_size = num_heads // num_kv_heads
+    q_packed = pack_q_with_angles(
+        golden_ref["Q"],
+        golden_ref["q_angles"],
+        group_size,
+        num_kv_heads,
+    )
+
     input_buffers = {
         "kv_cache": golden_ref["KV_interleaved"],
-        "queries": golden_ref["Q"].flatten(),
+        "queries": q_packed,
     }
     output_buffers = {"output": golden_ref["O"]}
 

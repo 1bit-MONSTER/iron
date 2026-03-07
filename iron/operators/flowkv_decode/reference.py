@@ -26,6 +26,43 @@ def interleave_kv_cache(k_cache, v_cache):
     return interleaved.reshape(-1)
 
 
+def apply_rope_two_halves(x, cos, sin):
+    """Apply RoPE rotation using the two-halves method.
+
+    Args:
+        x:   Input tensor, shape (..., head_dim) in any dtype.
+        cos: Cosine values, shape (head_dim/2,).
+        sin: Sine values, shape (head_dim/2,).
+
+    Returns:
+        Rotated tensor, same shape and dtype as x.
+    """
+    half = x.shape[-1] // 2
+    x1 = x[..., :half]
+    x2 = x[..., half:]
+    out = torch.empty_like(x)
+    out[..., :half] = x1 * cos - x2 * sin
+    out[..., half:] = x2 * cos + x1 * sin
+    return out
+
+
+def make_rope_angles_interleaved(cos, sin):
+    """Create interleaved cos/sin angles for the AIE kernel.
+
+    Args:
+        cos: Shape (head_dim/2,) cosine values.
+        sin: Shape (head_dim/2,) sine values.
+
+    Returns:
+        Shape (head_dim,) interleaved [cos0, sin0, cos1, sin1, ...] in bf16.
+    """
+    head_dim = cos.shape[0] * 2
+    angles = torch.empty(head_dim, dtype=torch.bfloat16)
+    angles[0::2] = cos.to(torch.bfloat16)
+    angles[1::2] = sin.to(torch.bfloat16)
+    return angles
+
+
 def generate_golden_reference(
     num_heads=32,
     num_kv_heads=8,
@@ -33,12 +70,13 @@ def generate_golden_reference(
     seq_len=128,
     seed=42,
 ):
-    """Generate golden reference data for FlowKV decode attention.
+    """Generate golden reference data for FlowKV decode attention with fused RoPE.
 
-    Computes standard scaled dot-product attention for a single decode step
-    (one query position attending over the full KV cache):
+    Computes scaled dot-product attention for a single decode step with RoPE
+    applied to Q before attention scores are computed. K in the cache is
+    assumed to be already rotated (standard practice).
 
-        O[h] = softmax(Q[h] @ K[kv_h]^T / sqrt(d)) @ V[kv_h]
+        O[h] = softmax(RoPE(Q[h]) @ K[kv_h]^T / sqrt(d)) @ V[kv_h]
 
     where h is the query head index and kv_h = h // group_size is the
     corresponding KV head.
@@ -52,11 +90,12 @@ def generate_golden_reference(
 
     Returns:
         dict with:
-            Q:        (num_heads, head_dim)           -- query vectors
-            K_cache:  (num_kv_heads, seq_len, head_dim) -- K cache
-            V_cache:  (num_kv_heads, seq_len, head_dim) -- V cache
+            Q:              (num_heads, head_dim)           -- unrotated queries
+            K_cache:        (num_kv_heads, seq_len, head_dim) -- rotated K cache
+            V_cache:        (num_kv_heads, seq_len, head_dim) -- V cache
             KV_interleaved: (num_kv_heads * seq_len * 2 * head_dim,)
-            O:        (num_heads, head_dim)           -- reference output
+            q_angles:       (head_dim,)                     -- interleaved cos/sin
+            O:              (num_heads, head_dim)           -- reference output
     """
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -68,15 +107,57 @@ def generate_golden_reference(
 
     # Generate inputs in bf16 for hardware-accurate reference
     Q = torch.randn(num_heads, head_dim, dtype=torch.bfloat16) * val_range
-    K_cache = (
+    K_cache_raw = (
         torch.randn(num_kv_heads, seq_len, head_dim, dtype=torch.bfloat16) * val_range
     )
     V_cache = (
         torch.randn(num_kv_heads, seq_len, head_dim, dtype=torch.bfloat16) * val_range
     )
 
+    # Generate RoPE angles for the current decode position (position = seq_len)
+    # and for all K cache positions (0..seq_len-1).
+    # Use simple theta_base=10000 without frequency scaling for test simplicity.
+    half_dim = head_dim // 2
+    inv_freq = 1.0 / (
+        10000.0 ** (torch.arange(0, head_dim, 2, dtype=torch.float32) / head_dim)
+    )
+
+    # Q position = seq_len (the new token being decoded)
+    q_pos = torch.tensor([seq_len], dtype=torch.float32)
+    q_cos = torch.cos(q_pos * inv_freq).squeeze(0)  # (half_dim,)
+    q_sin = torch.sin(q_pos * inv_freq).squeeze(0)  # (half_dim,)
+
+    # K positions = 0..seq_len-1 (already in the cache)
+    k_positions = torch.arange(seq_len, dtype=torch.float32)
+    k_cos = torch.cos(
+        k_positions.unsqueeze(1) * inv_freq.unsqueeze(0)
+    )  # (seq_len, half_dim)
+    k_sin = torch.sin(
+        k_positions.unsqueeze(1) * inv_freq.unsqueeze(0)
+    )  # (seq_len, half_dim)
+
+    # Apply RoPE to K cache (simulating what would have been done during prefill)
+    K_cache = torch.empty_like(K_cache_raw)
+    for kv_h in range(num_kv_heads):
+        for pos in range(seq_len):
+            K_cache[kv_h, pos] = apply_rope_two_halves(
+                K_cache_raw[kv_h, pos].float(),
+                k_cos[pos],
+                k_sin[pos],
+            ).to(torch.bfloat16)
+
+    # Create interleaved angles for the AIE kernel
+    q_angles = make_rope_angles_interleaved(q_cos, q_sin)
+
+    # Apply RoPE to Q in bf16 to match hardware precision
+    Q_rotated_bf16 = apply_rope_two_halves(
+        Q.float(),
+        q_cos,
+        q_sin,
+    ).to(torch.bfloat16)
+
     # Compute reference attention output in float32 for precision
-    Q_f32 = Q.float()
+    Q_rot_f32 = Q_rotated_bf16.float()
     K_f32 = K_cache.float()
     V_f32 = V_cache.float()
 
@@ -90,7 +171,7 @@ def generate_golden_reference(
 
         for g in range(group_size):
             h = kv_h * group_size + g
-            q = Q_f32[h]  # (head_dim,)
+            q = Q_rot_f32[h]  # (head_dim,)
 
             # Attention scores: (seq_len,)
             scores = (q @ k.T) * inv_sqrt_d
@@ -111,5 +192,6 @@ def generate_golden_reference(
         "K_cache": K_cache,
         "V_cache": V_cache,
         "KV_interleaved": kv_interleaved,
+        "q_angles": q_angles,
         "O": O_bf16,
     }
