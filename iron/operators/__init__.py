@@ -17,6 +17,7 @@ from .rms_norm.op import AIERMSNorm
 from .rope.op import AIERope
 from .sigmoid.op import AIESigmoid
 from .silu.op import AIESiLU
+from .silu_mul.op import AIESiLUMul
 from .softmax.op import AIESoftmax
 from .swiglu_decode.op import AIESwiGLUDecode
 from .swiglu_prefill.op import AIESwiGLUPrefill
