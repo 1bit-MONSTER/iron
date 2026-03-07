@@ -39,6 +39,9 @@
 static float score_running_max[4] __attribute__((aligned(64)));
 static float score_running_sum[4] __attribute__((aligned(64)));
 
+// RoPE-rotated Q vectors (written by score_rope_q, read by score_chunk)
+static bfloat16 rotated_q[4 * 64] __attribute__((aligned(64)));
+
 // ---------------------------------------------------------------------------
 // Value tile: accumulated output in f32 for precision
 // ---------------------------------------------------------------------------
@@ -60,18 +63,67 @@ void flowkv_score_init_bf16(int32_t num_q_heads)
     }
 }
 
+// Apply RoPE rotation to all Q heads and store in static buffer.
+// The Q FIFO buffer layout is [Q_heads (group_size * head_dim) | angles (head_dim)]
+// where angles are interleaved [cos0, sin0, cos1, sin1, ...] for head_dim/2 pairs.
+// Uses the "two halves" method: for head_dim=64:
+//   rotated[0:32]  = q[0:32]  * cos - q[32:64] * sin
+//   rotated[32:64] = q[32:64] * cos + q[0:32]  * sin
+//
+// q_in: pointer to Q FIFO buffer (Q heads followed by angles)
+void flowkv_score_rope_q_bf16(const bfloat16 *__restrict q_in, int32_t num_q_heads, int32_t head_dim)
+{
+    const int32_t half_dim = head_dim / 2;
+    const bfloat16 *angles = q_in + num_q_heads * head_dim;
+
+    // Load cos and sin from interleaved angles: [cos0, sin0, cos1, sin1, ...]
+    // For head_dim=64, half_dim=32, we have 32 cos and 32 sin values
+    // packed in 64 interleaved bf16 values.
+    for (int h = 0; h < num_q_heads; h++) {
+        const bfloat16 *q_head = q_in + h * head_dim;
+        bfloat16 *out_head = rotated_q + h * head_dim;
+
+        for (int v = 0; v < half_dim; v += 16) {
+            // Load first and second halves of Q
+            aie::vector<bfloat16, 16> x1 = aie::load_v<16>(q_head + v);
+            aie::vector<bfloat16, 16> x2 = aie::load_v<16>(q_head + v + half_dim);
+
+            // Load interleaved cos/sin angles and deinterleave
+            aie::vector<bfloat16, 32> ang = aie::load_v<32>(angles + 2 * v);
+            aie::vector<bfloat16, 16> cos_val = aie::filter_even(ang, 1);
+            aie::vector<bfloat16, 16> sin_val = aie::filter_odd(ang, 1);
+
+            // First half: x1*cos - x2*sin
+            aie::vector<bfloat16, 16> x1_cos = aie::mul(x1, cos_val);
+            aie::vector<bfloat16, 16> x2_sin = aie::mul(x2, sin_val);
+            aie::vector<bfloat16, 16> out_first = aie::sub(x1_cos, x2_sin);
+            aie::store_v(out_head + v, out_first);
+
+            // Second half: x2*cos + x1*sin
+            aie::vector<bfloat16, 16> x2_cos = aie::mul(x2, cos_val);
+            aie::vector<bfloat16, 16> x1_sin = aie::mul(x1, sin_val);
+            aie::vector<bfloat16, 16> out_second = aie::add(x2_cos, x1_sin);
+            aie::store_v(out_head + v + half_dim, out_second);
+        }
+    }
+}
+
 // Compute attention scores for one K chunk and update online softmax state.
 // Writes results into a single packed inter-tile buffer.
+// Uses rotated Q from the static buffer (populated by flowkv_score_rope_q_bf16).
 //
-// q_in:      (num_q_heads, head_dim)  -- query vectors for this KV group
+// q_in:      (num_q_heads, head_dim)  -- query vectors (unused, reads rotated_q)
 // k_chunk:   (chunk_size, head_dim)   -- K cache chunk
 // packed_out: packed buffer for inter-tile FIFO:
 //   [0 .. cs*gs-1]: F_c scores in (chunk_size, num_q_heads) layout
 //   [cs*gs .. cs*gs+gs-1]: C_c correction factors
 //   [cs*gs+gs .. cs*gs+2*gs-1]: l denominators
-void flowkv_score_chunk_bf16(const bfloat16 *__restrict q_in, const bfloat16 *__restrict k_chunk,
-                              bfloat16 *__restrict packed_out, int32_t num_q_heads, int32_t head_dim,
-                              int32_t chunk_size)
+void flowkv_score_chunk_bf16(const bfloat16 *__restrict q_in,
+                             const bfloat16 *__restrict k_chunk,
+                             bfloat16 *__restrict packed_out,
+                             int32_t num_q_heads,
+                             int32_t head_dim,
+                             int32_t chunk_size)
 {
     event0();
     ::aie::set_rounding(aie::rounding_mode::conv_even);
@@ -84,7 +136,7 @@ void flowkv_score_chunk_bf16(const bfloat16 *__restrict q_in, const bfloat16 *__
     bfloat16 *denom_out = packed_out + scores_size + num_q_heads;
 
     for (int h = 0; h < num_q_heads; h++) {
-        const bfloat16 *q_head = q_in + h * head_dim;
+        const bfloat16 *q_head = rotated_q + h * head_dim;
         float m_old = score_running_max[h];
         float l_old = score_running_sum[h];
 
@@ -107,8 +159,7 @@ void flowkv_score_chunk_bf16(const bfloat16 *__restrict q_in, const bfloat16 *__
             auto k_vec1 = aie::load_v<32>(k_pos + 32);
             acc = aie::mac(acc, q_vec1, k_vec1);
 
-            bfloat16 score = static_cast<bfloat16>(
-                aie::reduce_add(acc.to_vector<float>()) * inv_sqrt_d);
+            bfloat16 score = static_cast<bfloat16>(aie::reduce_add(acc.to_vector<float>()) * inv_sqrt_d);
 
             scores_bf16[pos] = score;
             if (static_cast<float>(score) > static_cast<float>(m_chunk_bf16)) {
@@ -132,8 +183,7 @@ void flowkv_score_chunk_bf16(const bfloat16 *__restrict q_in, const bfloat16 *__
 
         // Compute exp2 for each score position — one at a time, no float arrays
         for (int pos = 0; pos < chunk_size; pos++) {
-            bfloat16 diff = static_cast<bfloat16>(
-                (static_cast<float>(scores_bf16[pos]) - m_new) * 1.4453125f);
+            bfloat16 diff = static_cast<bfloat16>((static_cast<float>(scores_bf16[pos]) - m_new) * 1.4453125f);
             aie::vector<bfloat16, 16> diff_vec = aie::broadcast<bfloat16, 16>(diff);
             aie::accum<accfloat, 16> diff_acc(diff_vec);
             aie::vector<bfloat16, 16> exp_result = aie::exp2<bfloat16>(diff_acc.to_vector<float>());
@@ -177,8 +227,11 @@ void flowkv_value_init_bf16(int32_t num_q_heads, int32_t head_dim)
 //   [cs*gs..cs*gs+gs-1]: C_c correction
 //   [cs*gs+gs..cs*gs+2*gs-1]: l denom
 // v_chunk: (chunk_size, head_dim) -- V cache chunk from DDR
-void flowkv_value_accum_bf16(const bfloat16 *__restrict packed_in, const bfloat16 *__restrict v_chunk,
-                              int32_t num_q_heads, int32_t head_dim, int32_t chunk_size)
+void flowkv_value_accum_bf16(const bfloat16 *__restrict packed_in,
+                             const bfloat16 *__restrict v_chunk,
+                             int32_t num_q_heads,
+                             int32_t head_dim,
+                             int32_t chunk_size)
 {
     event0();
     ::aie::set_rounding(aie::rounding_mode::conv_even);
