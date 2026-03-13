@@ -384,7 +384,7 @@ class AieccCompilationRule(CompilationRule):
                 if not do_compile_xclbin:
                     compile_cmd += ["--no-compile"]
                 compile_cmd += first_insts_bin.extra_flags + [
-                    "--aie-generate-npu",
+                    "--aie-generate-npu-insts",
                     "--npu-insts-name=" + str(first_insts_bin.path),
                 ]
             compile_cmd += [str(mlir_source.path)]

@@ -129,8 +129,13 @@ def pytest_runtest_makereport(item, call):
                 r"^(.+?)::(.+?)\[(iter\d+-)?(.+?)\]$", item.nodeid
             )
             if not nodeid_components:
-                raise RuntimeError(f"Unexpected test nodeid format: {item.nodeid}")
-            test_name = nodeid_components.group(4)
+                # Non-parametrized tests: use the function name as test_name
+                simple_match = re.match(r"^(.+?)::(.+?)$", item.nodeid)
+                if not simple_match:
+                    return  # Skip metrics for unrecognized formats
+                test_name = simple_match.group(2)
+            else:
+                test_name = nodeid_components.group(4)
 
             passed = report.outcome == "passed"
             captured = report.capstdout

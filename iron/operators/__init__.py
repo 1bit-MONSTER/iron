@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from .conv2d.op import AIEConv2d
 from .axpy.op import AIEAXPY
 from .dequant.op import AIEDequant
 from .elementwise_add.op import AIEElementwiseAdd
@@ -10,6 +11,7 @@ from .gemm.op import AIEGEMM
 from .gemv.op import AIEGEMV
 from .layer_norm.op import AIELayerNorm
 from .leaky_relu.op import AIELeakyReLU
+from .maxpool2d.op import AIEMaxPool2d
 from .mem_copy.op import AIEMemCopy
 from .mha.op import AIEMHA
 from .relu.op import AIEReLU
@@ -22,3 +24,4 @@ from .swiglu_decode.op import AIESwiGLUDecode
 from .swiglu_prefill.op import AIESwiGLUPrefill
 from .tanh.op import AIETanh
 from .transpose.op import AIETranspose
+from .upsample.op import AIEUpsample
