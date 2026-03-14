@@ -13,7 +13,7 @@
 | P4: Composites | **DONE** | 5/5 HW | CBS now uses fused bias+SiLU kernel on-chip |
 | P5.1: Neck (FPN+PAN) | **DONE** | 5/5 HW | FPN up, PAN down, auto-column for L1 fit |
 | P5.2: Detect Head | **DONE** | 5/5 HW | Reg + Cls branches, bare Conv1×1 final layer |
-| P5.3: Full pipeline | **IN PROGRESS** | 37+/47 compile | MemTile input+weight streaming done; layer-by-layer HW verification running |
+| P5.3: Full pipeline | **NEAR COMPLETE** | 21/24 layers NPU | Backbone+Neck 100% NPU; 3 detect configs need IC streaming |
 | P6.0: Multi-PDI XCLBIN | **DONE** | 5/5 HW | `YOLOv8nPipeline` chains ~52 PDIs, SwiGLU pattern |
 | P6.1: SiLU/Bias Fusion | **DONE** | 5/5 HW | Bias packed in weights, Padé tanh approx, CBS verified |
 | P6.2: Post-Processing | **DONE** | 110/110 CPU | DFL decode + dist2bbox + NMS, full unit tests |
