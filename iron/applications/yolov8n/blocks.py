@@ -23,17 +23,17 @@ from iron.operators.maxpool2d.op import AIEMaxPool2d
 def _auto_columns(in_channels, out_channels, kernel_size, width=None, stride=1):
     """Choose num_aie_columns to fit all buffers in L1 (64KB).
 
-    For 1x1 conv with known width, checks total L1 usage including
-    double-buffered input/output FIFOs (all on compute tile).
-    For 3x3 conv, uses weight-only check (MemTile absorbs FIFO
-    buffering on NPU2, so only per-core weight must fit in ~40KB).
+    Checks total L1 usage including all FIFO buffers on the compute tile.
     Per-core output channels must be a multiple of 8.
+
+    For 1x1 conv: input depth=2, output depth=2, weight depth=1.
+    For 3x3 conv: input depth=4 (sliding window), output depth=2, weight depth=1.
 
     Args:
         in_channels: Number of input channels.
         out_channels: Number of output channels.
         kernel_size: Convolution kernel size (1 or 3).
-        width: Spatial width (enables full L1 check for 1x1 conv).
+        width: Spatial width (enables full L1 check).
         stride: Convolution stride (1 or 2).
     """
     L1_SIZE = 65536
@@ -46,21 +46,67 @@ def _auto_columns(in_channels, out_channels, kernel_size, width=None, stride=1):
         if per_core_oc < 8 or per_core_oc % 8 != 0:
             continue
         per_core_weight = in_channels * per_core_oc * k_elems * 2
-        if kernel_size == 1 and width is not None:
-            # 1x1 conv: all FIFO buffers live on compute tile.
-            # Input FIFO depth=2, output FIFO depth=2, weight depth=1.
-            input_bytes = 2 * in_channels * width * 2
-            output_bytes = 2 * per_core_oc * width * 2
+        if width is not None:
+            out_w = width // stride if stride > 1 else width
+            input_depth = 4 if kernel_size == 3 else 2
+            input_bytes = input_depth * in_channels * width * 2
+            output_bytes = 2 * per_core_oc * out_w * 2
             total_l1 = OVERHEAD + input_bytes + per_core_weight + output_bytes
             if total_l1 <= L1_SIZE:
                 return cols
         else:
-            # 3x3 conv or unknown width: weight-only check.
-            # On NPU2, MemTile absorbs FIFO buffering for 3x3.
+            # Unknown width: weight-only check as fallback.
             if per_core_weight <= max_weight:
                 return cols
-    # If nothing fits, stream weights through MemTile (fallback to 1 col)
-    # This will require weight streaming design changes
+    # Second pass: try with MemTile input routing (L1 input depth=1 instead
+    # of 2).  The design.py will route input through MemTile automatically
+    # when direct routing overflows L1.
+    if kernel_size == 1 and width is not None:
+        for cols in [1, 2, 4, 8]:
+            per_core_oc = out_channels // cols if out_channels % cols == 0 else -1
+            if per_core_oc < 8 or per_core_oc % 8 != 0:
+                continue
+            per_core_weight = in_channels * per_core_oc * k_elems * 2
+            # MemTile routing reduces L1 input depth from 2 to 1
+            input_bytes = 1 * in_channels * width * 2
+            output_bytes = 2 * per_core_oc * width * 2
+            total_l1 = OVERHEAD + input_bytes + per_core_weight + output_bytes
+            if total_l1 <= L1_SIZE:
+                return cols
+    # Third pass: weight streaming via multiple DDR fills per OC group.
+    # design.py will automatically stream weights in OC-group chunks.
+    # Find smallest column count where the largest possible oc_chunk fits
+    # in L1 alongside input/output FIFOs AND n_oc_groups stays within
+    # the ShimDMA BD limit (16 BDs per tile).
+    MAX_BDS_PER_TILE = 16
+    if width is not None:
+        for cols in [1, 2, 4, 8]:
+            per_core_oc = out_channels // cols if out_channels % cols == 0 else -1
+            if per_core_oc < 8 or per_core_oc % 8 != 0:
+                continue
+            out_w = width // stride if stride > 1 else width
+            # Input depth: k1 with MemTile=1, k3=4.
+            # k3 sliding window uses acquire(3) which forces depth=4
+            # (3 active + 1 prefetch) in the MLIR-AIE framework.
+            if kernel_size == 1:
+                input_bytes = 1 * in_channels * width * 2
+            else:
+                input_bytes = 4 * in_channels * width * 2
+            avail = L1_SIZE - OVERHEAD - input_bytes
+            if avail <= 0:
+                continue
+            # Try largest oc_chunk first to minimize n_oc_groups
+            for try_oc in range(per_core_oc, 0, -8):
+                if per_core_oc % try_oc != 0 or try_oc % 8 != 0:
+                    continue
+                wt_bytes = try_oc * in_channels * k_elems * 2
+                out_bytes = 2 * try_oc * out_w * 2
+                if wt_bytes + out_bytes <= avail:
+                    n_groups = per_core_oc // try_oc
+                    # BD count: n_groups input + n_groups weight + 1 output
+                    if n_groups * 2 + 1 <= MAX_BDS_PER_TILE:
+                        return cols
+                    break  # larger oc_chunk won't help, try more columns
     return 1
 
 
