@@ -13,7 +13,7 @@
 | P4: Composites | **DONE** | 5/5 HW | CBS now uses fused bias+SiLU kernel on-chip |
 | P5.1: Neck (FPN+PAN) | **DONE** | 5/5 HW | FPN up, PAN down, auto-column for L1 fit |
 | P5.2: Detect Head | **DONE** | 5/5 HW | Reg + Cls branches, bare Conv1×1 final layer |
-| P5.3: Full pipeline | **PARTIAL** | 7/8 backbone HW | TAP BD + _auto_columns fixed; 6 configs need MemTile routing (P7) |
+| P5.3: Full pipeline | **IN PROGRESS** | 37+/47 compile | MemTile input+weight streaming done; layer-by-layer HW verification running |
 | P6.0: Multi-PDI XCLBIN | **DONE** | 5/5 HW | `YOLOv8nPipeline` chains ~52 PDIs, SwiGLU pattern |
 | P6.1: SiLU/Bias Fusion | **DONE** | 5/5 HW | Bias packed in weights, Padé tanh approx, CBS verified |
 | P6.2: Post-Processing | **DONE** | 110/110 CPU | DFL decode + dist2bbox + NMS, full unit tests |
@@ -50,9 +50,9 @@
 - Updated `op.py` to pack bias per-column into weight buffer
 - CBS block verified on hardware with fused SiLU (5/5 pass)
 
-### Active Risks & Blockers
+### Active Risks & Blockers (Updated)
 
-1. **DMA BD size limit (1023)** — TAP dimensions exceed 1023 for large configs. Fix: 4D TAP decomposition in `design.py` (agent `tap-fixer` working on this).
+1. **DMA BD size limit (1023)** — **RESOLVED.** TAP 4D decomposition with d3≤64, d0 even constraint. `_factorize_tensor()` and `_factorize_3d()` helpers in design.py.
 
 2. **L1 memory overflow for 1×1 convs** — `_auto_columns()` only checked weight size, not total L1 budget (input+weight+output+stack). FIXED by pipeline-runner: updated `_auto_columns` to check full L1 for 1×1 conv.
 
@@ -1424,3 +1424,71 @@ Sorted by compute volume (FLOPs):
 - [MLIR-AIE ResNet Example](https://github.com/Xilinx/mlir-aie/tree/main/programming_examples/ml/resnet)
 - [AIE2P Architecture Specification v1.4](internal)
 - [IRON Framework](https://github.com/nod-ai/IRON)
+
+## Appendix D: Session Progress Log
+
+### Git History (branch: yolov8n, based on devel)
+```
+f5ecbc1 Conv2d: MemTile input buffering + weight streaming for YOLOv8n-scale configs
+b76e786 YOLOv8n end-to-end NPU implementation: operators, pipeline, kernels, docs
+```
+
+### Files Created (40 files, ~12,000 lines)
+
+**Operators:**
+- `iron/operators/conv2d/{op,design,reference,test}.py` — Conv2d 1×1/3×3 with TAP decomposition, MemTile routing, fused bias+SiLU, weight streaming
+- `iron/operators/maxpool2d/{op,design,reference,test}.py` — MaxPool2d k5 with strip-based design
+- `iron/operators/upsample/{op,design,reference,test}.py` — Nearest 2× upsample
+
+**AIE Kernels:**
+- `aie_kernels/aie2p/conv2dk1_bf16.cc` — 1×1 conv scalar+vectorized, bias+SiLU fused variant
+- `aie_kernels/aie2p/conv2dk3_bf16.cc` — 3×3 conv s1/s2 scalar+vectorized, bias+SiLU fused variants
+- `aie_kernels/aie2p/maxpool2d_bf16.cc` — 5×5 max pooling
+- `aie_kernels/aie2p/upsample2x_bf16.cc` — 2× nearest upsample
+
+**YOLOv8n Application:**
+- `iron/applications/yolov8n/blocks.py` — CBS, Bottleneck, C2f, SPPF with auto-column L1 budget
+- `iron/applications/yolov8n/backbone.py` — Layers L0-L9
+- `iron/applications/yolov8n/neck.py` — FPN up-path + PAN down-path (L10-L21)
+- `iron/applications/yolov8n/detect.py` — Decoupled reg+cls head (6 branches)
+- `iron/applications/yolov8n/pipeline.py` — Multi-PDI pipeline operator (~52 PDIs in one xclbin)
+- `iron/applications/yolov8n/postprocess.py` — DFL decode + dist2bbox + NMS
+- `iron/applications/yolov8n/model_prep.py` — BN fusion, weight export, tiled layout utils
+- `iron/applications/yolov8n/test_*.py` — Tests for all components
+
+**Documentation:**
+- `iron/applications/yolov8n/README.md` — 620-line architecture guide
+- `NPU_DATA_MOVEMENT_GUIDE.md` — 1106-line NPU data movement reference
+- `iron/applications/yolov8n/benchmark_results.md` — 18-config operator benchmarks
+
+**Infrastructure:**
+- `iron/common/aie_base.py` — `register=True` kwarg for sub-operator creation
+- `iron/common/compilation.py` — Minor fix
+
+### Hardware Verification Summary
+
+| Component | Tests | Status |
+|-----------|-------|--------|
+| Conv2d operator (all variants) | 50/50 | **PASS** on NPU |
+| MaxPool2d operator | 15/15 | **PASS** on NPU |
+| Upsample operator | 15/15 | **PASS** on NPU |
+| CBS block (fused bias+SiLU) | 5/5 | **PASS** on NPU |
+| Post-processing (DFL+NMS) | 110/110 | **PASS** (CPU) |
+| Pipeline construction (256×256) | 5/5 | **PASS** |
+| YOLOv8n-scale Conv2d (TAP fix) | 11/13 | **PASS** on NPU |
+| YOLOv8n-scale Conv2d (MemTile) | 11/11 | **PASS** on NPU |
+| Full 640×640 compile audit | 37/47 | Compile OK; 10 use weight streaming |
+| **Layer-by-layer 640×640** | **IN PROGRESS** | Agent running L0→L1→...→L9 |
+
+### Key Technical Achievements
+
+1. **Multi-PDI xclbin chaining** — 52 unique operator configs merged into one xclbin via `--xclbin-input` + `--xclbin-kernel-id` (SwiGLU pattern)
+2. **Fused bias+SiLU kernel** — Bias packed at end of weight buffer, Padé tanh approx (no expf on AIE), eliminates DDR round-trip per CBS block
+3. **TAP 4D decomposition** — `_factorize_tensor()` handles DMA BD d3≤64, d0-d2≤1023, d0 even constraints
+4. **MemTile input buffering** — `forward(placement=AnyMemTile)` for configs where input FIFO overflows L1
+5. **MemTile weight streaming** — OC-subgroup chunks streamed from MemTile, core loops over chunks
+6. **Auto-column L1 budget** — `_auto_columns()` checks full L1 (input+weight+output+stack) for all conv types
+
+### Current Focus: Layer-by-Layer Hardware Verification
+
+Testing backbone L0→L1→...→L9 sequentially at 640×640, each layer verified on NPU hardware individually and in chains. This validates every operator config at real YOLOv8n scale before attempting the full pipeline.
