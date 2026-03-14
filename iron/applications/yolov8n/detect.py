@@ -152,7 +152,7 @@ class YOLOv8nDetect:
         num_aie_columns: Number of AIE columns per operator (default 1).
     """
 
-    def __init__(self, nc=80, reg_max=16, context=None, num_aie_columns=1):
+    def __init__(self, nc=80, reg_max=16, context=None, num_aie_columns=0):
         self.nc = nc
         self.reg_max = reg_max
         c_reg = 4 * reg_max  # 64 regression output channels

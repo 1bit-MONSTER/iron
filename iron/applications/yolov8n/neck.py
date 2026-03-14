@@ -52,7 +52,7 @@ class YOLOv8nNeck:
         num_aie_columns: Number of AIE columns per operator (default 1).
     """
 
-    def __init__(self, context=None, num_aie_columns=1):
+    def __init__(self, context=None, num_aie_columns=0):
         cols = num_aie_columns
 
         # ----- FPN up-path -----

@@ -47,7 +47,7 @@ class YOLOv8nBackbone:
         num_aie_columns: Number of AIE columns per operator (default 1).
     """
 
-    def __init__(self, context=None, num_aie_columns=1):
+    def __init__(self, context=None, num_aie_columns=0):
         cols = num_aie_columns
 
         # L0: Conv3x3 s2, 8->16, 640->320

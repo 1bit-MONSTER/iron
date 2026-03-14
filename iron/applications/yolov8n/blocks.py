@@ -18,6 +18,7 @@ import torch.nn.functional as F
 
 from iron.operators.conv2d.op import AIEConv2d
 from iron.operators.maxpool2d.op import AIEMaxPool2d
+from iron.common import AIEOperatorConstraintError
 
 
 def _auto_columns(in_channels, out_channels, kernel_size, width=None, stride=1):
@@ -107,7 +108,16 @@ def _auto_columns(in_channels, out_channels, kernel_size, width=None, stride=1):
                     if n_groups * 2 + 1 <= MAX_BDS_PER_TILE:
                         return cols
                     break  # larger oc_chunk won't help, try more columns
-    return 1
+    raise AIEOperatorConstraintError(
+        f"No feasible NPU mapping: in_channels={in_channels}, "
+        f"out_channels={out_channels}, kernel_size={kernel_size}, "
+        f"width={width}, stride={stride}. "
+        f"Even at 8 columns, weight chunk ({8 * in_channels * k_elems * 2} bytes) "
+        f"does not fit in L1 alongside input FIFO "
+        f"({'4' if kernel_size == 3 else '1'}*{in_channels}*{width}*2 = "
+        f"{(4 if kernel_size == 3 else 1) * in_channels * width * 2} bytes). "
+        f"This layer requires IC streaming (not yet implemented)."
+    )
 
 
 class CBS:
@@ -140,16 +150,13 @@ class CBS:
         num_aie_columns=0,
         context=None,
     ):
-        if num_aie_columns == 0:
-            num_aie_columns = _auto_columns(
-                in_channels, out_channels, kernel_size, width, stride
-            )
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
         self.height = height
         self.width = width
+        self.cpu_fallback = False
 
         # Compute output spatial dims
         if kernel_size == 3 and stride == 2:
@@ -158,6 +165,20 @@ class CBS:
         else:
             self.out_height = height
             self.out_width = width
+
+        if num_aie_columns == 0:
+            try:
+                num_aie_columns = _auto_columns(
+                    in_channels, out_channels, kernel_size, width, stride
+                )
+            except AIEOperatorConstraintError:
+                # Layer is infeasible on NPU (input FIFO alone exceeds L1).
+                # Fall back to CPU execution via PyTorch.
+                self.cpu_fallback = True
+                self.conv = None
+                self.weight = None
+                self.bias = None
+                return
 
         # Create the underlying AIEConv2d operator with fused bias+SiLU.
         # The kernel applies bias and SiLU on-chip, eliminating the DDR
@@ -191,7 +212,7 @@ class CBS:
         self.bias = bias.to(torch.bfloat16)
 
     def forward(self, x):
-        """Run Conv + Bias + SiLU on the NPU (all fused in kernel).
+        """Run Conv + Bias + SiLU on the NPU (or CPU fallback).
 
         Args:
             x: Input tensor [1, C_in, H, W] in bfloat16.
@@ -199,6 +220,18 @@ class CBS:
         Returns:
             Output tensor [1, C_out, H_out, W_out] in bfloat16.
         """
+        if self.cpu_fallback:
+            # Layer exceeds NPU L1 budget; run on CPU via PyTorch.
+            padding = self.kernel_size // 2
+            out = F.conv2d(
+                x.float(),
+                self.weight.float(),
+                self.bias.float(),
+                stride=self.stride,
+                padding=padding,
+            )
+            out = F.silu(out)
+            return out.to(torch.bfloat16)
         return self.conv.forward(x, self.weight, self.bias)
 
 
