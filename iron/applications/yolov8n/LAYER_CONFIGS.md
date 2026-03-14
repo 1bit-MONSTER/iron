@@ -163,10 +163,88 @@ output = 2 × 8 × 20 × 2 = 640
 Total = 12,408 ✓✓✓
 ```
 
+## Bug Fixes Applied This Session
+
+### 1. TAP 4D Decomposition (DMA BD Size Limits)
+**File**: `iron/operators/conv2d/design.py`
+**Problem**: Flat TAPs like `sizes=[1,1,1,total_size]` fail when `total_size > 1023`.
+At YOLOv8n scale, input rows easily exceed 1023 (e.g., 64ch × 80w = 5120).
+**Fix**: `_factorize_tensor()` decomposes any size into 4D `(d3, d2, d1, d0)` with:
+- d3 ≤ 64 (hardware wrap count limit)
+- d0, d1, d2 ≤ 1023
+- d0 must be even (4-byte alignment for bf16)
+**Impact**: Unblocks all YOLOv8n-scale TAPs. All input/weight/output TAPs now use decomposed dims.
+
+### 2. Multi-Column Linker Fix (`--no-unified`)
+**File**: `iron/common/compilation.py`
+**Problem**: `aiecc --unified` (default) compiles all core functions into one object file.
+When linking per-tile ELFs for 4+ column designs, the linker sees FIFO buffer symbol
+references from other tiles' switch tables, causing `undefined symbol: in_N_cons_buff_*`.
+**Fix**: Added `--no-unified` flag to aiecc. Forces per-core object file generation.
+**Impact**: Unblocks L3 (4col), L5 (8col), L7 (8col), L16 (4col), L19 (4col), and
+all future multi-column 3×3 conv designs.
+
+### 3. BD Factorization Padding
+**File**: `iron/operators/conv2d/design.py`, `iron/operators/conv2d/op.py`
+**Problem**: Fused bias+SiLU packs bias at end of weights: `weights_per_col = OC×IC×9 + OC`.
+For L8 bottleneck (128→128 k3s1 at 8col): `16×128×9 + 16 = 18448 = 16×1153`.
+Since 1153 is prime > 1023, no valid BD factorization exists.
+**Fix**: `_factorize_tensor_padded()` pads by up to 2 elements to find a factorizable
+size (18448→18450 = 45×410). Weight buffer allocates the padded size.
+**Impact**: Unblocks L8 bottleneck and L21 bottleneck with fused SiLU.
+
+### 4. MemTile Input Buffering
+**File**: `iron/operators/conv2d/design.py`
+**Problem**: For 1×1 conv with large IC, input FIFO at depth=2 overflows L1.
+E.g., 384→128 k1 40×40: input_fifo = 2×384×40×2 = 61KB > 64KB L1.
+**Fix**: When `total_l1 > 65536` for k1 conv, route input through MemTile via
+`ObjectFifo.cons().forward(placement=AnyMemTile, depth=1)`. MemTile holds the
+double-buffer (512KB available); L1 only needs depth=1 (single buffer).
+**Impact**: Unblocks L6 cv2, L9 cv2, L12 cv1, L15 cv1, L18 cv1/cv2, L21 cv1.
+
+### 5. MemTile Weight Streaming
+**File**: `iron/operators/conv2d/design.py`
+**Problem**: For configs where full weight buffer exceeds L1 even after multi-column
+split. E.g., L7 (128→256 k3s2) at 8col: weight = 32×128×9×2 = 72KB > 40KB budget.
+**Fix**: Split weights into OC-subgroups (`oc_chunk`, typically 8). Store full weights
+in MemTile, stream one OC-subgroup at a time via `forward(placement=AnyMemTile,
+dims_to_stream=...)`. Core loops: for each OC group → for each row → kernel.
+Output FIFO element is `oc_chunk × W` instead of `oc_per_col × W`.
+**Impact**: Unblocks L7, L8 bn, L19, L21 bn, L21 cv2, reg_p4 cv1, cls_p3 cv1,
+cls_p4 cv1, cls_p4 cv2, cls_p5 cv2.
+
+### 6. `_auto_columns` Full L1 Budget Check
+**File**: `iron/applications/yolov8n/blocks.py`
+**Problem**: Original `_auto_columns()` only checked per-core weight size (≤40KB),
+ignoring input/output FIFO buffers. For 1×1 conv, all FIFOs live on compute tile,
+so total L1 = input + weight + output + stack must fit 64KB.
+**Fix**: Updated to check full L1 budget:
+- k1: `stack(1040) + input(2×IC×W×2) + weight(OC_col×IC×2) + output(2×OC_col×W×2)`
+- k3: `stack(1040) + input(4×IC×W×2) + weight(OC_col×IC×9×2) + output(2×OC_col×W_out×2)`
+- Second pass for k1: MemTile routing reduces input depth to 1
+**Impact**: Correct column selection for all configs. Prevents silent L1 overflow.
+
+### 7. Auto-Columns Default (0 instead of 1)
+**Files**: `backbone.py`, `neck.py`, `detect.py`, `blocks.py` (SPPF)
+**Problem**: Backbone/Neck/Detect constructors defaulted to `num_aie_columns=1`,
+which overrode `_auto_columns()` and caused L1 overflow for large configs.
+**Fix**: Changed default to `num_aie_columns=0` (auto-select based on L1 budget).
+**Impact**: All blocks now automatically choose the optimal column count.
+
+### 8. Fused Bias+SiLU Kernel
+**Files**: `aie_kernels/aie2p/conv2dk1_bf16.cc`, `conv2dk3_bf16.cc`
+**Problem**: CBS block applied bias and SiLU in Python after NPU conv, requiring
+DDR round-trip per layer.
+**Fix**: New kernel variants `conv2dk1_bf16_bias_silu` and `conv2dk3_bf16_bias_silu`
+that apply bias+SiLU on-chip. Bias packed at end of weight buffer per column.
+SiLU uses Padé rational tanh approximation (no `expf` on AIE):
+`tanh(z) ≈ z(27+z²)/(27+9z²)`, then `SiLU(x) = x × 0.5 × (1 + tanh(x/2))`.
+**Impact**: Eliminates DDR round-trip for every CBS block (~25 per model).
+
 ## Compilation Flags
 
 All designs require these aiecc flags (set in `iron/common/compilation.py`):
-- `--no-unified`: Prevents multi-column linker symbol collision
+- `--no-unified`: Prevents multi-column linker symbol collision (Bug Fix #2)
 - `--aie-generate-npu-insts`: Generates instruction binary (NOT `--aie-generate-npu`)
 - `--aie-generate-xclbin`: Generates hardware binary
 
@@ -177,4 +255,4 @@ All operators use tiled layout `[H, C/8, W, 8]` for activations:
 - Output: tiled → NCHW in `op.py:tiled_to_nchw()`
 - Weights k1: `[OC/8, IC/8, 8, 8]` via `weights_to_tiled()`
 - Weights k3: `[OC/8, IC/8, 3, 3, 8, 8]` via `weights_to_tiled_3x3()`
-- Fused SiLU: bias `[OC]` appended after tiled weights per column
+- Fused SiLU: bias `[OC]` appended after tiled weights per column (Bug Fix #8)
