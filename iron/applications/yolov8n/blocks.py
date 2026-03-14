@@ -138,7 +138,7 @@ def _auto_columns(in_channels, out_channels, kernel_size, width=None, stride=1):
                         continue
                     n_ic = in_channels // ic_try
                     n_oc = per_core_oc // try_oc
-                    bd_estimate = n_oc * (n_ic + 1) + 1
+                    bd_estimate = n_oc + 2
                     if bd_estimate <= MAX_BDS_PER_TILE:
                         return cols
     raise AIEOperatorConstraintError(

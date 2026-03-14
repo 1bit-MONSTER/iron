@@ -381,7 +381,10 @@ class AIEConv2d(AIEOperatorBase):
                         continue
                     n_oc = oc_per_col // try_oc
                     n_ic = self.in_channels // try_ic
-                    bd_estimate = n_oc * (n_ic + 1) + 1
+                    if is_ic_streaming:
+                        bd_estimate = n_oc + 2
+                    else:
+                        bd_estimate = 2 * n_oc + 1
                     if bd_estimate <= MAX_BDS:
                         return try_oc  # store oc_chunk; ic_chunk via _compute_ic_chunk
             raise AIEOperatorConstraintError(
@@ -429,7 +432,10 @@ class AIEConv2d(AIEOperatorBase):
                     continue
                 n_oc = oc_per_col // try_oc
                 n_ic = self.in_channels // try_ic
-                bd_estimate = n_oc * (n_ic + 1) + 1
+                if is_ic_streaming:
+                    bd_estimate = n_oc * n_ic + 2
+                else:
+                    bd_estimate = 2 * n_oc + 1
                 if bd_estimate <= MAX_BDS:
                     return try_ic
         return self.in_channels  # fallback (design.py will raise)

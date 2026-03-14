@@ -149,13 +149,34 @@ void conv2dk3_bf16_bias_silu_icstream_scalar(
 }
 
 // ---------------------------------------------------------------------------
-// extern "C" wrapper
+// extern "C" wrappers
+//
+// Two entry points with different signatures:
+//   accum:  NO output pointer — used for non-last IC groups (accumulate only)
+//   flush:  WITH output pointer — used for last IC group (bias + SiLU + write)
+//
+// This allows the MLIR-AIE core function to avoid acquiring the output FIFO
+// for non-last IC groups, keeping the drain TAP simple (n_oc * height elements
+// instead of n_oc * n_ic * height).
 // ---------------------------------------------------------------------------
 extern "C" {
 
-// IC-streaming variant: called n_ic_groups times per output row.
-// ic_group_idx=0: initialize accum; ic_group_idx=n_ic_groups-1: flush+silu.
-void conv2dk3_bf16_bias_silu_icstream(
+// Accumulate-only: called for ic_group_idx < n_ic_groups-1.
+// No output pointer — kernel only writes to the static _ic_accum buffer.
+void conv2dk3_bf16_accum_icstream(
+    bfloat16 *line0, bfloat16 *line1, bfloat16 *line2, bfloat16 *weights,
+    const int32_t input_width, const int32_t input_channels,
+    const int32_t output_channels, const int32_t check,
+    const int32_t ic_group_idx, const int32_t n_ic_groups) {
+    conv2dk3_bf16_bias_silu_icstream_scalar(line0, line1, line2, weights,
+                                            nullptr, input_width,
+                                            input_channels, output_channels,
+                                            check, ic_group_idx, n_ic_groups);
+}
+
+// Flush: called for ic_group_idx == n_ic_groups-1.
+// Reads _ic_accum, adds bias, applies SiLU, writes to output FIFO buffer.
+void conv2dk3_bf16_flush_icstream(
     bfloat16 *line0, bfloat16 *line1, bfloat16 *line2, bfloat16 *weights,
     bfloat16 *output, const int32_t input_width, const int32_t input_channels,
     const int32_t output_channels, const int32_t check,

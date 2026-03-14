@@ -632,7 +632,14 @@ def my_conv2d_k3(
                 continue
             n_oc = oc_per_col // try_oc
             n_ic = in_channels // try_ic
-            bd_estimate = n_oc * (n_ic + 1) + 1
+            # BD budget per shim tile (16 max).
+            # IC streaming: n_oc input fills + 1 weight fill + 1 drain.
+            #   (consolidated TAP covers all IC groups in one fill)
+            # Non-IC: n_oc input fills + n_oc weight fills + 1 drain.
+            if is_ic_streaming:
+                bd_estimate = n_oc + 2
+            else:
+                bd_estimate = 2 * n_oc + 1
             if bd_estimate <= _MAX_BDS:
                 # Verify ic_accum buffer can hold oc_chunk * out_w
                 if is_ic_streaming:
@@ -720,10 +727,28 @@ def my_conv2d_k3(
     # extra int32 parameters: ic_group_idx and n_ic_groups.
     fused = has_bias and activation == "silu"
     if use_ic_streaming:
-        # IC streaming: only fused+silu variant (bias applied on last IC group)
-        # Uses separate .o to avoid _ic_accum static buffer in non-IC designs.
-        conv2dk3_kernel = Kernel(
-            "conv2dk3_bf16_bias_silu_icstream",
+        # IC streaming uses two kernel entry points from the same .o:
+        #   accum: no output pointer — used for non-last IC groups
+        #   flush: with output pointer — used for last IC group (bias + SiLU)
+        # This avoids acquiring the output FIFO for non-last IC groups.
+        conv2dk3_accum = Kernel(
+            "conv2dk3_bf16_accum_icstream",
+            "conv2dk3_bf16_icstream.o",
+            [
+                input_row_ty,
+                input_row_ty,
+                input_row_ty,
+                weights_ty,
+                np.int32,
+                np.int32,
+                np.int32,
+                np.int32,
+                np.int32,  # ic_group_idx
+                np.int32,  # n_ic_groups
+            ],
+        )
+        conv2dk3_flush = Kernel(
+            "conv2dk3_bf16_flush_icstream",
             "conv2dk3_bf16_icstream.o",
             [
                 input_row_ty,
@@ -794,97 +819,103 @@ def my_conv2d_k3(
     if use_ic_streaming:
         # IC+OC streaming stride-1 core function.
         #
-        # For each output row, we need n_ic_groups kernel passes to accumulate
-        # partial sums.  Only the LAST IC group writes to the output FIFO.
-        # Non-last IC groups acquire+process input but use the static _ic_accum
-        # buffer only (kernel does NOT write output FIFO elements).
+        # Two kernel entry points (same .o file):
+        #   kernel_accum: no output param — accumulates to static _ic_accum
+        #   kernel_flush: with output param — final IC group writes bias+SiLU
         #
-        # To avoid releasing garbage output elements, we acquire the output FIFO
-        # element only on the LAST IC group pass per row, and never acquire it
-        # for earlier IC groups.
-        #
-        # ic_group_idx is a compile-time constant (not a range_() loop variable)
-        # to avoid the MLIR 'index' vs 'i32' type mismatch.
-        #
-        # For non-last IC groups: process all rows (sliding window), but don't
-        # acquire or release the output FIFO.  The kernel writes to the static
-        # _ic_accum buffer only (since ic_group_idx != n_ic_groups-1).
-        # The output FIFO pointer is still needed by the C kernel signature —
-        # pass the weight buffer as a dummy (kernel won't write to it for non-last).
-        def _make_ic_pass_nonlast(ic_g_idx, n_ic):
-            def do_ic_pass_nonlast(of_in, of_wt, of_out, kernel_fn, x_dim, ci, co, y_dim):
+        # Non-last IC groups: sliding window using kernel_accum, no output FIFO.
+        # Last IC group: sliding window using kernel_flush, acquire/release output.
+        # This keeps the drain TAP simple (n_oc * height elements).
+
+        def _make_ic_pass_accum(ic_g_idx, n_ic):
+            """Non-last IC group: accumulate only, no output FIFO."""
+
+            def do_ic_pass_accum(
+                of_in, of_wt, kernel_accum, kernel_flush, of_out,
+                x_dim, ci, co, y_dim,
+            ):
                 elem_wt = of_wt.acquire(1)
-                # Top row: acquire 2 input rows, NO output acquire
+                # Top row: check=0
                 elems = of_in.acquire(2)
-                # Pass elem_wt as dummy output pointer — kernel won't write it
-                kernel_fn(
-                    elems[0], elems[0], elems[1], elem_wt, elem_wt,
-                    x_dim, ci, co, 0, ic_g_idx, n_ic
+                kernel_accum(
+                    elems[0], elems[0], elems[1], elem_wt,
+                    x_dim, ci, co, 0, ic_g_idx, n_ic,
                 )
-                # Middle rows
+                # Middle rows: check=1
                 for _ in range_(y_dim - 2):
                     elems = of_in.acquire(3)
-                    kernel_fn(
-                        elems[0], elems[1], elems[2], elem_wt, elem_wt,
-                        x_dim, ci, co, 1, ic_g_idx, n_ic
+                    kernel_accum(
+                        elems[0], elems[1], elems[2], elem_wt,
+                        x_dim, ci, co, 1, ic_g_idx, n_ic,
                     )
                     of_in.release(1)
-                # Bottom row
+                # Bottom row: check=2
                 elems = of_in.acquire(2)
-                kernel_fn(
-                    elems[0], elems[1], elems[1], elem_wt, elem_wt,
-                    x_dim, ci, co, 2, ic_g_idx, n_ic
+                kernel_accum(
+                    elems[0], elems[1], elems[1], elem_wt,
+                    x_dim, ci, co, 2, ic_g_idx, n_ic,
                 )
                 of_in.release(2)
                 of_wt.release(1)
-            return do_ic_pass_nonlast
 
-        # Last IC group: process all rows and acquire/release output FIFO.
-        def _make_ic_pass_last(n_ic):
+            return do_ic_pass_accum
+
+        def _make_ic_pass_flush(n_ic):
+            """Last IC group: flush _ic_accum + bias + SiLU to output FIFO."""
             ic_g_idx = n_ic - 1
-            def do_ic_pass_last(of_in, of_wt, of_out, kernel_fn, x_dim, ci, co, y_dim):
+
+            def do_ic_pass_flush(
+                of_in, of_wt, kernel_accum, kernel_flush, of_out,
+                x_dim, ci, co, y_dim,
+            ):
                 elem_wt = of_wt.acquire(1)
-                # Top row
+                # Top row: check=0
                 elems = of_in.acquire(2)
                 elem_out = of_out.acquire(1)
-                kernel_fn(
+                kernel_flush(
                     elems[0], elems[0], elems[1], elem_wt, elem_out,
-                    x_dim, ci, co, 0, ic_g_idx, n_ic
+                    x_dim, ci, co, 0, ic_g_idx, n_ic,
                 )
                 of_out.release(1)
-                # Middle rows
+                # Middle rows: check=1
                 for _ in range_(y_dim - 2):
                     elems = of_in.acquire(3)
                     elem_out = of_out.acquire(1)
-                    kernel_fn(
+                    kernel_flush(
                         elems[0], elems[1], elems[2], elem_wt, elem_out,
-                        x_dim, ci, co, 1, ic_g_idx, n_ic
+                        x_dim, ci, co, 1, ic_g_idx, n_ic,
                     )
                     of_in.release(1)
                     of_out.release(1)
-                # Bottom row
+                # Bottom row: check=2
                 elems = of_in.acquire(2)
                 elem_out = of_out.acquire(1)
-                kernel_fn(
+                kernel_flush(
                     elems[0], elems[1], elems[1], elem_wt, elem_out,
-                    x_dim, ci, co, 2, ic_g_idx, n_ic
+                    x_dim, ci, co, 2, ic_g_idx, n_ic,
                 )
                 of_in.release(2)
                 of_out.release(1)
                 of_wt.release(1)
-            return do_ic_pass_last
 
-        _ic_passes = [_make_ic_pass_nonlast(g, n_ic_groups) for g in range(n_ic_groups - 1)]
-        _ic_passes.append(_make_ic_pass_last(n_ic_groups))
+            return do_ic_pass_flush
 
-        def core_fn_ic(of_in, of_wt, of_out, kernel_fn):
+        _ic_passes = [
+            _make_ic_pass_accum(g, n_ic_groups) for g in range(n_ic_groups - 1)
+        ]
+        _ic_passes.append(_make_ic_pass_flush(n_ic_groups))
+
+        def core_fn_ic(of_in, of_wt, kernel_accum, kernel_flush, of_out):
             y_dim = height
             x_dim = width
             ci = ic_chunk
             co = oc_chunk
             for _ in range_(n_oc_groups):
                 for pass_fn in _ic_passes:
-                    pass_fn(of_in, of_wt, of_out, kernel_fn, x_dim, ci, co, y_dim)
+                    pass_fn(
+                        of_in, of_wt, kernel_accum, kernel_flush, of_out,
+                        x_dim, ci, co, y_dim,
+                    )
 
         core_fn = core_fn_ic
     elif stride == 1:
@@ -987,18 +1018,35 @@ def my_conv2d_k3(
         core_fn = core_fn_s2
 
     # Workers
-    workers = [
-        Worker(
-            core_fn,
-            [
-                in_fifos[i].cons(),
-                wt_fifos[i].cons(),
-                out_fifos[i].prod(),
-                conv2dk3_kernel,
-            ],
-        )
-        for i in range(num_columns)
-    ]
+    if use_ic_streaming:
+        # IC streaming: two kernel entry points (accum + flush) from the same .o.
+        # core_fn_ic signature: (of_in, of_wt, kernel_accum, kernel_flush, of_out)
+        workers = [
+            Worker(
+                core_fn,
+                [
+                    in_fifos[i].cons(),
+                    wt_fifos[i].cons(),
+                    conv2dk3_accum,
+                    conv2dk3_flush,
+                    out_fifos[i].prod(),
+                ],
+            )
+            for i in range(num_columns)
+        ]
+    else:
+        workers = [
+            Worker(
+                core_fn,
+                [
+                    in_fifos[i].cons(),
+                    wt_fifos[i].cons(),
+                    out_fifos[i].prod(),
+                    conv2dk3_kernel,
+                ],
+            )
+            for i in range(num_columns)
+        ]
 
     # Input TAPs: all columns receive the same input.
     # When IC streaming, each IC group streams ic_chunk channels = [height, ic_chunk*width].
@@ -1006,37 +1054,53 @@ def my_conv2d_k3(
     # [H, C_in/8, W, 8] per row.  So IC groups are contiguous slices:
     #   IC group g: offset = g * ic_chunk * height * width
     if use_ic_streaming:
-        # Input tensor layout: [H, C_in/8, W, 8] — height-major, channels interleaved.
-        # For IC group g, row r starts at: r * in_channels * width + g * ic_chunk * width
+        # Consolidated input TAP: a SINGLE fill covers ALL IC groups for
+        # the full height.  The 4D TAP iterates IC groups in the outermost
+        # dimension and rows in the next dimension, producing FIFO elements
+        # in the order the core body consumes them (IC-outer, row-inner).
         #
-        # The IRON fill() call issues one TAP per height-rows total.  To stream height
-        # rows of ic_chunk channels each (with in_channels*width stride between rows),
-        # use a 4D TAP:
-        #   [height, ic_d2, ic_d1, ic_d0]
-        #   strides: [in_channels*width, ic_d1*ic_d0, ic_d0, 1]
-        #   offset: ic_g * ic_chunk * width
+        # 4D TAP: [n_ic_groups, height, ic_d1, ic_d0]
+        # Strides: [ic_chunk*width, full_row_stride, ic_d0, 1]
         #
-        # This produces exactly height FIFO elements of size ic_chunk*width each.
+        # This reduces ShimDMA BDs from n_oc*n_ic to n_oc per column,
+        # critical for staying within per-channel BD queue limits.
         full_row_stride = in_channels * width  # row-to-row stride
-        ic_slice_offset_per_group = ic_chunk * width  # offset within row for ic group g
-        ic_slice_size = ic_chunk * width              # elements per row-slice
-        _ic_d2, _ic_d1, _ic_d0 = _factorize_3d(ic_slice_size)
+        ic_slice_size = ic_chunk * width
 
-        # Build one TAP per (OC group, IC group).
-        in_taps = []
-        for _ in range(num_columns):
-            col_taps = []
-            for _oc_g in range(n_oc_groups):
-                for ic_g in range(n_ic_groups):
-                    col_taps.append(
-                        TensorAccessPattern(
-                            (1, total_input_size),
-                            offset=ic_g * ic_slice_offset_per_group,
-                            sizes=[height, _ic_d2, _ic_d1, _ic_d0],
-                            strides=[full_row_stride, _ic_d1 * _ic_d0, _ic_d0, 1],
-                        )
-                    )
-            in_taps.append(col_taps)
+        # Factor ic_slice_size into d1 × d0 (d0 even, both ≤ 1023).
+        _D0_MAX = 1023
+        _ic_d0 = min(ic_slice_size, _D0_MAX)
+        if _ic_d0 % 2 != 0:
+            _ic_d0 -= 1
+        while _ic_d0 >= 2 and ic_slice_size % _ic_d0 != 0:
+            _ic_d0 -= 2
+        assert _ic_d0 >= 2, (
+            f"Cannot factorize ic_slice_size={ic_slice_size} into valid BD dims"
+        )
+        _ic_d1 = ic_slice_size // _ic_d0
+        assert _ic_d1 <= 1023, (
+            f"ic_slice d1={_ic_d1} exceeds 1023 for ic_slice={ic_slice_size}"
+        )
+
+        assert n_ic_groups <= _BD_WRAP_MAX, (
+            f"n_ic_groups={n_ic_groups} exceeds BD d3 limit {_BD_WRAP_MAX}"
+        )
+        assert height <= 1023, (
+            f"height={height} exceeds BD d2 limit 1023 for IC streaming"
+        )
+
+        # Build one consolidated TAP per OC group (same TAP reused since
+        # all OC groups re-stream the same input data).
+        consolidated_in_tap = TensorAccessPattern(
+            (1, total_input_size),
+            offset=0,
+            sizes=[n_ic_groups, height, _ic_d1, _ic_d0],
+            strides=[ic_chunk * width, full_row_stride, _ic_d0, 1],
+        )
+        in_taps = [
+            [consolidated_in_tap] * n_oc_groups
+            for _ in range(num_columns)
+        ]
     else:
         in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input_size)
         in_taps = [
@@ -1051,28 +1115,55 @@ def my_conv2d_k3(
             for _ in range(num_columns)
         ]
 
-    # Weight TAPs: each column's (OC group, IC group) weight chunk is a contiguous slice.
-    # Layout: [col][oc_g][ic_g] → offset = col*weights_per_col + (oc_g*n_ic_groups+ic_g)*wt_chunk_transfer
+    # Weight TAPs.
     wt_taps = []
-    for i in range(num_columns):
-        col_taps = []
-        for oc_g in range(n_oc_groups):
-            for ic_g in range(n_ic_groups):
-                flat_g = oc_g * n_ic_groups + ic_g
-                col_taps.append(
+    if use_ic_streaming:
+        # IC streaming: all n_oc*n_ic weight chunks per column are contiguous
+        # in DDR.  A single linear fill per column covers them all, reducing
+        # weight BDs from n_oc*n_ic to 1 (critical for staying within the
+        # 16 BD limit per shim tile).
+        _wt_all_d3, _wt_all_d2, _wt_all_d1, _wt_all_d0 = _factorize_tensor(
+            weights_per_col
+        )
+        for i in range(num_columns):
+            wt_taps.append(
+                [
                     TensorAccessPattern(
                         (1, total_weights_size),
-                        offset=i * weights_per_col + flat_g * wt_chunk_transfer,
-                        sizes=[_wt_cd3, _wt_cd2, _wt_cd1, _wt_cd0],
+                        offset=i * weights_per_col,
+                        sizes=[_wt_all_d3, _wt_all_d2, _wt_all_d1, _wt_all_d0],
                         strides=[
-                            _wt_cd2 * _wt_cd1 * _wt_cd0,
-                            _wt_cd1 * _wt_cd0,
-                            _wt_cd0,
+                            _wt_all_d2 * _wt_all_d1 * _wt_all_d0,
+                            _wt_all_d1 * _wt_all_d0,
+                            _wt_all_d0,
                             1,
                         ],
                     )
-                )
-        wt_taps.append(col_taps)
+                ]
+            )
+    else:
+        # OC streaming (or no streaming): per-chunk TAPs.
+        # Layout: [col][oc_g][ic_g] → offset = col*weights_per_col + (oc_g*n_ic_groups+ic_g)*wt_chunk_transfer
+        for i in range(num_columns):
+            col_taps = []
+            for oc_g in range(n_oc_groups):
+                for ic_g in range(n_ic_groups):
+                    flat_g = oc_g * n_ic_groups + ic_g
+                    col_taps.append(
+                        TensorAccessPattern(
+                            (1, total_weights_size),
+                            offset=i * weights_per_col
+                            + flat_g * wt_chunk_transfer,
+                            sizes=[_wt_cd3, _wt_cd2, _wt_cd1, _wt_cd0],
+                            strides=[
+                                _wt_cd2 * _wt_cd1 * _wt_cd0,
+                                _wt_cd1 * _wt_cd0,
+                                _wt_cd0,
+                                1,
+                            ],
+                        )
+                    )
+            wt_taps.append(col_taps)
 
     # Output TAPs: each column drains its own output.
     # With weight streaming, the FIFO produces output in OC-group order:
@@ -1081,8 +1172,8 @@ def my_conv2d_k3(
     #   ...
     # The TAP must scatter these to the correct positions in DDR.
     output_row_total = out_channels * out_w
-    if use_weight_streaming or use_ic_streaming:
-        # Streaming: [n_oc_groups, out_h, d1, d0] with strided placement.
+    if use_ic_streaming or use_weight_streaming:
+        # OC streaming only: [n_oc_groups, out_h, d1, d0] with strided placement.
         per_elem = output_elem_size  # oc_chunk * out_w
         pe_d0 = min(per_elem, 1023)
         if pe_d0 % 2 != 0:
@@ -1170,12 +1261,15 @@ def my_conv2d_k3(
         tg = rt.task_group()
 
         if use_ic_streaming:
-            # IC+OC streaming: interleave input and weight fills in
-            # (OC group, IC group) order matching the core's execution order.
+            # IC+OC streaming fills.
+            # Weights: single linear fill per column (all n_oc*n_ic chunks
+            # are contiguous in DDR).
+            # Inputs: n_oc*n_ic fills (one per IC group per OC group), each
+            # streaming height rows of ic_chunk channels.
             for i in range(num_columns):
-                for tap_in, tap_wt in zip(in_taps[i], wt_taps[i]):
+                rt.fill(wt_fifos[i].prod(), wts, wt_taps[i][0], task_group=tg)
+                for tap_in in in_taps[i]:
                     rt.fill(in_fifos[i].prod(), inp, tap_in, task_group=tg)
-                    rt.fill(wt_fifos[i].prod(), wts, tap_wt, task_group=tg)
         else:
             # OC streaming (or no streaming): re-stream input once per OC group,
             # then stream all weight chunks, then drain output.
@@ -1189,7 +1283,9 @@ def my_conv2d_k3(
 
         # Drain output FIFOs
         for i in range(num_columns):
-            rt.drain(out_fifos[i].cons(), out, out_taps[i], wait=True, task_group=tg)
+            rt.drain(
+                out_fifos[i].cons(), out, out_taps[i], wait=True, task_group=tg
+            )
 
         rt.finish_task_group(tg)
 
