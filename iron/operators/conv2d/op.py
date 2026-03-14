@@ -339,7 +339,23 @@ class AIEConv2d(AIEOperatorBase):
             mt_input_fbs = 1 * self.in_channels * self.width * 2
             if mt_input_fbs + wt_fbs + out_fbs + OVERHEAD <= L1_SIZE:
                 return oc_per_col
+            # Phase 3: k1 weight streaming through MemTile
             avail = L1_SIZE - OVERHEAD - mt_input_fbs
+            if avail > 0:
+                for try_oc in range(oc_per_col, 0, -8):
+                    if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
+                        continue
+                    wt_elems = try_oc * self.in_channels * k_elems
+                    if fused:
+                        wt_elems += try_oc
+                    wt_bytes = wt_elems * 2
+                    out_bytes = 2 * try_oc * out_w * 2
+                    if wt_bytes + out_bytes <= avail:
+                        return try_oc
+            raise AIEOperatorConstraintError(
+                f"AIEConv2d k1 infeasible: in_channels={self.in_channels}, "
+                f"oc_per_col={oc_per_col}, width={self.width}, avail={avail} bytes."
+            )
         else:
             # k3: Try full IC, then IC streaming (ic_chunk splits).
             # Mirror design.py's nested (ic_chunk, oc_chunk) search.
