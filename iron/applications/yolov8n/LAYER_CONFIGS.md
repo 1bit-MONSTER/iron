@@ -163,6 +163,68 @@ output = 2 × 8 × 20 × 2 = 640
 Total = 12,408 ✓✓✓
 ```
 
+## Multi-PDI Configuration (29 PDIs for L0-L21)
+
+Each unique `(op_type, IC, OC, H, W, K, S, cols)` gets one PDI. Layers sharing
+the same config share a PDI (same xclbin partition) but use separate instruction
+streams and buffers.
+
+| PDI | Kernel ID | Config | Layers Using This PDI |
+|-----|-----------|--------|----------------------|
+| 0 | 0x901 | conv2d 8→16 k3s2 640×640 1col | L0 |
+| 1 | 0x902 | conv2d 16→32 k3s2 320×320 2col | L1 |
+| 2 | 0x903 | conv2d 32→32 k1 160×160 1col | L2 cv1 |
+| 3 | 0x904 | conv2d 16→16 k3s1 160×160 1col | L2 bn0 cv1, L2 bn0 cv2 |
+| 4 | 0x905 | conv2d 48→32 k1 160×160 1col | L2 cv2 |
+| 5 | 0x906 | conv2d 32→64 k3s2 160×160 4col | L3 |
+| 6 | 0x907 | conv2d 64→64 k1 80×80 1col | L4 cv1, reg_p3 cv3 |
+| 7 | 0x908 | conv2d 32→32 k3s1 80×80 1col | L4 bn0/bn1 cv1/cv2, L15 bn0 cv1/cv2 |
+| 8 | 0x909 | conv2d 128→64 k1 80×80 2col | L4 cv2 |
+| 9 | 0x90A | conv2d 64→128 k3s2 80×80 8col | L5 |
+| 10 | 0x90B | conv2d 128→128 k1 40×40 2col | L6 cv1 |
+| 11 | 0x90C | conv2d 64→64 k3s1 40×40 2col | L6 bn0/bn1, L12 bn0, L18 bn0 |
+| 12 | 0x90D | conv2d 256→128 k1 40×40 4col (MemTile) | L6 cv2 |
+| 13 | 0x90E | conv2d 128→256 k3s2 40×40 8col (wt stream) | L7 |
+| 14 | 0x90F | conv2d 256→256 k1 20×20 4col | L8 cv1 |
+| 15 | 0x910 | conv2d 128→128 k3s1 20×20 8col (wt stream) | L8 bn0, L21 bn0 |
+| 16 | 0x911 | conv2d 384→256 k1 20×20 8col (MemTile) | L8 cv2 |
+| 17 | 0x912 | conv2d 256→128 k1 20×20 2col | L9 cv1 |
+| 18 | 0x913 | maxpool2d 128ch k5 20×20 1col | L9 mp1/mp2/mp3 |
+| 19 | 0x914 | conv2d 512→256 k1 20×20 8col (MemTile) | L9 cv2 |
+| 20 | 0x915 | upsample 256ch 20×20 1col | L10 (up1) |
+| 21 | 0x916 | conv2d 384→128 k1 40×40 4col (MemTile) | L12 cv1 |
+| 22 | 0x917 | conv2d 192→128 k1 40×40 4col (MemTile) | L12 cv2, L18 cv1, L18 cv2 |
+| 23 | 0x918 | upsample 128ch 40×40 1col | L13 (up2) |
+| 24 | 0x919 | conv2d 192→64 k1 80×80 2col (MemTile) | L15 cv1 |
+| 25 | 0x91A | conv2d 96→64 k1 80×80 1col | L15 cv2 |
+| 26 | 0x91B | conv2d 64→64 k3s2 80×80 4col | L16 |
+| 27 | 0x91C | conv2d 128→128 k3s2 40×40 4col (wt stream) | L19 |
+| 28 | 0x91D | conv2d 768→256 k1 20×20 4col (MemTile+wt stream) | L21 cv2 |
+
+**Detect head PDIs** (additional, to be added after IC streaming):
+
+| PDI | Config | Layers | Status |
+|-----|--------|--------|--------|
+| 29 | conv2d 64→64 k3s1 80×80 2col | reg_p3 cv1/cv2 | Ready |
+| 30 | conv2d 128→64 k3s1 40×40 8col (wt stream) | reg_p4 cv1 | Ready |
+| 31 | conv2d 64→64 k3s1 40×40 2col | reg_p4 cv2 | Ready (shared w/ PDI 11) |
+| 32 | conv2d 256→64 k3s1 20×20 (IC stream) | reg_p5 cv1 | **NEEDS IC STREAMING** |
+| 33 | conv2d 64→64 k3s1 20×20 2col | reg_p5 cv2 | Ready |
+| 34 | conv2d 64→64 k1 40×40 1col | reg_p4 cv3 | Ready |
+| 35 | conv2d 64→64 k1 20×20 1col | reg_p5 cv3 | Ready |
+| 36 | conv2d 64→80 k3s1 80×80 2col (wt stream) | cls_p3 cv1 | Ready |
+| 37 | conv2d 80→80 k3s1 80×80 (IC stream) | cls_p3 cv2 | **NEEDS IC STREAMING** |
+| 38 | conv2d 80→80 k1 80×80 1col | cls_p3 cv3 | Ready |
+| 39 | conv2d 128→80 k3s1 40×40 2col (wt stream) | cls_p4 cv1 | Ready |
+| 40 | conv2d 80→80 k3s1 40×40 1col (wt stream) | cls_p4 cv2 | Ready |
+| 41 | conv2d 80→80 k1 40×40 1col | cls_p4 cv3 | Ready |
+| 42 | conv2d 256→80 k3s1 20×20 (IC stream) | cls_p5 cv1 | **NEEDS IC STREAMING** |
+| 43 | conv2d 80→80 k3s1 20×20 1col (wt stream) | cls_p5 cv2 | Ready |
+| 44 | conv2d 80→80 k1 20×20 1col | cls_p5 cv3 | Ready |
+
+**Total**: 29 backbone+neck PDIs (verified) + ~15 detect PDIs = ~44 unique PDIs.
+Some detect PDIs are shared with existing backbone/neck PDIs (e.g., 64→64 k3s1 40×40).
+
 ## Bug Fixes Applied This Session
 
 ### 1. TAP 4D Decomposition (DMA BD Size Limits)

@@ -13,7 +13,7 @@
 | P4: Composites | **DONE** | 5/5 HW | CBS now uses fused bias+SiLU kernel on-chip |
 | P5.1: Neck (FPN+PAN) | **DONE** | 5/5 HW | FPN up, PAN down, auto-column for L1 fit |
 | P5.2: Detect Head | **DONE** | 5/5 HW | Reg + Cls branches, bare Conv1×1 final layer |
-| P5.3: Full pipeline | **NEAR COMPLETE** | 21/24 layers NPU | Backbone+Neck 100% NPU; 3 detect configs need IC streaming |
+| P5.3: Full pipeline | **L0-L21 DONE** | 29 PDIs, 1 ctx | Multi-PDI backbone+neck verified at 640×640; detect needs IC streaming (3 configs) |
 | P6.0: Multi-PDI XCLBIN | **DONE** | 5/5 HW | `YOLOv8nPipeline` chains ~52 PDIs, SwiGLU pattern |
 | P6.1: SiLU/Bias Fusion | **DONE** | 5/5 HW | Bias packed in weights, Padé tanh approx, CBS verified |
 | P6.2: Post-Processing | **DONE** | 110/110 CPU | DFL decode + dist2bbox + NMS, full unit tests |
@@ -1489,6 +1489,80 @@ b76e786 YOLOv8n end-to-end NPU implementation: operators, pipeline, kernels, doc
 5. **MemTile weight streaming** — OC-subgroup chunks streamed from MemTile, core loops over chunks
 6. **Auto-column L1 budget** — `_auto_columns()` checks full L1 (input+weight+output+stack) for all conv types
 
-### Current Focus: Layer-by-Layer Hardware Verification
+### Multi-PDI Verification Results
 
-Testing backbone L0→L1→...→L9 sequentially at 640×640, each layer verified on NPU hardware individually and in chains. This validates every operator config at real YOLOv8n scale before attempting the full pipeline.
+**Backbone L0-L9 multi-PDI**: PASS (20 PDIs, 1 context, 23.8s forward)
+**Backbone+Neck L0-L21 multi-PDI**: PASS (29 PDIs, 1 context, 33.1s forward, 34.2s compile)
+
+All 29 unique operator configs compiled into a single xclbin via `--xclbin-input` chaining.
+Each PDI has a unique `--xclbin-kernel-id` (0x901-0x91D). Runtime uses 1 hw_context.
+Forward pass feeds data sequentially through all layers via `_run_kernel()` per layer.
+
+### Pickup Point — What's Left
+
+#### 1. IC Streaming (in progress — `ic-streaming` agent task #6)
+3 detect head configs need input-channel streaming to fit L1:
+- `reg_p5 cv1` (256→64 k3s1 20×20): input FIFO 41KB + min weight 37KB > 64KB
+- `cls_p3 cv2` (80→80 k3s1 80×80): input FIFO 51KB > 64KB alone
+- `cls_p5 cv1` (256→80 k3s1 20×20): input FIFO 41KB + min weight 37KB > 64KB
+
+**Implementation status:**
+- `aie_kernels/aie2p/conv2dk3_bf16_icstream.cc` — accumulating kernel (DONE, 169 lines)
+- `iron/operators/conv2d/design.py` — IC streaming path in `my_conv2d_k3` (DONE, 34 refs)
+- `iron/operators/conv2d/op.py` — `_compute_ic_chunk()`, weight packing (DONE, 29 refs)
+- `iron/applications/yolov8n/blocks.py` — `_auto_columns` IC streaming budget (DONE)
+- Hardware verification: IN PROGRESS (aiecc compiling reg_p5 cv1)
+
+**To resume:** Check if `ic-streaming` agent completed task #6. If not, run:
+```bash
+source ~/.bashrc; source ironenv/bin/activate && source /scratch/jmelber/mlir-aie/utils/env_setup.sh /scratch/jmelber/mlir-aie /opt/xrt
+python3 -c "
+import torch; from iron.common import AIEContext; from iron.applications.yolov8n.blocks import CBS
+for ic,oc,h,w in [(256,64,20,20),(80,80,80,80),(256,80,20,20)]:
+    ctx=AIEContext(); cbs=CBS(ic,oc,3,1,h,w,context=ctx); ctx.compile_all()
+    cbs.load_weights(torch.randn(oc,ic,3,3,dtype=torch.bfloat16)*0.01,torch.randn(oc,dtype=torch.bfloat16)*0.01)
+    ctx.prepare_runtime(); out=cbs.forward(torch.randn(1,ic,h,w,dtype=torch.bfloat16))
+    print(f'{ic}->{oc} {h}x{w}: {out.shape} finite={torch.isfinite(out).all()}')
+"
+```
+
+#### 2. Detect Head Multi-PDI (after IC streaming)
+Once IC streaming works, add detect head layers to the multi-PDI pipeline:
+- 6 DetectBranch instances (reg×3 + cls×3)
+- Each has 3 convs: CBS(k3)+CBS(k3)+Conv(k1)
+- ~18 additional PDIs (many shared with backbone/neck)
+- Extend the `FullPipe` class with detect layers
+
+#### 3. Full Model End-to-End
+Chain L0-L21 + detect head + postprocess:
+```python
+det_p3, det_p4, det_p5 = pipe.forward(image)
+postproc = YOLOv8nPostProcess()
+detections = postproc(
+    [det_reg_p3, det_reg_p4, det_reg_p5],
+    [det_cls_p3, det_cls_p4, det_cls_p5]
+)
+```
+
+#### 4. Real Weights (optional, after e2e works)
+Load pretrained YOLOv8n weights via `model_prep.py`:
+```python
+from iron.applications.yolov8n.model_prep import export_yolov8n_weights
+weights = export_yolov8n_weights()  # requires: pip install ultralytics
+```
+
+### Git Log (branch: yolov8n)
+```
+eaff4cb Fix k1 weight streaming in _compute_oc_chunk, verify L0-L21 multi-PDI
+1f02c54 Multi-PDI backbone verified on NPU: 20 PDIs, 1 hw_context, 640x640
+73b9ec5 LAYER_CONFIGS.md: add comprehensive bug fixes section
+9e90630 Add LAYER_CONFIGS.md: complete YOLOv8n operator reference
+db7c759 Update plan: backbone+neck 100% NPU verified at 640x640
+9f41927 Fix SPPF auto-columns default (was 1, now 0)
+d7132ff Default to auto-columns, add CPU fallback for infeasible configs
+35bda75 Fix BD factorization for unfactorizable weight sizes (L8 bottleneck)
+04eba65 Fix multi-column k3 linker bug: add --no-unified to aiecc
+0f33753 Update YOLOV8N_NPU2_PLAN.md with comprehensive session progress log
+f5ecbc1 Conv2d: MemTile input buffering + weight streaming for YOLOv8n-scale configs
+b76e786 YOLOv8n end-to-end NPU implementation: operators, pipeline, kernels, docs
+```
