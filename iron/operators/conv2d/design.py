@@ -241,17 +241,16 @@ def my_conv2d(
 
     # Transfer size: may be padded up for BD factorization.
     # Padding is harmless — extra elements go into the FIFO but the kernel
-    # reads only wt_chunk_elems valid elements.
-    if use_weight_streaming:
-        (
-            wt_chunk_transfer,
-            _wt_cd3,
-            _wt_cd2,
-            _wt_cd1,
-            _wt_cd0,
-        ) = _factorize_tensor_padded(wt_chunk_elems)
-    else:
-        wt_chunk_transfer = wt_chunk_elems
+    # reads only wt_chunk_elems valid elements.  Applied to both streaming
+    # and non-streaming paths so unfactorizable sizes (e.g. 18448=16×1153
+    # where 1153 is prime) are handled transparently.
+    (
+        wt_chunk_transfer,
+        _wt_cd3,
+        _wt_cd2,
+        _wt_cd1,
+        _wt_cd0,
+    ) = _factorize_tensor_padded(wt_chunk_elems)
 
     # Output FIFO element size
     output_elem_size = oc_chunk * width
@@ -265,7 +264,9 @@ def my_conv2d(
         weights_per_col = n_oc_groups * wt_chunk_transfer
         total_weights_size = weights_per_col * num_columns
     else:
-        weights_ty = np.ndarray[(weights_per_col,), np.dtype[xfr_dtype]]
+        weights_ty = np.ndarray[(wt_chunk_transfer,), np.dtype[xfr_dtype]]
+        weights_per_col = wt_chunk_transfer
+        total_weights_size = weights_per_col * num_columns
 
     # L3 (DDR) tensor types for runtime sequence
     input_l3_ty = np.ndarray[(total_input_size,), np.dtype[xfr_dtype]]
@@ -387,14 +388,18 @@ def my_conv2d(
                 )
             wt_taps.append(col_taps)
     else:
-        wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(weights_per_col)
         wt_taps = [
             [
                 TensorAccessPattern(
                     (1, total_weights_size),
                     offset=i * weights_per_col,
-                    sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
-                    strides=[wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1],
+                    sizes=[_wt_cd3, _wt_cd2, _wt_cd1, _wt_cd0],
+                    strides=[
+                        _wt_cd2 * _wt_cd1 * _wt_cd0,
+                        _wt_cd1 * _wt_cd0,
+                        _wt_cd0,
+                        1,
+                    ],
                 )
             ]
             for i in range(num_columns)
@@ -596,20 +601,32 @@ def my_conv2d_k3(
 
     input_fbs = input_depth * input_row_size * 2
     avail = 65536 - 1040 - input_fbs
-    if avail > 0:
-        for try_oc in range(oc_per_col, 0, -8):
-            if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
-                continue
-            wt_elems = try_oc * in_channels * k_elems
-            if fused:
-                wt_elems += try_oc
-            wt_bytes = wt_elems * 2
-            out_bytes = 2 * try_oc * out_w * 2
-            if wt_bytes + out_bytes <= avail:
-                n_groups = oc_per_col // try_oc
-                if n_groups * 2 + 1 <= _MAX_BDS:
-                    oc_chunk = try_oc
-                    break
+    if avail <= 0:
+        raise ValueError(
+            f"k3 conv2d infeasible: input FIFO alone ({input_fbs} bytes) exceeds "
+            f"L1 budget. in_channels={in_channels}, width={width} requires "
+            f"{input_fbs // 1024}KB for sliding window depth=4."
+        )
+    for try_oc in range(oc_per_col, 0, -8):
+        if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
+            continue
+        wt_elems = try_oc * in_channels * k_elems
+        if fused:
+            wt_elems += try_oc
+        wt_bytes = wt_elems * 2
+        out_bytes = 2 * try_oc * out_w * 2
+        if wt_bytes + out_bytes <= avail:
+            n_groups = oc_per_col // try_oc
+            if n_groups * 2 + 1 <= _MAX_BDS:
+                oc_chunk = try_oc
+                break
+    else:
+        raise ValueError(
+            f"k3 conv2d infeasible: no valid oc_chunk fits in L1. "
+            f"in_channels={in_channels}, oc_per_col={oc_per_col}, width={width}, "
+            f"avail={avail} bytes. Minimum weight chunk "
+            f"({8 * in_channels * k_elems * 2} bytes) exceeds available L1."
+        )
 
     if oc_chunk < oc_per_col:
         use_weight_streaming = True
@@ -621,16 +638,16 @@ def my_conv2d_k3(
         wt_chunk_elems += oc_chunk
 
     # Transfer size: may be padded up for BD factorization.
-    if use_weight_streaming:
-        (
-            wt_chunk_transfer,
-            _wt_cd3,
-            _wt_cd2,
-            _wt_cd1,
-            _wt_cd0,
-        ) = _factorize_tensor_padded(wt_chunk_elems)
-    else:
-        wt_chunk_transfer = wt_chunk_elems
+    # This applies to both streaming and non-streaming paths: when the weight
+    # buffer size contains a prime factor > 1023, pad to the next factorable
+    # size.  The kernel reads only wt_chunk_elems valid elements.
+    (
+        wt_chunk_transfer,
+        _wt_cd3,
+        _wt_cd2,
+        _wt_cd1,
+        _wt_cd0,
+    ) = _factorize_tensor_padded(wt_chunk_elems)
 
     # Output FIFO element size: oc_chunk channels per element when streaming,
     # full oc_per_col when not streaming.
@@ -648,7 +665,8 @@ def my_conv2d_k3(
         weights_per_col = n_oc_groups * wt_chunk_transfer
         total_weights_size = weights_per_col * num_columns
     else:
-        weights_ty = np.ndarray[(weights_per_col,), np.dtype[xfr_dtype]]
+        weights_ty = np.ndarray[(wt_chunk_transfer,), np.dtype[xfr_dtype]]
+        weights_per_col = wt_chunk_transfer
         total_weights_size = weights_per_col * num_columns
 
     # L3 (DDR) tensor types for runtime sequence
@@ -868,14 +886,18 @@ def my_conv2d_k3(
                 )
             wt_taps.append(col_taps)
     else:
-        wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(weights_per_col)
         wt_taps = [
             [
                 TensorAccessPattern(
                     (1, total_weights_size),
                     offset=i * weights_per_col,
-                    sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
-                    strides=[wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1],
+                    sizes=[_wt_cd3, _wt_cd2, _wt_cd1, _wt_cd0],
+                    strides=[
+                        _wt_cd2 * _wt_cd1 * _wt_cd0,
+                        _wt_cd1 * _wt_cd0,
+                        _wt_cd0,
+                        1,
+                    ],
                 )
             ]
             for i in range(num_columns)

@@ -194,6 +194,11 @@ class AIEConv2d(AIEOperatorBase):
         # Store bias separately (applied in Python after conv)
         self.bias = None
 
+        # Compute oc_chunk and padded transfer size for weight streaming
+        # (must match design.py logic)
+        self._oc_chunk = self._compute_oc_chunk()
+        self._wt_chunk_transfer = self._compute_wt_chunk_transfer()
+
         self.xclbin_artifact = None
         self.insts_artifact = None
 
@@ -210,11 +215,13 @@ class AIEConv2d(AIEOperatorBase):
             Tuple of (xclbin_artifact, insts_artifact).
         """
         operator_dir = Path(__file__).parent
+        fused_suffix = "_fused" if self._fused_bias_silu else ""
+        bias_suffix = "_bias" if self.has_bias and not self._fused_bias_silu else ""
         file_name_base = (
             f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
             f"{self.height}h_{self.width}w_"
             f"k{self.kernel_size}_s{self.stride}_"
-            f"{self.num_aie_columns}col"
+            f"{self.num_aie_columns}col{fused_suffix}{bias_suffix}"
         )
 
         # Select design function and kernel source based on kernel_size
@@ -294,18 +301,108 @@ class AIEConv2d(AIEOperatorBase):
         """Whether bias+SiLU is fused into the kernel."""
         return self.has_bias and self.activation == "silu"
 
+    def _compute_oc_chunk(self):
+        """Compute per-core OC chunk size, matching design.py L1 budget logic.
+
+        When weights don't fit in L1 alongside input/output FIFOs, the design
+        streams weights in smaller OC-group chunks.  This method replicates
+        that decision so forward() can pack the DDR weight buffer to match
+        the TAP offsets used by the runtime sequence.
+        """
+        L1_SIZE = 65536
+        OVERHEAD = 1040
+        MAX_BDS = 16
+        oc_per_col = self.out_channels // self.num_aie_columns
+        k_elems = self.kernel_size * self.kernel_size
+        fused = self._fused_bias_silu
+        out_w = self.width // self.stride if self.stride > 1 else self.width
+
+        # Compute weights_per_col (elements, not bytes)
+        wpc = oc_per_col * self.in_channels * k_elems
+        if fused:
+            wpc += oc_per_col
+
+        if self.kernel_size == 1:
+            # k1: Phase 1 (depth=2), Phase 2 (MemTile depth=1), Phase 3 (streaming)
+            input_fbs_p1 = 2 * self.in_channels * self.width * 2
+            wt_fbs = wpc * 2
+            out_fbs = 2 * oc_per_col * out_w * 2
+            if input_fbs_p1 + wt_fbs + out_fbs + OVERHEAD <= L1_SIZE:
+                return oc_per_col
+            mt_input_fbs = 1 * self.in_channels * self.width * 2
+            if mt_input_fbs + wt_fbs + out_fbs + OVERHEAD <= L1_SIZE:
+                return oc_per_col
+            avail = L1_SIZE - OVERHEAD - mt_input_fbs
+        else:
+            # k3: Phase 1 (depth=4), Phase 2 (MemTile depth=1 -- k3 still depth=4),
+            #     Phase 3 (streaming)
+            input_fbs_p1 = 4 * self.in_channels * self.width * 2
+            wt_fbs = wpc * 2
+            out_fbs = 2 * oc_per_col * out_w * 2
+            if input_fbs_p1 + wt_fbs + out_fbs + OVERHEAD <= L1_SIZE:
+                return oc_per_col
+            # k3 doesn't benefit from MemTile input (still needs depth=4)
+            avail = L1_SIZE - OVERHEAD - input_fbs_p1
+            if avail <= 0:
+                raise AIEOperatorConstraintError(
+                    f"AIEConv2d k3 infeasible: input FIFO ({input_fbs_p1} bytes) "
+                    f"exceeds L1 budget. in_channels={self.in_channels}, "
+                    f"width={self.width} needs {input_fbs_p1 // 1024}KB for "
+                    f"sliding window depth=4."
+                )
+
+        for try_oc in range(oc_per_col, 0, -8):
+            if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
+                continue
+            wt_elems = try_oc * self.in_channels * k_elems
+            if fused:
+                wt_elems += try_oc
+            wt_bytes = wt_elems * 2
+            out_bytes = 2 * try_oc * out_w * 2
+            if wt_bytes + out_bytes <= avail:
+                n_groups = oc_per_col // try_oc
+                if n_groups * 2 + 1 <= MAX_BDS:
+                    return try_oc
+
+        raise AIEOperatorConstraintError(
+            f"AIEConv2d k3 infeasible: no valid oc_chunk fits in L1. "
+            f"in_channels={self.in_channels}, oc_per_col={oc_per_col}, "
+            f"width={self.width}, avail={avail} bytes. "
+            f"Minimum weight chunk ({8 * self.in_channels * k_elems * 2} bytes) "
+            f"exceeds available L1. Try more columns."
+        )
+
+    def _compute_wt_chunk_transfer(self):
+        """Compute padded weight chunk transfer size for BD factorization.
+
+        When the weight chunk size is not BD-factorizable (e.g. 18448=16*1153
+        where 1153 is prime > 1023), pad to the next factorizable size.
+        This applies to both streaming and non-streaming paths and must match
+        design.py's _factorize_tensor_padded() behavior.
+        """
+        oc_chunk = self._oc_chunk
+        k_elems = self.kernel_size * self.kernel_size
+
+        wt_chunk_elems = oc_chunk * self.in_channels * k_elems
+        if self._fused_bias_silu:
+            wt_chunk_elems += oc_chunk
+
+        from iron.operators.conv2d.design import _factorize_tensor_padded
+
+        padded, _, _, _, _ = _factorize_tensor_padded(wt_chunk_elems)
+        return padded
+
     def set_up_runtime(self):
         total_input = self.in_channels * self.height * self.width
 
-        if self.kernel_size == 1:
-            total_weights = self.out_channels * self.in_channels
-        else:
-            # 3x3: [O/8, I/8, 3, 3, 8, 8] = O * I * 9
-            total_weights = self.out_channels * self.in_channels * 9
+        oc_per_col = self.out_channels // self.num_aie_columns
+        oc_chunk = self._oc_chunk
+        n_oc_groups = oc_per_col // oc_chunk
 
-        # When bias+SiLU is fused, bias is packed at the end of weights
-        if self._fused_bias_silu:
-            total_weights += self.out_channels
+        # Per-column weight buffer size always uses the padded transfer size
+        # to match design.py's _factorize_tensor_padded() behavior.
+        weights_per_col = n_oc_groups * self._wt_chunk_transfer
+        total_weights = weights_per_col * self.num_aie_columns
 
         total_output = self.out_channels * self.out_height * self.out_width
 
@@ -361,8 +458,10 @@ class AIEConv2d(AIEOperatorBase):
                 weight_tiled = weights_to_tiled_3x3(weight)
 
             if self._fused_bias_silu:
-                # Pack bias after each column's weights for the fused kernel.
-                # Layout: [col0_wt, col0_bias, col1_wt, col1_bias, ...]
+                # Pack bias after each OC-group chunk's weights.
+                # Layout: [col0_grp0_wt, col0_grp0_bias, col0_grp1_wt, ...]
+                # This must match the TAP offsets in design.py which read
+                # per-OC-group chunks from the DDR weight buffer.
                 b = bias if bias is not None else self.bias
                 if b is None:
                     raise AIEOperatorConstraintError(
@@ -370,15 +469,26 @@ class AIEConv2d(AIEOperatorBase):
                     )
                 bias_np = torch_to_numpy(b.to(torch.bfloat16)).ravel()
                 oc_per_col = self.out_channels // self.num_aie_columns
+                oc_chunk = self._oc_chunk
                 k_elems = self.kernel_size * self.kernel_size
-                wt_per_col = oc_per_col * self.in_channels * k_elems
-                bias_per_col = oc_per_col
+                wt_per_chunk = oc_chunk * self.in_channels * k_elems
+                wt_chunk_elems = wt_per_chunk + oc_chunk
+                wt_chunk_transfer = self._wt_chunk_transfer
+                pad = wt_chunk_transfer - wt_chunk_elems
+                n_oc_groups = oc_per_col // oc_chunk
                 parts = []
                 for col in range(self.num_aie_columns):
-                    wt_start = col * wt_per_col
-                    parts.append(weight_tiled[wt_start : wt_start + wt_per_col])
-                    b_start = col * bias_per_col
-                    parts.append(bias_np[b_start : b_start + bias_per_col])
+                    col_wt_base = col * oc_per_col * self.in_channels * k_elems
+                    col_bias_base = col * oc_per_col
+                    for g in range(n_oc_groups):
+                        wt_start = col_wt_base + g * wt_per_chunk
+                        parts.append(
+                            weight_tiled[wt_start : wt_start + wt_per_chunk]
+                        )
+                        b_start = col_bias_base + g * oc_chunk
+                        parts.append(bias_np[b_start : b_start + oc_chunk])
+                        if pad > 0:
+                            parts.append(np.zeros(pad, dtype=bfloat16))
                 weight_tiled = np.concatenate(parts)
 
             self.write_buffer("weights", weight_tiled)
