@@ -352,6 +352,11 @@ class AieccCompilationRule(CompilationRule):
         # Now we know for each mlir source if we need to generate an xclbin, an insts.bin or both for it
         for mlir_source in mlir_sources:
             # Build aiecc command using Peano
+            # --no-unified: generate per-core object files instead of a single
+            # unified main_input.o.  With unified compilation, all core functions
+            # are linked into one object and the linker for core_N cannot resolve
+            # FIFO buffer symbols (e.g. in_0_cons_buff_*) that belong to a
+            # non-adjacent tile's memory map.  Per-core compilation avoids this.
             compile_cmd = [
                 "python",
                 str(self.aiecc_path),
@@ -361,6 +366,7 @@ class AieccCompilationRule(CompilationRule):
                 "--peano",
                 str(self.peano_dir),
                 "--dynamic-objFifos",
+                "--no-unified",
             ]
             do_compile_xclbin = mlir_source in mlir_sources_to_xclbins
             do_compile_insts_bin = mlir_source in mlir_sources_to_insts_bins
