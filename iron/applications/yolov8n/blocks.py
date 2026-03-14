@@ -108,15 +108,44 @@ def _auto_columns(in_channels, out_channels, kernel_size, width=None, stride=1):
                     if n_groups * 2 + 1 <= MAX_BDS_PER_TILE:
                         return cols
                     break  # larger oc_chunk won't help, try more columns
+    # Fourth pass (k3 only): IC streaming — split in_channels into ic_chunk groups.
+    # design.py supports IC streaming via the icstream kernel variant.
+    # The icstream .o contains a static float32 accumulation buffer (12800 bytes)
+    # that must be accounted for in the L1 budget.
+    IC_ACCUM_STATIC_BYTES = 12800  # 3200 floats × 4 bytes
+    if kernel_size == 3 and width is not None:
+        for cols in [1, 2, 4, 8]:
+            per_core_oc = out_channels // cols if out_channels % cols == 0 else -1
+            if per_core_oc < 8 or per_core_oc % 8 != 0:
+                continue
+            out_w = width // stride if stride > 1 else width
+            for ic_try in [
+                c
+                for c in [64, 32, 16]
+                if c < in_channels and in_channels % c == 0 and c % 8 == 0
+            ]:
+                input_bytes = 4 * ic_try * width * 2
+                avail = L1_SIZE - OVERHEAD - input_bytes - IC_ACCUM_STATIC_BYTES
+                if avail <= 0:
+                    continue
+                for try_oc in range(per_core_oc, 0, -8):
+                    if per_core_oc % try_oc != 0 or try_oc % 8 != 0:
+                        continue
+                    # Include fused bias in weight bytes
+                    wt_bytes = (try_oc * ic_try * k_elems + try_oc) * 2
+                    out_bytes = 2 * try_oc * out_w * 2
+                    if wt_bytes + out_bytes > avail:
+                        continue
+                    n_ic = in_channels // ic_try
+                    n_oc = per_core_oc // try_oc
+                    bd_estimate = n_oc * (n_ic + 1) + 1
+                    if bd_estimate <= MAX_BDS_PER_TILE:
+                        return cols
     raise AIEOperatorConstraintError(
         f"No feasible NPU mapping: in_channels={in_channels}, "
         f"out_channels={out_channels}, kernel_size={kernel_size}, "
         f"width={width}, stride={stride}. "
-        f"Even at 8 columns, weight chunk ({8 * in_channels * k_elems * 2} bytes) "
-        f"does not fit in L1 alongside input FIFO "
-        f"({'4' if kernel_size == 3 else '1'}*{in_channels}*{width}*2 = "
-        f"{(4 if kernel_size == 3 else 1) * in_channels * width * 2} bytes). "
-        f"This layer requires IC streaming (not yet implemented)."
+        f"Cannot satisfy L1 budget and BD limit even with IC+OC streaming."
     )
 
 
@@ -156,7 +185,6 @@ class CBS:
         self.stride = stride
         self.height = height
         self.width = width
-        self.cpu_fallback = False
 
         # Compute output spatial dims
         if kernel_size == 3 and stride == 2:
@@ -167,18 +195,9 @@ class CBS:
             self.out_width = width
 
         if num_aie_columns == 0:
-            try:
-                num_aie_columns = _auto_columns(
-                    in_channels, out_channels, kernel_size, width, stride
-                )
-            except AIEOperatorConstraintError:
-                # Layer is infeasible on NPU (input FIFO alone exceeds L1).
-                # Fall back to CPU execution via PyTorch.
-                self.cpu_fallback = True
-                self.conv = None
-                self.weight = None
-                self.bias = None
-                return
+            num_aie_columns = _auto_columns(
+                in_channels, out_channels, kernel_size, width, stride
+            )
 
         # Create the underlying AIEConv2d operator with fused bias+SiLU.
         # The kernel applies bias and SiLU on-chip, eliminating the DDR
@@ -212,7 +231,7 @@ class CBS:
         self.bias = bias.to(torch.bfloat16)
 
     def forward(self, x):
-        """Run Conv + Bias + SiLU on the NPU (or CPU fallback).
+        """Run Conv + Bias + SiLU on the NPU.
 
         Args:
             x: Input tensor [1, C_in, H, W] in bfloat16.
@@ -220,18 +239,6 @@ class CBS:
         Returns:
             Output tensor [1, C_out, H_out, W_out] in bfloat16.
         """
-        if self.cpu_fallback:
-            # Layer exceeds NPU L1 budget; run on CPU via PyTorch.
-            padding = self.kernel_size // 2
-            out = F.conv2d(
-                x.float(),
-                self.weight.float(),
-                self.bias.float(),
-                stride=self.stride,
-                padding=padding,
-            )
-            out = F.silu(out)
-            return out.to(torch.bfloat16)
         return self.conv.forward(x, self.weight, self.bias)
 
 
