@@ -476,7 +476,7 @@ class SPPF:
         height,
         width,
         kernel_size=5,
-        num_aie_columns=1,
+        num_aie_columns=0,
         context=None,
     ):
         c_ = c_in // 2  # hidden channels
