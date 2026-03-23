@@ -21,6 +21,40 @@
 </table>
 
 
+## llama_3.2_1b_prompt_1024_tokens_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>TTFT (max)</th><th>TTFT (mean)</th><th>TTFT (median)</th><th>TTFT (min)</th><th>TTFT (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2b62dc7</code> — 2026-03-23 16:22:44</td><td>2.27 (n/a)</td><td>2.23 (n/a)</td><td>2.23 (n/a)</td><td>2.20 (n/a)</td><td>0.02 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## llama_3.2_1b_prompt_1024_tokens_40
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>TTFT (max)</th><th>TTFT (mean)</th><th>TTFT (median)</th><th>TTFT (min)</th><th>TTFT (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2b62dc7</code> — 2026-03-23 16:22:44</td><td>2.37 (n/a)</td><td>2.27 (n/a)</td><td>2.26 (n/a)</td><td>2.22 (n/a)</td><td>0.06 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
 ## llama_3.2_1b_prompt_13_tokens_1
 
 <table>
@@ -32,10 +66,10 @@
 </thead>
 <tbody>
 <tr>
-<td><code>897d04e</code> — 2026-03-06 22:56:07</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>1.00 (+0.00%)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.62 (-4.45%)</td><td>0.62 (-4.45%)</td><td>0.62 (-4.45%)</td><td>0.62 (-4.45%)</td><td>0.00 (n/a)</td>
+<td><code>2b62dc7</code> — 2026-03-23 16:22:44</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>2.18 <b>(+250.68%)</b></td><td>2.16 <b>(+247.58%)</b></td><td>2.17 <b>(+248.90%)</b></td><td>2.12 <b>(+241.01%)</b></td><td>0.02 (n/a)</td>
 </tr>
 <tr>
-<td><code>84d3478</code> — 2026-02-17 23:16:23</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.65 (n/a)</td><td>0.65 (n/a)</td><td>0.65 (n/a)</td><td>0.65 (n/a)</td><td>0.00 (n/a)</td>
+<td><code>897d04e</code> — 2026-03-06 22:56:07</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>1.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.62 (n/a)</td><td>0.62 (n/a)</td><td>0.62 (n/a)</td><td>0.62 (n/a)</td><td>0.00 (n/a)</td>
 </tr>
 </tbody>
 </table>
@@ -52,10 +86,10 @@
 </thead>
 <tbody>
 <tr>
-<td><code>897d04e</code> — 2026-03-06 22:56:07</td><td>40.00 (+0.00%)</td><td>40.00 (+0.00%)</td><td>40.00 (+0.00%)</td><td>40.00 (+0.00%)</td><td>0.00 (n/a)</td><td>4.30 (+2.38%)</td><td>4.30 (+2.38%)</td><td>4.30 (+2.38%)</td><td>4.30 (+2.38%)</td><td>0.00 (n/a)</td><td>0.61 (-2.49%)</td><td>0.61 (-2.49%)</td><td>0.61 (-2.49%)</td><td>0.61 (-2.49%)</td><td>0.00 (n/a)</td>
+<td><code>2b62dc7</code> — 2026-03-23 16:22:44</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>2.19 <b>(+257.06%)</b></td><td>2.17 <b>(+253.28%)</b></td><td>2.16 <b>(+252.17%)</b></td><td>2.16 <b>(+251.36%)</b></td><td>0.01 (n/a)</td>
 </tr>
 <tr>
-<td><code>84d3478</code> — 2026-02-17 23:16:23</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>0.00 (n/a)</td><td>4.20 (n/a)</td><td>4.20 (n/a)</td><td>4.20 (n/a)</td><td>4.20 (n/a)</td><td>0.00 (n/a)</td><td>0.63 (n/a)</td><td>0.63 (n/a)</td><td>0.63 (n/a)</td><td>0.63 (n/a)</td><td>0.00 (n/a)</td>
+<td><code>897d04e</code> — 2026-03-06 22:56:07</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>40.00 (n/a)</td><td>0.00 (n/a)</td><td>4.30 (n/a)</td><td>4.30 (n/a)</td><td>4.30 (n/a)</td><td>4.30 (n/a)</td><td>0.00 (n/a)</td><td>0.61 (n/a)</td><td>0.61 (n/a)</td><td>0.61 (n/a)</td><td>0.61 (n/a)</td><td>0.00 (n/a)</td>
 </tr>
 </tbody>
 </table>

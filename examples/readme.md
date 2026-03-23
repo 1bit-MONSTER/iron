@@ -1,7 +1,7 @@
 
 # IRONCLAD
 
-Tested on `2026_03_06_23_01_02` at commit `897d04e`.
+Tested on `2026_03_23_16_28_15` at commit `2b62dc7`.
 
 <table>
     <thead>
@@ -14,17 +14,47 @@ Tested on `2026_03_06_23_01_02` at commit `897d04e`.
     <tbody>
         <tr>
             <td>
+                llama_3.2_1b_prompt_1024_tokens_1
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                2.23
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                llama_3.2_1b_prompt_1024_tokens_40
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                2.27
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
                 llama_3.2_1b_prompt_13_tokens_1
             </td>
             <td>
                 ✅
-                1/1
+                5/5
             </td>
             <td>
-                0.62
+                2.16
             </td>
             <td>
-                0.00
+                n/a
             </td>
         </tr>
         <tr>
@@ -33,43 +63,13 @@ Tested on `2026_03_06_23_01_02` at commit `897d04e`.
             </td>
             <td>
                 ✅
-                1/1
+                5/5
             </td>
             <td>
-                0.61
+                2.17
             </td>
             <td>
-                4.30
-            </td>
-        </tr>
-        <tr>
-            <td>
-                llama_3.2_1b_prompt_2048_tokens_1
-            </td>
-            <td>
-                ✅
-                1/1
-            </td>
-            <td>
-                2.68
-            </td>
-            <td>
-                0.00
-            </td>
-        </tr>
-        <tr>
-            <td>
-                llama_3.2_1b_prompt_2048_tokens_40
-            </td>
-            <td>
-                ✅
-                1/1
-            </td>
-            <td>
-                2.70
-            </td>
-            <td>
-                4.00
+                n/a
             </td>
         </tr>
     </tbody>

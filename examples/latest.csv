@@ -1,5 +1,5 @@
-Commit,Date,Test,Checks,TTFT (mean),TTFT (median),TTFT (min),TTFT (max),TTFT (stddev),TPS (mean),TPS (median),TPS (min),TPS (max),TPS (stddev),Num_Tokens (mean),Num_Tokens (median),Num_Tokens (min),Num_Tokens (max),Num_Tokens (stddev)
-897d04ec696bb235b226a217853ec4b155533dd8,2026-03-06 22:56:07,llama_3.2_1b_prompt_13_tokens_1,1/1,0.6208,0.6208,0.6208,0.6208,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,0.0
-897d04ec696bb235b226a217853ec4b155533dd8,2026-03-06 22:56:07,llama_3.2_1b_prompt_13_tokens_40,1/1,0.6139,0.6139,0.6139,0.6139,0.0,4.3,4.3,4.3,4.3,0.0,40.0,40.0,40.0,40.0,0.0
-897d04ec696bb235b226a217853ec4b155533dd8,2026-03-06 22:56:07,llama_3.2_1b_prompt_2048_tokens_1,1/1,2.6763,2.6763,2.6763,2.6763,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,0.0
-897d04ec696bb235b226a217853ec4b155533dd8,2026-03-06 22:56:07,llama_3.2_1b_prompt_2048_tokens_40,1/1,2.701,2.701,2.701,2.701,0.0,4.0,4.0,4.0,4.0,0.0,40.0,40.0,40.0,40.0,0.0
+Commit,Date,Test,Checks,TTFT (mean),TTFT (median),TTFT (min),TTFT (max),TTFT (stddev)
+2b62dc77ecc72f0fa8fb3381b05579ab84778d27,2026-03-23 16:22:44,llama_3.2_1b_prompt_1024_tokens_1,5/5,2.235,2.233,2.202,2.268,0.023462736413300066
+2b62dc77ecc72f0fa8fb3381b05579ab84778d27,2026-03-23 16:22:44,llama_3.2_1b_prompt_1024_tokens_40,5/5,2.2696,2.257,2.22,2.371,0.0588837838458093
+2b62dc77ecc72f0fa8fb3381b05579ab84778d27,2026-03-23 16:22:44,llama_3.2_1b_prompt_13_tokens_1,5/5,2.1578,2.166,2.117,2.177,0.024772969139770097
+2b62dc77ecc72f0fa8fb3381b05579ab84778d27,2026-03-23 16:22:44,llama_3.2_1b_prompt_13_tokens_40,5/5,2.1688,2.162,2.157,2.192,0.014549914089093546
