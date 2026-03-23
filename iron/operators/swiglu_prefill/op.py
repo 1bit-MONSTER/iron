@@ -7,7 +7,10 @@ import numpy as np
 from ml_dtypes import bfloat16
 
 from iron.common import (
-    AIEOperatorBase,
+    CompositeOperator,
+    AIERuntimeArgSpec,
+    AIEBuffer,
+    SingleXclbinCallable,
     XclbinArtifact,
     InstsBinArtifact,
     KernelObjectArtifact,
@@ -21,7 +24,87 @@ from iron.operators.elementwise_mul.op import AIEElementwiseMul
 from iron.common.utils import torch_to_numpy
 
 
-class AIESwiGLUPrefill(AIEOperatorBase):
+class SwiGLUPrefillCallable:
+    def __init__(self, op):
+        self.op = op
+
+        def create_callable(sub_op, xclbin_path, kernel_name, insts_artifact):
+            return SingleXclbinCallable(
+                xclbin_path=xclbin_path,
+                kernel_name=kernel_name,
+                insts_bin_path=insts_artifact.filename,
+                args_spec=sub_op.get_arg_spec(),
+            )
+
+        self.gemm_1_callable = create_callable(
+            op.gemm_1,
+            op.combined_xclbin.filename,
+            op.gemm_1_xclbin.kernel_name,
+            op.gemm_1_insts,
+        )
+        self.silu_callable = create_callable(
+            op.silu,
+            op.combined_xclbin.filename,
+            op.silu_xclbin.kernel_name,
+            op.silu_insts,
+        )
+        self.eltwise_mul_callable = create_callable(
+            op.eltwise_mul,
+            op.combined_xclbin.filename,
+            op.eltwise_mul_xclbin.kernel_name,
+            op.eltwise_mul_insts,
+        )
+        self.gemm_2_callable = create_callable(
+            op.gemm_2,
+            op.combined_xclbin.filename,
+            op.gemm_2_xclbin.kernel_name,
+            op.gemm_2_insts,
+        )
+
+        # Allocate and upload weights
+        self.weights_1 = AIEBuffer.from_np(torch_to_numpy(op.weights_1.T))
+        self.weights_2 = AIEBuffer.from_np(torch_to_numpy(op.weights_2.T))
+        self.weights_3 = AIEBuffer.from_np(torch_to_numpy(op.weights_3.T))
+
+        # Allocate intermediate buffers
+        # Sizes are padded
+        size_hidden = op.seq_len_padded * op.hidden_dim_padded
+        self.left = AIEBuffer(shape=(size_hidden,), dtype=bfloat16)
+        self.right = AIEBuffer(shape=(size_hidden,), dtype=bfloat16)
+        self.left_swished = AIEBuffer(shape=(size_hidden,), dtype=bfloat16)
+        self.intermediate = AIEBuffer(shape=(size_hidden,), dtype=bfloat16)
+        self.last_output_buf = None
+
+    def __call__(self, input_buf, output_buf):
+        self.last_output_buf = output_buf
+        input_buf.to("npu")
+        output_buf.to("npu")
+        self.weights_1.to("npu")
+        self.weights_2.to("npu")
+        self.weights_3.to("npu")
+        self.left.to("npu")
+        self.right.to("npu")
+        self.left_swished.to("npu")
+        self.intermediate.to("npu")
+
+        # Sequence:
+        # 1. GEMM(input, weights_1, left)
+        self.gemm_1_callable(input_buf, self.weights_1, self.left)
+
+        # 2. GEMM(input, weights_2, right)
+        self.gemm_1_callable(input_buf, self.weights_2, self.right)
+
+        # 3. SiLU(left, left_swished)
+        self.silu_callable(self.left, self.left_swished)
+
+        # 4. EltwiseMul(left_swished, right, intermediate)
+        self.eltwise_mul_callable(self.left_swished, self.right, self.intermediate)
+
+        # 5. GEMM(intermediate, weights_3, output)
+        self.gemm_2_callable(self.intermediate, self.weights_3, output_buf)
+
+
+class AIESwiGLUPrefill(CompositeOperator):
 
     def __init__(
         self, seq_len, embedding_dim, hidden_dim, prio_accuracy=False, context=None
@@ -85,7 +168,6 @@ class AIESwiGLUPrefill(AIEOperatorBase):
         silu = AIESiLU(
             size=self.seq_len_padded * self.hidden_dim_padded,
             num_aie_columns=8,
-            num_channels=2,
             tile_size=self.hidden_dim_padded // 8,
         )
         self.silu = silu
@@ -98,13 +180,12 @@ class AIESwiGLUPrefill(AIEOperatorBase):
             "--xclbin-kernel-id=0x902",
         ]
         silu_xclbin.kernel_name = "swiglu_silu"
-        silu_xclbin.depends += [gemm_1_xclbin]
+        silu_xclbin.dependencies.add(gemm_1_xclbin)
         artifacts.append(silu_insts)
 
         eltwise_mul = AIEElementwiseMul(
             size=self.seq_len_padded * self.hidden_dim_padded,
             num_aie_columns=8,
-            num_channels=2,
             tile_size=self.hidden_dim_padded // 8,
         )
         self.eltwise_mul = eltwise_mul
@@ -119,7 +200,7 @@ class AIESwiGLUPrefill(AIEOperatorBase):
             "--xclbin-kernel-id=0x903",
         ]
         eltwise_mul_xclbin.kernel_name = "swiglu_eltwise_mul"
-        eltwise_mul_xclbin.depends += [silu_xclbin]
+        eltwise_mul_xclbin.dependencies.add(silu_xclbin)
         artifacts.append(eltwise_mul_insts)
 
         gemm_2 = AIEGEMM(
@@ -137,7 +218,7 @@ class AIESwiGLUPrefill(AIEOperatorBase):
             "--xclbin-kernel-id=0x904",
         ]
         gemm_2_xclbin.kernel_name = "swiglu_gemm_2"
-        gemm_2_xclbin.depends += [eltwise_mul_xclbin]
+        gemm_2_xclbin.dependencies.add(eltwise_mul_xclbin)
         artifacts.append(gemm_2_xclbin)
         artifacts.append(gemm_2_insts)
 
@@ -153,109 +234,13 @@ class AIESwiGLUPrefill(AIEOperatorBase):
 
         self.add_artifacts(artifacts)
 
-    def set_up_runtime(self):
-        # Runtime setup
-        # ---
-        self.add_buffer("input", self.seq_len_padded * self.embedding_dim_padded)
-        self.add_buffer(
-            "weights_1",
-            self.embedding_dim_padded * self.hidden_dim_padded,
-            static_data=torch_to_numpy(self.weights_1.T),
-        )
-        self.add_buffer(
-            "weights_2",
-            self.embedding_dim_padded * self.hidden_dim_padded,
-            static_data=torch_to_numpy(self.weights_2.T),
-        )
-        self.add_buffer(
-            "weights_3",
-            self.hidden_dim_padded * self.embedding_dim_padded,
-            static_data=torch_to_numpy(self.weights_3.T),
-        )
-        self.add_buffer("left", self.seq_len_padded * self.hidden_dim_padded)
-        self.add_buffer("left_swished", self.seq_len_padded * self.hidden_dim_padded)
-        self.add_buffer("right", self.seq_len_padded * self.hidden_dim_padded)
-        self.add_buffer("intermediate", self.seq_len_padded * self.hidden_dim_padded)
-        self.add_buffer("output", self.seq_len_padded * self.embedding_dim_padded)
-        self.add_kernel(
-            "swiglu_gemm_1",
-            self.combined_xclbin,
-            self.gemm_1_xclbin.kernel_name,
-            self.gemm_1_insts,
-        )
-        self.add_kernel(
-            "swiglu_silu",
-            self.combined_xclbin,
-            self.silu_xclbin.kernel_name,
-            self.silu_insts,
-        )
-        self.add_kernel(
-            "swiglu_eltwise_mul",
-            self.combined_xclbin,
-            self.eltwise_mul_xclbin.kernel_name,
-            self.eltwise_mul_insts,
-        )
-        self.add_kernel(
-            "swiglu_gemm_2",
-            self.combined_xclbin,
-            self.gemm_2_xclbin.kernel_name,
-            self.gemm_2_insts,
-        )
-        self.add_to_runlist("swiglu_gemm_1", "input", "weights_1", "left")
-        self.add_to_runlist("swiglu_gemm_1", "input", "weights_2", "right")
-        self.add_to_runlist("swiglu_silu", "left", "left_swished")
-        self.add_to_runlist(
-            "swiglu_eltwise_mul", "left_swished", "right", "intermediate"
-        )
-        self.add_to_runlist("swiglu_gemm_2", "intermediate", "weights_3", "output")
+    def get_arg_spec(self):
+        return [
+            AIERuntimeArgSpec("in", (self.seq_len_padded * self.embedding_dim_padded,)),
+            AIERuntimeArgSpec(
+                "out", (self.seq_len_padded * self.embedding_dim_padded,)
+            ),
+        ]
 
-    def forward(self, x):
-        """Forward pass for SwiGLU operation"""
-
-        # Always flatten to [batch, orig_size]
-        original_shape = x.shape
-        batch = x.shape[0] if x.dim() > 1 else 1
-        x_flat = x.reshape(batch, -1)
-
-        out = self._execute_aie_operation(x_flat)
-
-        # Restore original shape
-        out = out.reshape(*original_shape)
-
-        return out
-
-    def _execute_aie_operation(self, x):
-        # x is [batch, size]
-        batch = x.shape[0] if x.dim() > 1 else 1
-
-        # Flatten inputs for AIE processing
-        x_flat = x.view(-1)
-
-        # Verify input size matches expected dimensions
-        expected_size = batch * self.seq_len * self.embedding_dim
-        assert x_flat.shape[0] == expected_size
-
-        # Pad input if necessary to match GEMM requirements
-        if self.seq_len_padded * self.embedding_dim_padded > x_flat.shape[0]:
-            x_padded = torch.zeros(
-                self.seq_len_padded * self.embedding_dim_padded,
-                dtype=x_flat.dtype,
-                device=x_flat.device,
-            )
-            x_padded[: x_flat.shape[0]] = x_flat
-            x_flat = x_padded
-
-        self.write_buffer("input", x_flat)
-        self.run_runlist()
-
-        # Read padded output buffer
-        result_padded = self.read_buffer_as_torch(
-            "output",
-            shape=(self.seq_len_padded * self.embedding_dim_padded,),
-            dtype=bfloat16,
-        )
-
-        # Extract only the unpadded portion
-        result = result_padded[:expected_size].view(batch, -1)
-
-        return result
+    def get_callable(self):
+        return SwiGLUPrefillCallable(self)

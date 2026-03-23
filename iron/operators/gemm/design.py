@@ -2,11 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from ml_dtypes import bfloat16
-from pathlib import Path
 
 import numpy as np
-import argparse
-import sys
 
 from aie.iron import (
     Kernel,
@@ -106,6 +103,7 @@ def main():
         args.separate_c_tiles,
         args.trace_size,
         args.archive,
+        "",
         args.generate_taps,
     )
 
@@ -140,7 +138,8 @@ def my_matmul(
     prio_accuracy,
     separate_c_tiles,
     trace_size,
-    archive=None,
+    kernel_archive=None,
+    func_prefix="",
     generate_taps=False,
 ):
     n_aie_rows = 4
@@ -273,7 +272,11 @@ def my_matmul(
 
     # AIE Core Function declarations
     scalar_suffix = "_scalar" if use_scalar else ""
-    archive_name = f"gemm_{m}x{k}x{n}_archive.a" if archive is None else archive
+    kernel_archive = (
+        f"{func_prefix}gemm_{m}x{k}x{n}_archive.a"
+        if kernel_archive is None
+        else kernel_archive
+    )
     if use_larger_internal_buffer:
         # Fix fifo depth for C objfifo to 1 since 1 buffer will be used for accumulation
         # and another for transfer to L2
@@ -283,19 +286,19 @@ def my_matmul(
         # A kernel to convert from the internal f32 accumulation to bf16 for transfer to L2 is needed
         convert_copy_kernel = Kernel(
             f"convert_copy_f32_to_bf16",
-            archive_name,
+            kernel_archive,
             [C_l1_ty_internal, C_l1_ty, np.int32],
         )
         # Fix the kernels to use f32 outputs
         zero_kernel = Kernel(
             f"zero{scalar_suffix}_f32",
-            archive_name,
+            kernel_archive,
             [C_l1_ty_internal],
         )
         matmul_func_name = f"matmul{scalar_suffix}_{dtype_in_str}_f32"
         matmul_kernel = Kernel(
             matmul_func_name,
-            archive_name,
+            kernel_archive,
             [A_l1_ty, B_l1_ty, C_l1_ty_internal],
         )
     else:
@@ -304,13 +307,13 @@ def my_matmul(
         fifo_depth_out = fifo_depth
         zero_kernel = Kernel(
             f"zero{scalar_suffix}_{dtype_out_str}",
-            archive_name,
+            kernel_archive,
             [C_l1_ty],
         )
         matmul_func_name = f"matmul{scalar_suffix}_{dtype_in_str}_{dtype_out_str}"
         matmul_kernel = Kernel(
             matmul_func_name,
-            archive_name,
+            kernel_archive,
             [A_l1_ty, B_l1_ty, C_l1_ty],
         )
 
@@ -768,7 +771,3 @@ def my_matmul(
     # Place components (assign them resources on the device) and generate an MLIR module
     module = my_program.resolve_program(SequentialPlacer())
     return module
-
-
-if __name__ == "__main__":
-    main()

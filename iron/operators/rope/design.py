@@ -2,10 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from pathlib import Path
 import numpy as np
-import argparse
-import sys
 
 from aie.iron import Kernel, ObjectFifo, Program, Runtime, Worker
 from aie.iron.placers import SequentialPlacer
@@ -37,11 +34,17 @@ def rope(
     num_aie_columns=1,
     trace_size=0,
     method_type=None,
+    kernel_archive=None,
+    func_prefix="",
 ):
     dtype = bfloat16
 
     if angle_rows is None:
         angle_rows = rows
+    if kernel_archive is None:
+        kernel_archive = (
+            "rope" + (f"_{method_type}" if method_type is not None else "") + ".o"
+        )
 
     assert cols % (16 * 2) == 0 and cols >= (
         16 * 2
@@ -73,8 +76,8 @@ def rope(
 
     # AIE Core Function declaration
     rope_kernel = Kernel(
-        "rope",
-        "rope" + (f"_{method_type}" if method_type is not None else "") + ".o",
+        f"{func_prefix}rope",
+        kernel_archive,
         [tensor_tile_ty, angle_tile_ty, tensor_tile_ty, np.int32],
     )
 
@@ -127,7 +130,7 @@ def rope(
 
     # Runtime operations to move data to/from the AIE-array
     rt = Runtime()
-    with rt.sequence(tensor_ty, tensor_ty, tensor_ty) as (A, B, C):
+    with rt.sequence(tensor_ty, angle_ty, tensor_ty) as (A, B, C):
         rt.start(*my_workers)
 
         # Initialize a group for parallel drain tasks, with fill resources free'd when drains complete.
