@@ -32,10 +32,10 @@
 </thead>
 <tbody>
 <tr>
-<td><code>dc66da7</code> — 2026-03-25 20:10:49</td><td>2.25 (-0.79%)</td><td>2.23 (-0.09%)</td><td>2.23 (-0.13%)</td><td>2.22 (+0.91%)</td><td>0.01 <b>(-55.91%)</b></td>
+<td><code>8b6d0f4</code> — 2026-03-25 21:36:35</td><td>2.26 (+0.36%)</td><td>2.25 (+0.55%)</td><td>2.25 (+0.76%)</td><td>2.23 (+0.41%)</td><td>0.01 (+7.74%)</td>
 </tr>
 <tr>
-<td><code>2b62dc7</code> — 2026-03-23 16:22:44</td><td>2.27 (n/a)</td><td>2.23 (n/a)</td><td>2.23 (n/a)</td><td>2.20 (n/a)</td><td>0.02 (n/a)</td>
+<td><code>dc66da7</code> — 2026-03-25 20:10:49</td><td>2.25 (n/a)</td><td>2.23 (n/a)</td><td>2.23 (n/a)</td><td>2.22 (n/a)</td><td>0.01 (n/a)</td>
 </tr>
 </tbody>
 </table>
@@ -47,15 +47,15 @@
 <thead>
 <tr>
 <th>Commit/Date</th>
-<th>TTFT (max)</th><th>TTFT (mean)</th><th>TTFT (median)</th><th>TTFT (min)</th><th>TTFT (stddev)</th>
+<th>TPS (max)</th><th>TPS (mean)</th><th>TPS (median)</th><th>TPS (min)</th><th>TPS (stddev)</th><th>TTFT (max)</th><th>TTFT (mean)</th><th>TTFT (median)</th><th>TTFT (min)</th><th>TTFT (stddev)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>dc66da7</code> — 2026-03-25 20:10:49</td><td>2.39 (+0.93%)</td><td>2.26 (-0.34%)</td><td>2.24 (-0.80%)</td><td>2.21 (-0.50%)</td><td>0.07 <b>(+27.25%)</b></td>
+<td><code>8b6d0f4</code> — 2026-03-25 21:36:35</td><td>4.30 (n/a)</td><td>4.28 (n/a)</td><td>4.28 (n/a)</td><td>4.26 (n/a)</td><td>0.02 (n/a)</td><td>2.37 (-1.09%)</td><td>2.27 (+0.16%)</td><td>2.25 (+0.45%)</td><td>2.23 (+0.77%)</td><td>0.06 <b>(-21.79%)</b></td>
 </tr>
 <tr>
-<td><code>2b62dc7</code> — 2026-03-23 16:22:44</td><td>2.37 (n/a)</td><td>2.27 (n/a)</td><td>2.26 (n/a)</td><td>2.22 (n/a)</td><td>0.06 (n/a)</td>
+<td><code>dc66da7</code> — 2026-03-25 20:10:49</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>2.39 (n/a)</td><td>2.26 (n/a)</td><td>2.24 (n/a)</td><td>2.21 (n/a)</td><td>0.07 (n/a)</td>
 </tr>
 </tbody>
 </table>
@@ -72,10 +72,10 @@
 </thead>
 <tbody>
 <tr>
-<td><code>dc66da7</code> — 2026-03-25 20:10:49</td><td>2.19 (+0.69%)</td><td>2.17 (+0.44%)</td><td>2.17 (+0.23%)</td><td>2.13 (+0.52%)</td><td>0.03 (+3.76%)</td>
+<td><code>8b6d0f4</code> — 2026-03-25 21:36:35</td><td>2.19 (-0.14%)</td><td>2.17 (+0.03%)</td><td>2.17 (+0.05%)</td><td>2.14 (+0.75%)</td><td>0.02 <b>(-34.53%)</b></td>
 </tr>
 <tr>
-<td><code>2b62dc7</code> — 2026-03-23 16:22:44</td><td>2.18 (n/a)</td><td>2.16 (n/a)</td><td>2.17 (n/a)</td><td>2.12 (n/a)</td><td>0.02 (n/a)</td>
+<td><code>dc66da7</code> — 2026-03-25 20:10:49</td><td>2.19 (n/a)</td><td>2.17 (n/a)</td><td>2.17 (n/a)</td><td>2.13 (n/a)</td><td>0.03 (n/a)</td>
 </tr>
 </tbody>
 </table>
@@ -87,15 +87,15 @@
 <thead>
 <tr>
 <th>Commit/Date</th>
-<th>TTFT (max)</th><th>TTFT (mean)</th><th>TTFT (median)</th><th>TTFT (min)</th><th>TTFT (stddev)</th>
+<th>TPS (max)</th><th>TPS (mean)</th><th>TPS (median)</th><th>TPS (min)</th><th>TPS (stddev)</th><th>TTFT (max)</th><th>TTFT (mean)</th><th>TTFT (median)</th><th>TTFT (min)</th><th>TTFT (stddev)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>dc66da7</code> — 2026-03-25 20:10:49</td><td>2.18 (-0.50%)</td><td>2.16 (-0.33%)</td><td>2.16 (-0.19%)</td><td>2.15 (-0.56%)</td><td>0.01 (-6.70%)</td>
+<td><code>8b6d0f4</code> — 2026-03-25 21:36:35</td><td>4.30 (n/a)</td><td>4.27 (n/a)</td><td>4.27 (n/a)</td><td>4.25 (n/a)</td><td>0.02 (n/a)</td><td>2.19 (+0.18%)</td><td>2.17 (+0.18%)</td><td>2.16 (+0.19%)</td><td>2.15 (+0.37%)</td><td>0.01 (-9.99%)</td>
 </tr>
 <tr>
-<td><code>2b62dc7</code> — 2026-03-23 16:22:44</td><td>2.19 (n/a)</td><td>2.17 (n/a)</td><td>2.16 (n/a)</td><td>2.16 (n/a)</td><td>0.01 (n/a)</td>
+<td><code>dc66da7</code> — 2026-03-25 20:10:49</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>n/a (n/a)</td><td>2.18 (n/a)</td><td>2.16 (n/a)</td><td>2.16 (n/a)</td><td>2.15 (n/a)</td><td>0.01 (n/a)</td>
 </tr>
 </tbody>
 </table>
