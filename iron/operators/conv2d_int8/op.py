@@ -78,6 +78,31 @@ def weights_to_tiled_int8(weight):
     return w.numpy().astype(np.int8).reshape(-1)
 
 
+def weights_to_tiled_int8_k3(weight):
+    """Convert [O, I, 3, 3] int8 weight tensor to tiled [O/8, I/8, 3, 3, 8, 8] flat.
+
+    Within each (O_group, I_group, kh, kw) tile, weights are stored as
+    [ic8, oc8] -- input channel varies fastest.
+
+    Args:
+        weight: PyTorch tensor of shape [O, I, 3, 3] in int8.
+
+    Returns:
+        1D numpy array in int8 with layout [O/8, I/8, 3, 3, 8, 8].
+    """
+    O, I, kh, kw = weight.shape
+    assert kh == 3 and kw == 3, "Only 3x3 kernels supported"
+    assert O % 8 == 0, f"Out channels ({O}) must be a multiple of 8"
+    assert I % 8 == 0, f"In channels ({I}) must be a multiple of 8"
+
+    # [O, I, 3, 3] -> [O/8, 8, I/8, 8, 3, 3]
+    w = weight.reshape(O // 8, 8, I // 8, 8, 3, 3)
+    # -> [O/8, I/8, 3, 3, 8(ic), 8(oc)]
+    w = w.permute(0, 2, 4, 5, 3, 1)
+    w = w.contiguous()
+    return w.numpy().astype(np.int8).reshape(-1)
+
+
 class AIEConv2dInt8(AIEOperatorBase):
     """AIE-accelerated 2D Convolution (1x1 kernel, int8).
 
@@ -107,9 +132,13 @@ class AIEConv2dInt8(AIEOperatorBase):
         scale=10,
         num_aie_columns=1,
         context=None,
+        register=True,
     ):
-        assert kernel_size == 1, f"Only kernel_size=1 supported, got {kernel_size}"
-        assert stride == 1, "Only stride=1 supported"
+        assert kernel_size in (1, 3), f"kernel_size must be 1 or 3, got {kernel_size}"
+        if kernel_size == 1:
+            assert stride == 1, "Only stride=1 supported for 1x1 conv"
+        else:
+            assert stride in (1, 2), "Only stride 1 or 2 supported for 3x3 conv"
         assert (
             in_channels % 8 == 0
         ), f"in_channels ({in_channels}) must be a multiple of 8"
@@ -133,58 +162,130 @@ class AIEConv2dInt8(AIEOperatorBase):
         self.xclbin_artifact = None
         self.insts_artifact = None
 
-        AIEOperatorBase.__init__(self, context=context)
+        AIEOperatorBase.__init__(self, context=context, register=register)
 
-    def set_up_artifacts(self):
+    @property
+    def out_height(self):
+        """Output spatial height."""
+        if self.kernel_size == 3 and self.stride == 2:
+            return self.height // 2
+        return self.height
+
+    @property
+    def out_width(self):
+        """Output spatial width."""
+        if self.kernel_size == 3 and self.stride == 2:
+            return self.width // 2
+        return self.width
+
+    def get_artifacts(self, prefix="conv2d_int8_"):
+        """Create compilation artifacts without registering them.
+
+        Args:
+            prefix: Prefix for artifact file names (allows multiple
+                independent compilations of the same operator config).
+
+        Returns:
+            Tuple of (xclbin_artifact, insts_artifact).
+        """
         operator_dir = Path(__file__).parent
-        file_name_base = (
-            f"conv2d_int8_{self.in_channels}ic_{self.out_channels}oc_"
-            f"{self.height}h_{self.width}w"
-        )
 
-        mlir_artifact = PythonGeneratedMLIRArtifact.new(
-            f"{file_name_base}.mlir",
-            import_path=operator_dir / "design.py",
-            callback_fn="my_conv2d_int8",
-            callback_args=[
+        if self.kernel_size == 3:
+            file_name_base = (
+                f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
+                f"{self.height}h_{self.width}w_k3s{self.stride}"
+            )
+            callback_fn = "my_conv2d_int8_k3"
+            callback_args = [
                 self.context.device_manager.device_type,
                 self.height,
                 self.width,
                 self.in_channels,
                 self.out_channels,
                 self.scale,
-            ],
+                self.stride,
+            ]
+            kernel_obj_name = "conv2dk3_i8.o"
+            kernel_src = "conv2dk3_i8.cc"
+            kernel_extra_flags = ["-DINT8_ACT"]
+        else:
+            file_name_base = (
+                f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
+                f"{self.height}h_{self.width}w"
+            )
+            callback_fn = "my_conv2d_int8"
+            kernel_src = "conv2dk1_i8.cc"
+            # Vectorized path: width must be multiple of 32 (MMUL_M*NUM_ACC)
+            # and in_channels >= 24 (IC/8 > 2 for pipeline min iterations)
+            use_vectorized = (
+                self.width % 32 == 0 and self.in_channels >= 24
+            )
+            if use_vectorized:
+                kernel_obj_name = "conv2dk1_i8_vec.o"
+                kernel_extra_flags = ["-DINT8_ACT"]
+            else:
+                kernel_obj_name = "conv2dk1_i8.o"
+                kernel_extra_flags = ["-DINT8_ACT", "-DSCALAR"]
+            callback_args = [
+                self.context.device_manager.device_type,
+                self.height,
+                self.width,
+                self.in_channels,
+                self.out_channels,
+                self.scale,
+            ]
+
+        mlir_artifact = PythonGeneratedMLIRArtifact.new(
+            f"{file_name_base}.mlir",
+            import_path=operator_dir / "design.py",
+            callback_fn=callback_fn,
+            callback_args=callback_args,
         )
 
-        self.xclbin_artifact = XclbinArtifact.new(
+        xclbin_artifact = XclbinArtifact.new(
             f"{file_name_base}.xclbin",
             depends=[
                 mlir_artifact,
                 KernelObjectArtifact.new(
-                    "conv2dk1_i8.o",
+                    kernel_obj_name,
                     depends=[
                         SourceArtifact.new(
                             self.context.base_dir
                             / "aie_kernels"
                             / "aie2p"
-                            / "conv2dk1_i8.cc"
+                            / kernel_src
                         )
                     ],
-                    extra_flags=["-DINT8_ACT", "-DSCALAR"],
+                    extra_flags=kernel_extra_flags,
                 ),
             ],
         )
 
-        self.insts_artifact = InstsBinArtifact.new(
+        insts_artifact = InstsBinArtifact.new(
             f"{file_name_base}.bin", depends=[mlir_artifact]
         )
 
-        self.add_artifacts([self.xclbin_artifact, self.insts_artifact])
+        return (xclbin_artifact, insts_artifact)
+
+    def set_up_artifacts(self):
+        xclbin_artifact, insts_artifact = self.get_artifacts()
+        self.xclbin_artifact = xclbin_artifact
+        self.insts_artifact = insts_artifact
+        self.add_artifacts([xclbin_artifact, insts_artifact])
 
     def set_up_runtime(self):
         total_input = self.in_channels * self.height * self.width
-        total_weights = self.out_channels * self.in_channels
-        total_output = self.out_channels * self.height * self.width
+
+        if self.kernel_size == 3:
+            total_weights = self.out_channels * self.in_channels * 9
+            out_h = self.height if self.stride == 1 else self.height // 2
+            out_w = self.width if self.stride == 1 else self.width // 2
+        else:
+            total_weights = self.out_channels * self.in_channels
+            out_h = self.height
+            out_w = self.width
+
+        total_output = self.out_channels * out_h * out_w
 
         self.add_buffer("input", total_input, dtype=np.int8)
         self.add_buffer("weights", total_weights, dtype=np.int8)
@@ -203,10 +304,10 @@ class AIEConv2dInt8(AIEOperatorBase):
 
         Args:
             x: Input tensor of shape [N, C_in, H, W] in int8.
-            weight: Weight tensor [C_out, C_in, 1, 1] in int8.
+            weight: Weight tensor [C_out, C_in, K, K] in int8.
 
         Returns:
-            Output tensor of shape [N, C_out, H, W] in int8.
+            Output tensor of shape [N, C_out, H_out, W_out] in int8.
         """
         if x.dtype != torch.int8:
             raise AIEOperatorConstraintError("AIEConv2dInt8: input must be int8")
@@ -216,10 +317,18 @@ class AIEConv2dInt8(AIEOperatorBase):
         input_tiled = nchw_to_tiled_int8(x)
         self.write_buffer("input", input_tiled)
 
-        weight_tiled = weights_to_tiled_int8(weight)
+        if self.kernel_size == 3:
+            weight_tiled = weights_to_tiled_int8_k3(weight)
+            out_h = self.height if self.stride == 1 else self.height // 2
+            out_w = self.width if self.stride == 1 else self.width // 2
+        else:
+            weight_tiled = weights_to_tiled_int8(weight)
+            out_h = self.height
+            out_w = self.width
+
         self.write_buffer("weights", weight_tiled)
 
-        total_output = self.out_channels * self.height * self.width
+        total_output = self.out_channels * out_h * out_w
         self.write_buffer("output", np.zeros(total_output, dtype=np.int8))
 
         self.run_runlist()
@@ -227,4 +336,4 @@ class AIEConv2dInt8(AIEOperatorBase):
         output_flat = self.read_buffer(
             "output", (total_output,), copy=True, dtype=np.int8
         )
-        return tiled_to_nchw_int8(output_flat, self.out_channels, self.height, self.width)
+        return tiled_to_nchw_int8(output_flat, self.out_channels, out_h, out_w)
