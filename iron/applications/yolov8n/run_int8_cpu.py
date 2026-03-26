@@ -17,6 +17,8 @@ Usage:
 """
 
 import argparse
+import math
+import re
 import time
 import urllib.request
 from pathlib import Path
@@ -111,30 +113,56 @@ class Int8YOLOv8nCPU:
                 b = seq[2].bias.float()
                 self.float_weights[f"det.{prefix}_{scale_name}.cv3"] = (w, b)
 
-    def calibrate(self, img_tensor):
+    def calibrate(self, img_tensor, percentile_fn=None):
         """Run float model forward, record activation scales at each layer output.
+
+        Also stores per-layer percentile data so that ``recalibrate_percentiles``
+        can recompute scales without re-running the float model.
 
         Args:
             img_tensor: [1, 3, H, W] bfloat16 tensor (same as normal inference).
+            percentile_fn: Optional callable(layer_name) -> float in (0, 1].
+                Controls clipping aggressiveness per layer.  If *None*, uses the
+                absolute max (equivalent to percentile = 1.0).
 
         Returns:
             dict of intermediate feature maps (for debugging).
         """
         x = img_tensor.float()
 
+        # Store multiple percentile values for each layer so that
+        # recalibrate_percentiles() can try different combos cheaply.
+        self._act_percentiles = {}
+        _STORED_PCTS = [0.90, 0.93, 0.95, 0.97, 0.99, 0.993, 0.995, 0.997, 0.999]
+
+        def _compute_scale(tensor, name):
+            flat = tensor.abs().float().flatten()
+            pctiles = {}
+            for p in _STORED_PCTS:
+                pctiles[p] = torch.quantile(flat, p).item()
+            pctiles[1.0] = flat.max().item()
+            self._act_percentiles[name] = pctiles
+
+            if percentile_fn is not None:
+                pct = percentile_fn(name)
+                val = pctiles.get(pct, pctiles[1.0])
+            else:
+                val = pctiles[1.0]
+            return val / 127.0 if val != 0 else 1.0
+
         def conv_silu(x, name, stride=1):
             w, b = self.float_weights[name]
             kH = w.shape[2]
             out = F.conv2d(x, w, b, stride=stride, padding=kH // 2)
             out = F.silu(out)
-            self.act_scales[name] = out.abs().max().item() / 127.0
+            self.act_scales[name] = _compute_scale(out, name)
             return out
 
         def conv_no_act(x, name, stride=1):
             w, b = self.float_weights[name]
             kH = w.shape[2]
             out = F.conv2d(x, w, b, stride=stride, padding=kH // 2)
-            self.act_scales[name] = out.abs().max().item() / 127.0
+            self.act_scales[name] = _compute_scale(out, name)
             return out
 
         def run_c2f(x, prefix, shortcut=True):
@@ -153,7 +181,7 @@ class Int8YOLOv8nCPU:
 
         # Record input scale
         x_padded = F.pad(x, (0, 0, 0, 0, 0, 5))
-        self.act_scales["input"] = x_padded.abs().max().item() / 127.0
+        self.act_scales["input"] = _compute_scale(x_padded, "input")
 
         # Backbone
         x = conv_silu(x_padded, "l0", stride=2)
@@ -208,22 +236,54 @@ class Int8YOLOv8nCPU:
         print(f"    Calibrated {len(self.act_scales)} activation scales")
         return results
 
-    def forward_int8(self, img_tensor):
+    def recalibrate_percentiles(self, percentile_fn):
+        """Recompute act_scales from stored percentile data.
+
+        Avoids re-running the float model.  ``calibrate()`` must have been
+        called first to populate ``_act_percentiles``.
+
+        Args:
+            percentile_fn: callable(layer_name) -> float percentile in (0, 1].
+        """
+        if not hasattr(self, "_act_percentiles") or not self._act_percentiles:
+            raise RuntimeError("Must call calibrate() first")
+
+        for name, pctiles in self._act_percentiles.items():
+            pct = percentile_fn(name)
+            val = pctiles.get(pct)
+            if val is None:
+                closest = min(pctiles.keys(), key=lambda p: abs(p - pct))
+                val = pctiles[closest]
+            self.act_scales[name] = val / 127.0 if val != 0 else 1.0
+
+    @staticmethod
+    def _compute_shift(w_scale, in_act_scale, out_act_scale):
+        """Compute right-shift for NPU requantization (local copy)."""
+        combined = w_scale * in_act_scale
+        if combined == 0 or out_act_scale == 0:
+            return 10
+        ratio = out_act_scale / combined
+        shift = round(math.log2(max(ratio, 1.0)))
+        return max(1, min(31, shift))
+
+    def forward_int8(self, img_tensor, npu_sim=False):
         """Run int8-simulated forward pass.
 
         For each conv layer:
           1. Quantize input to int8
           2. int8 × int8 MAC → int32
-          3. Dequantize int32 result to float (using w_scale * act_scale)
+          3. (npu_sim) Right-shift → int8 → dequant, or (normal) direct dequant
           4. Add float bias
           5. Apply activation (SiLU or none)
           6. The float output becomes input to next layer
 
-        This is the "fake quantization" approach — we simulate int8 arithmetic
-        but keep intermediate float precision for bias/activation/concat/upsample.
+        When *npu_sim=True*, simulates the NPU's double quantization:
+        int32 accumulator → right-shift → int8 → dequant back to float.
+        This captures the precision loss from the NPU's requantization step.
 
         Args:
             img_tensor: [1, 3, H, W] bfloat16 tensor.
+            npu_sim: If True, simulate NPU shift behaviour.
 
         Returns:
             dict with 'reg': [3 tensors], 'cls': [3 tensors].
@@ -231,7 +291,6 @@ class Int8YOLOv8nCPU:
 
         def get_int8_weight(layer_name):
             """Look up int8 weight and scale from the quantized weight dict."""
-            # Map layer names to the weight dict structure
             return self._lookup_weight(layer_name)
 
         def int8_cbs(x_float, layer_name, stride=1):
@@ -240,10 +299,9 @@ class Int8YOLOv8nCPU:
             kH = w_int8.shape[2]
             pad = kH // 2
 
-            # Quantize activation to int8
+            pred = self._prev_layer_name(layer_name)
             act_scale = self.act_scales.get(
-                self._prev_layer_name(layer_name),
-                x_float.abs().max().item() / 127.0,
+                pred, x_float.abs().max().item() / 127.0,
             )
             if act_scale == 0:
                 act_scale = 1.0
@@ -251,20 +309,23 @@ class Int8YOLOv8nCPU:
                 torch.round(x_float / act_scale), -128, 127
             ).to(torch.int8)
 
-            # int8 × int8 MAC → int32
             out_int32 = F.conv2d(
                 x_int8.float(), w_int8.float(),
                 bias=None, stride=stride, padding=pad,
-            ).to(torch.int32)
+            )
 
-            # Dequantize: int32 * (w_scale * act_scale)
-            combined_scale = w_scale * act_scale
-            out_float = out_int32.float() * combined_scale
+            if npu_sim:
+                out_act_scale = self.act_scales.get(layer_name, 1.0)
+                shift = self._compute_shift(w_scale, act_scale, out_act_scale)
+                out_shifted = out_int32 / (2.0**shift)
+                out_requant = torch.clamp(torch.round(out_shifted), -128, 127)
+                dequant_scale = (2.0**shift) * w_scale * act_scale
+                out_float = out_requant * dequant_scale
+            else:
+                combined_scale = w_scale * act_scale
+                out_float = out_int32.float() * combined_scale
 
-            # Add bias in float domain
             out_float = out_float + bias.view(1, -1, 1, 1)
-
-            # SiLU activation
             out_float = F.silu(out_float)
             return out_float
 
@@ -274,9 +335,9 @@ class Int8YOLOv8nCPU:
             kH = w_int8.shape[2]
             pad = kH // 2
 
+            pred = self._prev_layer_name(layer_name)
             act_scale = self.act_scales.get(
-                self._prev_layer_name(layer_name),
-                x_float.abs().max().item() / 127.0,
+                pred, x_float.abs().max().item() / 127.0,
             )
             if act_scale == 0:
                 act_scale = 1.0
@@ -287,10 +348,19 @@ class Int8YOLOv8nCPU:
             out_int32 = F.conv2d(
                 x_int8.float(), w_int8.float(),
                 bias=None, stride=stride, padding=pad,
-            ).to(torch.int32)
+            )
 
-            combined_scale = w_scale * act_scale
-            out_float = out_int32.float() * combined_scale
+            if npu_sim:
+                out_act_scale = self.act_scales.get(layer_name, 1.0)
+                shift = self._compute_shift(w_scale, act_scale, out_act_scale)
+                out_shifted = out_int32 / (2.0**shift)
+                out_requant = torch.clamp(torch.round(out_shifted), -128, 127)
+                dequant_scale = (2.0**shift) * w_scale * act_scale
+                out_float = out_requant * dequant_scale
+            else:
+                combined_scale = w_scale * act_scale
+                out_float = out_int32.float() * combined_scale
+
             out_float = out_float + bias.view(1, -1, 1, 1)
             return out_float
 

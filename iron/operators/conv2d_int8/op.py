@@ -246,7 +246,8 @@ class AIEConv2dInt8(AIEOperatorBase):
         if self.fused and self.kernel_size == 3:
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
-                f"{self.height}h_{self.width}w_k3s{self.stride}_fused"
+                f"{self.height}h_{self.width}w_k3s{self.stride}"
+                f"_fused_sh{self.shift1}_{self.shift2}"
             )
             callback_fn = "my_conv2d_int8_k3_fused"
             callback_args = [
@@ -266,6 +267,7 @@ class AIEConv2dInt8(AIEOperatorBase):
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
                 f"{self.height}h_{self.width}w_k3s{self.stride}"
+                f"_sc{self.scale}"
             )
             callback_fn = "my_conv2d_int8_k3"
             callback_args = [
@@ -283,7 +285,8 @@ class AIEConv2dInt8(AIEOperatorBase):
         elif self.fused and self.kernel_size == 1:
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
-                f"{self.height}h_{self.width}w_k1_fused"
+                f"{self.height}h_{self.width}w_k1"
+                f"_fused_sh{self.shift1}_{self.shift2}"
             )
             callback_fn = "my_conv2d_int8_fused"
             callback_args = [
@@ -301,7 +304,7 @@ class AIEConv2dInt8(AIEOperatorBase):
         else:
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
-                f"{self.height}h_{self.width}w"
+                f"{self.height}h_{self.width}w_sc{self.scale}"
             )
             callback_fn = "my_conv2d_int8"
             kernel_src = "conv2dk1_i8.cc"
