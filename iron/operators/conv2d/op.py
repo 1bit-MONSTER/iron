@@ -357,22 +357,21 @@ class AIEConv2d(AIEOperatorBase):
                 f"oc_per_col={oc_per_col}, width={self.width}, avail={avail} bytes."
             )
         else:
-            # k3: Try full IC, then IC streaming (ic_chunk splits).
-            # Mirror design.py's nested (ic_chunk, oc_chunk) search.
-            for try_ic in ([self.in_channels] + [
-                c for c in [64, 32, 16]
-                if c < self.in_channels and self.in_channels % c == 0 and c % 8 == 0
-            ]):
-                is_ic_streaming = try_ic < self.in_channels
-                input_fbs = 4 * try_ic * self.width * 2
-                ic_accum_cost = IC_ACCUM_STATIC_BYTES if is_ic_streaming else 0
-                avail = L1_SIZE - OVERHEAD - input_fbs - ic_accum_cost
+            # k3: OC streaming with full in_channels per call.
+            # IC streaming is disabled (broken accumulation — see design.py).
+            # Try input depth=4 (preferred, 1 prefetch slot) then depth=3.
+            # Note: the AIE ObjectFIFO allocator uses (depth+1) physical buffers
+            # for a k3 sliding window FIFO, so budget with (depth+1) × element_size.
+            for try_depth in [4, 3]:
+                phys_bufs = try_depth + 1  # framework allocates one extra buffer
+                input_fbs = phys_bufs * self.in_channels * self.width * 2
+                avail = L1_SIZE - OVERHEAD - input_fbs
                 if avail <= 0:
                     continue
                 for try_oc in range(oc_per_col, 0, -8):
                     if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
                         continue
-                    wt_elems = try_oc * try_ic * k_elems
+                    wt_elems = try_oc * self.in_channels * k_elems
                     if fused:
                         wt_elems += try_oc
                     wt_bytes = wt_elems * 2
@@ -380,65 +379,22 @@ class AIEConv2d(AIEOperatorBase):
                     if wt_bytes + out_bytes > avail:
                         continue
                     n_oc = oc_per_col // try_oc
-                    n_ic = self.in_channels // try_ic
-                    if is_ic_streaming:
-                        bd_estimate = n_oc + 2
-                    else:
-                        bd_estimate = 2 * n_oc + 1
+                    bd_estimate = 2 * n_oc + 1
                     if bd_estimate <= MAX_BDS:
-                        return try_oc  # store oc_chunk; ic_chunk via _compute_ic_chunk
+                        return try_oc  # store oc_chunk
             raise AIEOperatorConstraintError(
-                f"AIEConv2d k3 infeasible even with IC+OC streaming: "
+                f"AIEConv2d k3 infeasible: "
                 f"in_channels={self.in_channels}, oc_per_col={oc_per_col}, "
                 f"width={self.width}. Cannot satisfy L1+BD constraints."
             )
 
     def _compute_ic_chunk(self):
-        """Compute IC streaming chunk size (mirrors design.py search logic).
+        """Compute IC streaming chunk size.
 
-        Returns in_channels when IC streaming is not needed.
+        IC streaming is disabled (broken accumulation for height > 1 row).
+        Always returns in_channels so the full depth is processed per call.
         """
-        if self.kernel_size == 1:
-            return self.in_channels  # k1 never uses IC streaming
-
-        L1_SIZE = 65536
-        OVERHEAD = 1040
-        MAX_BDS = 16
-        IC_ACCUM_STATIC_BYTES = 12800
-        oc_per_col = self.out_channels // self.num_aie_columns
-        k_elems = self.kernel_size * self.kernel_size
-        fused = self._fused_bias_silu
-        out_w = self.width // self.stride if self.stride > 1 else self.width
-
-        for try_ic in ([self.in_channels] + [
-            c for c in [64, 32, 16]
-            if c < self.in_channels and self.in_channels % c == 0 and c % 8 == 0
-        ]):
-            is_ic_streaming = try_ic < self.in_channels
-            input_fbs = 4 * try_ic * self.width * 2
-            ic_accum_cost = IC_ACCUM_STATIC_BYTES if is_ic_streaming else 0
-            avail = L1_SIZE - OVERHEAD - input_fbs - ic_accum_cost
-            if avail <= 0:
-                continue
-            for try_oc in range(oc_per_col, 0, -8):
-                if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
-                    continue
-                wt_elems = try_oc * try_ic * k_elems
-                if fused:
-                    wt_elems += try_oc
-                wt_bytes = wt_elems * 2
-                out_bytes = 2 * try_oc * out_w * 2
-                if wt_bytes + out_bytes > avail:
-                    continue
-                n_oc = oc_per_col // try_oc
-                n_ic = self.in_channels // try_ic
-                if is_ic_streaming:
-                    bd_estimate = n_oc * n_ic + 2
-                else:
-                    bd_estimate = 2 * n_oc + 1
-                if bd_estimate <= MAX_BDS:
-                    return try_ic
-        return self.in_channels  # fallback (design.py will raise)
+        return self.in_channels
 
     def _compute_wt_chunk_transfer(self):
         """Compute padded weight chunk transfer size for BD factorization.

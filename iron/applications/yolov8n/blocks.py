@@ -74,11 +74,13 @@ def _auto_columns(in_channels, out_channels, kernel_size, width=None, stride=1):
             total_l1 = OVERHEAD + input_bytes + per_core_weight + output_bytes
             if total_l1 <= L1_SIZE:
                 return cols
-    # Third pass: weight streaming via multiple DDR fills per OC group.
+    # Third pass: OC weight streaming via multiple DDR fills per OC group.
     # design.py will automatically stream weights in OC-group chunks.
     # Find smallest column count where the largest possible oc_chunk fits
     # in L1 alongside input/output FIFOs AND n_oc_groups stays within
     # the ShimDMA BD limit (16 BDs per tile).
+    # For k3 conv: try input depth=4 first (preferred, 1 prefetch slot),
+    # then depth=3 (minimum correct, no prefetch).
     MAX_BDS_PER_TILE = 16
     if width is not None:
         for cols in [1, 2, 4, 8]:
@@ -86,61 +88,27 @@ def _auto_columns(in_channels, out_channels, kernel_size, width=None, stride=1):
             if per_core_oc < 8 or per_core_oc % 8 != 0:
                 continue
             out_w = width // stride if stride > 1 else width
-            # Input depth: k1 with MemTile=1, k3=4.
-            # k3 sliding window uses acquire(3) which forces depth=4
-            # (3 active + 1 prefetch) in the MLIR-AIE framework.
-            if kernel_size == 1:
-                input_bytes = 1 * in_channels * width * 2
-            else:
-                input_bytes = 4 * in_channels * width * 2
-            avail = L1_SIZE - OVERHEAD - input_bytes
-            if avail <= 0:
-                continue
-            # Try largest oc_chunk first to minimize n_oc_groups
-            for try_oc in range(per_core_oc, 0, -8):
-                if per_core_oc % try_oc != 0 or try_oc % 8 != 0:
-                    continue
-                wt_bytes = try_oc * in_channels * k_elems * 2
-                out_bytes = 2 * try_oc * out_w * 2
-                if wt_bytes + out_bytes <= avail:
-                    n_groups = per_core_oc // try_oc
-                    # BD count: n_groups input + n_groups weight + 1 output
-                    if n_groups * 2 + 1 <= MAX_BDS_PER_TILE:
-                        return cols
-                    break  # larger oc_chunk won't help, try more columns
-    # Fourth pass (k3 only): IC streaming — split in_channels into ic_chunk groups.
-    # design.py supports IC streaming via the icstream kernel variant.
-    # The icstream .o contains a static float32 accumulation buffer (12800 bytes)
-    # that must be accounted for in the L1 budget.
-    IC_ACCUM_STATIC_BYTES = 12800  # 3200 floats × 4 bytes
-    if kernel_size == 3 and width is not None:
-        for cols in [1, 2, 4, 8]:
-            per_core_oc = out_channels // cols if out_channels % cols == 0 else -1
-            if per_core_oc < 8 or per_core_oc % 8 != 0:
-                continue
-            out_w = width // stride if stride > 1 else width
-            for ic_try in [
-                c
-                for c in [64, 32, 16]
-                if c < in_channels and in_channels % c == 0 and c % 8 == 0
-            ]:
-                input_bytes = 4 * ic_try * width * 2
-                avail = L1_SIZE - OVERHEAD - input_bytes - IC_ACCUM_STATIC_BYTES
+            # Try input depth 4 then 3 for k3 (k1 always uses MemTile depth=1).
+            depths = [1] if kernel_size == 1 else [4, 3]
+            for try_depth in depths:
+                # ObjectFIFO allocates (depth+1) physical buffers for k3 sliding window.
+                phys_bufs = try_depth + 1 if kernel_size == 3 else try_depth + 1
+                input_bytes = phys_bufs * in_channels * width * 2
+                avail = L1_SIZE - OVERHEAD - input_bytes
                 if avail <= 0:
                     continue
+                # Try largest oc_chunk first to minimize n_oc_groups
                 for try_oc in range(per_core_oc, 0, -8):
                     if per_core_oc % try_oc != 0 or try_oc % 8 != 0:
                         continue
-                    # Include fused bias in weight bytes
-                    wt_bytes = (try_oc * ic_try * k_elems + try_oc) * 2
+                    wt_bytes = try_oc * in_channels * k_elems * 2
                     out_bytes = 2 * try_oc * out_w * 2
-                    if wt_bytes + out_bytes > avail:
-                        continue
-                    n_ic = in_channels // ic_try
-                    n_oc = per_core_oc // try_oc
-                    bd_estimate = n_oc + 2
-                    if bd_estimate <= MAX_BDS_PER_TILE:
-                        return cols
+                    if wt_bytes + out_bytes <= avail:
+                        n_groups = per_core_oc // try_oc
+                        # BD count: n_groups input + n_groups weight + 1 output
+                        if n_groups * 2 + 1 <= MAX_BDS_PER_TILE:
+                            return cols
+                        break  # larger oc_chunk won't help with this depth/cols
     raise AIEOperatorConstraintError(
         f"No feasible NPU mapping: in_channels={in_channels}, "
         f"out_channels={out_channels}, kernel_size={kernel_size}, "
@@ -195,25 +163,38 @@ class CBS:
             self.out_width = width
 
         if num_aie_columns == 0:
-            num_aie_columns = _auto_columns(
-                in_channels, out_channels, kernel_size, width, stride
-            )
+            try:
+                num_aie_columns = _auto_columns(
+                    in_channels, out_channels, kernel_size, width, stride
+                )
+            except AIEOperatorConstraintError:
+                num_aie_columns = None  # signals CPU fallback below
 
         # Create the underlying AIEConv2d operator with fused bias+SiLU.
         # The kernel applies bias and SiLU on-chip, eliminating the DDR
         # round-trip for these operations.
-        self.conv = AIEConv2d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=kernel_size,
-            stride=stride,
-            height=height,
-            width=width,
-            has_bias=True,
-            activation="silu",
-            num_aie_columns=num_aie_columns,
-            context=context,
-        )
+        # If the configuration is infeasible on NPU (e.g. large in_channels
+        # with k3 and large spatial dimensions), fall back to CPU computation.
+        self.conv = None
+        self._use_cpu_fallback = False
+        if num_aie_columns is not None:
+            try:
+                self.conv = AIEConv2d(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    height=height,
+                    width=width,
+                    has_bias=True,
+                    activation="silu",
+                    num_aie_columns=num_aie_columns,
+                    context=context,
+                )
+            except AIEOperatorConstraintError:
+                self._use_cpu_fallback = True
+        else:
+            self._use_cpu_fallback = True
 
         self.weight = None
         self.bias = None
@@ -231,7 +212,7 @@ class CBS:
         self.bias = bias.to(torch.bfloat16)
 
     def forward(self, x):
-        """Run Conv + Bias + SiLU on the NPU.
+        """Run Conv + Bias + SiLU on the NPU (or CPU fallback).
 
         Args:
             x: Input tensor [1, C_in, H, W] in bfloat16.
@@ -239,6 +220,19 @@ class CBS:
         Returns:
             Output tensor [1, C_out, H_out, W_out] in bfloat16.
         """
+        if self._use_cpu_fallback:
+            # NPU infeasible for this configuration: compute on CPU.
+            # This occurs for large in_channels + large spatial dims (k3 only)
+            # where the sliding window input FIFO cannot fit in L1 (64KB).
+            padding = self.kernel_size // 2
+            y = F.conv2d(
+                x.float(),
+                self.weight.float(),
+                self.bias.float(),
+                stride=self.stride,
+                padding=padding,
+            )
+            return F.silu(y).to(torch.bfloat16)
         return self.conv.forward(x, self.weight, self.bias)
 
 

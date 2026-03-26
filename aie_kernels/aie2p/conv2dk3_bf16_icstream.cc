@@ -3,13 +3,17 @@
 
 // IC-streaming 3x3 convolution kernel for bfloat16 (AIE2+).
 //
-// Used when in_channels is too large to fit the depth-4 sliding window
-// FIFO alongside weights in L1 (64KB).  Input channels are split into
-// ic_chunk-wide groups; this kernel is called n_ic_groups times per
-// output row.  Partial products are accumulated in a static float32
-// buffer.  On the final IC group, bias is added and SiLU is applied.
+// NOTE: This kernel is currently DISABLED.  IC streaming was found to produce
+// incorrect results for configurations where height > 1 because the static
+// _ic_accum buffer (sized for one output row) gets overwritten as the IC-outer
+// pass processes successive rows.  By the time IC group 1 starts accumulating
+// on top of IC group 0's results, _ic_accum contains only the LAST row's
+// partial sums from IC group 0 — not row 0's.
 //
-// Data layouts match conv2dk3_bf16.cc:
+// The design.py k3 path now disables IC streaming entirely.  This file is
+// retained for reference and future correctness work.
+//
+// Data layouts (for reference):
 //   Input rows:  [ic_chunk/8, W, 8]
 //   Weights:     [oc_chunk/8, ic_chunk/8, 3, 3, 8, 8]
 //   Output row:  [oc_chunk/8, W_out, 8]
@@ -46,27 +50,18 @@ static inline bfloat16 *select_line(int kh, bfloat16 *line0, bfloat16 *line1,
 
 // ---------------------------------------------------------------------------
 // IC-streaming accumulation buffer.
-//
-// Sized for max oc_chunk * out_w across IC-streaming configs:
-//   40 * 80 = 3200 elements (from 80->80 k3s1 80x80 config).
-//   3200 * 4 = 12800 bytes.
-//
-// This buffer lives in L1 static data and MUST be accounted for in the
-// Python-side L1 budget calculations (IC_ACCUM_STATIC_BYTES = 12800).
+// Retained for reference; not used in the disabled IC streaming path.
 // ---------------------------------------------------------------------------
 static float __attribute__((aligned(64))) _ic_accum[3200];
 
 // ---------------------------------------------------------------------------
-// IC-streaming stride-1 bias+SiLU fused scalar implementation.
+// IC-streaming stride-1 bias+SiLU fused scalar implementation (BROKEN).
 //
-// Parameters:
-//   input_channels   -- ic_chunk (channels in this group, multiple of 8)
-//   output_channels  -- oc_chunk (output channels handled by this core)
-//   ic_group_idx     -- index of this IC group (0 = initialize accum)
-//   n_ic_groups      -- total number of IC groups (last = flush + SiLU)
+// Bug: _ic_accum is sized for one output row but the IC-outer pass processes
+// all H rows for IC group 0, leaving only row H-1's partial sums in the
+// buffer when IC group 1 starts processing row 0.
 //
-// Accumulation: static float32 buffer.  Avoids extra DMA channel since
-// the output FIFO is only written on the final IC group.
+// Retained for reference only; IC streaming is currently disabled in design.py.
 // ---------------------------------------------------------------------------
 void conv2dk3_bf16_bias_silu_icstream_scalar(
     bfloat16 *line0, bfloat16 *line1, bfloat16 *line2, bfloat16 *weights,
@@ -149,15 +144,8 @@ void conv2dk3_bf16_bias_silu_icstream_scalar(
 }
 
 // ---------------------------------------------------------------------------
-// extern "C" wrappers
-//
-// Two entry points with different signatures:
-//   accum:  NO output pointer — used for non-last IC groups (accumulate only)
-//   flush:  WITH output pointer — used for last IC group (bias + SiLU + write)
-//
-// This allows the MLIR-AIE core function to avoid acquiring the output FIFO
-// for non-last IC groups, keeping the drain TAP simple (n_oc * height elements
-// instead of n_oc * n_ic * height).
+// extern "C" wrappers (BROKEN - retained for reference only).
+// IC streaming is currently disabled in design.py.
 // ---------------------------------------------------------------------------
 extern "C" {
 
