@@ -1184,21 +1184,58 @@ def my_conv2d_int8_k3_fused(
 def my_conv2d_int8_fused(
     dev, height, width, in_channels, out_channels, shift1, shift2,
 ):
-    """Fused 1x1 int8 conv+bias+SiLU. Bias packed at end of weight buffer."""
+    """Fused 1x1 int8 conv+bias+SiLU with OC streaming.
+
+    Bias packed at end of weight buffer. Supports OC streaming when
+    weights+bias don't fit in L1 (same as non-fused k1).
+    """
     xfr_dtype = np.int8
+    _BD_WRAP_MAX = 64
     assert in_channels % 8 == 0 and out_channels % 8 == 0
 
     input_row_size = in_channels * width
     total_input = in_channels * height * width
     total_output = out_channels * height * width
-    wt_chunk = out_channels * in_channels + out_channels * 4
-    total_wt = wt_chunk
-    out_row = out_channels * width
+
+    # L1 budget: find oc_chunk that fits (including bias bytes)
+    n_oc_groups = 1
+    oc_chunk = out_channels
+    input_bufs = 2 * input_row_size  # depth=2
+    avail = 65536 - 1040 - input_bufs
+
+    if avail <= 0:
+        raise ValueError(f"k1 fused int8 infeasible: IC={in_channels}, W={width}")
+
+    wt_bytes = out_channels * in_channels + out_channels * 4  # weights + bias
+    out_bytes = 2 * out_channels * width  # depth=2 output
+    if wt_bytes + out_bytes > avail:
+        found = False
+        for try_oc in range(out_channels, 0, -8):
+            if out_channels % try_oc != 0 or try_oc % 8 != 0:
+                continue
+            wt_b = try_oc * in_channels + try_oc * 4
+            out_b = 2 * try_oc * width
+            if wt_b + out_b > avail:
+                continue
+            n_oc = out_channels // try_oc
+            if n_oc > _BD_WRAP_MAX:
+                continue
+            oc_chunk = try_oc
+            n_oc_groups = n_oc
+            found = True
+            break
+        if not found:
+            raise ValueError(
+                f"k1 fused int8 infeasible: IC={in_channels}, OC={out_channels}, W={width}")
+
+    wt_chunk_size = oc_chunk * in_channels + oc_chunk * 4  # per-chunk weights + bias
+    output_row_size = oc_chunk * width
+    total_wt = wt_chunk_size * n_oc_groups
 
     dev_ty = NPU2()
     in_ty = np.ndarray[(input_row_size,), np.dtype[xfr_dtype]]
-    wt_ty = np.ndarray[(wt_chunk,), np.dtype[xfr_dtype]]
-    out_ty = np.ndarray[(out_row,), np.dtype[xfr_dtype]]
+    wt_ty = np.ndarray[(wt_chunk_size,), np.dtype[xfr_dtype]]
+    out_ty = np.ndarray[(output_row_size,), np.dtype[xfr_dtype]]
     in_l3_ty = np.ndarray[(total_input,), np.dtype[xfr_dtype]]
     wt_l3_ty = np.ndarray[(total_wt,), np.dtype[xfr_dtype]]
     out_l3_ty = np.ndarray[(total_output,), np.dtype[xfr_dtype]]
@@ -1210,17 +1247,32 @@ def my_conv2d_int8_fused(
     out_fifo = ObjectFifo(out_ty, name="out", depth=2)
 
     def core_fn(oi, ow, oo, k):
-        wt = ow.acquire(1)
-        for _ in range_(height):
-            ei = oi.acquire(1); eo = oo.acquire(1)
-            k(ei, wt, eo, width, in_channels, out_channels, shift1, shift2)
-            oi.release(1); oo.release(1)
-        ow.release(1)
+        s1, s2 = shift1, shift2
+        co = oc_chunk
+        for _ in range_(n_oc_groups):
+            wt = ow.acquire(1)
+            for _ in range_(height):
+                ei = oi.acquire(1); eo = oo.acquire(1)
+                k(ei, wt, eo, width, in_channels, co, s1, s2)
+                oi.release(1); oo.release(1)
+            ow.release(1)
 
     worker = Worker(core_fn, [in_fifo.cons(), wt_fifo.cons(), out_fifo.prod(), kernel])
-    in_tap = TensorAccessPattern((1, total_input), offset=0, sizes=[1,1,1,total_input], strides=[0,0,0,1])
-    wt_tap = TensorAccessPattern((1, total_wt), offset=0, sizes=[1,1,1,total_wt], strides=[0,0,0,1])
-    out_tap = TensorAccessPattern((1, total_output), offset=0, sizes=[1,1,1,total_output], strides=[0,0,0,1])
+
+    # TAPs
+    in_tap = TensorAccessPattern((1, total_input), offset=0,
+                                  sizes=[1, 1, 1, total_input], strides=[0, 0, 0, 1])
+    wt_tap = TensorAccessPattern((1, total_wt), offset=0,
+                                  sizes=[1, 1, 1, total_wt], strides=[0, 0, 0, 1])
+    # Output TAP: interleave OC chunks across rows
+    output_row_total = out_channels * width
+    if n_oc_groups == 1:
+        out_tap = TensorAccessPattern((1, total_output), offset=0,
+                                       sizes=[1, 1, 1, total_output], strides=[0, 0, 0, 1])
+    else:
+        out_tap = TensorAccessPattern((1, total_output), offset=0,
+            sizes=[n_oc_groups, height, 1, output_row_size],
+            strides=[output_row_size, output_row_total, 0, 1])
 
     rt = Runtime()
     with rt.sequence(in_l3_ty, wt_l3_ty, out_l3_ty) as (inp, wts, out):
