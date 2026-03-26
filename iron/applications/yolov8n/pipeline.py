@@ -35,7 +35,7 @@ from iron.operators.upsample.op import AIEUpsample
 from iron.applications.yolov8n.blocks import _auto_columns
 
 
-def _conv_key(in_ch, out_ch, h, w, kernel_size, stride, num_cols):
+def _conv_key(in_ch, out_ch, h, w, kernel_size, stride, num_cols, activation=None):
     """Unique key for a conv2d configuration."""
     return (
         "conv2d",
@@ -46,6 +46,7 @@ def _conv_key(in_ch, out_ch, h, w, kernel_size, stride, num_cols):
         kernel_size,
         stride,
         num_cols,
+        activation,
     )
 
 
@@ -105,12 +106,13 @@ class YOLOv8nPipeline(AIEOperatorBase):
         return kid
 
     def _register_conv(
-        self, layer_name, in_ch, out_ch, h, w, kernel_size, stride, num_cols
+        self, layer_name, in_ch, out_ch, h, w, kernel_size, stride, num_cols,
+        activation=None,
     ):
         """Register a conv2d config; deduplicate by config key."""
         if num_cols == 0:
             num_cols = _auto_columns(in_ch, out_ch, kernel_size, w, stride)
-        key = _conv_key(in_ch, out_ch, h, w, kernel_size, stride, num_cols)
+        key = _conv_key(in_ch, out_ch, h, w, kernel_size, stride, num_cols, activation)
         self._layer_map[layer_name] = key
 
         if key not in self._pdi_map:
@@ -122,7 +124,7 @@ class YOLOv8nPipeline(AIEOperatorBase):
                 height=h,
                 width=w,
                 has_bias=True,
-                activation=None,
+                activation=activation,
                 num_aie_columns=num_cols,
                 context=self.context,
                 register=False,
@@ -168,8 +170,9 @@ class YOLOv8nPipeline(AIEOperatorBase):
             self._pdi_map[key] = {"sub_op": sub_op, "xclbin": None, "insts": None}
 
     def _register_cbs(self, name, in_ch, out_ch, ks, stride, h, w, cols):
-        """Register a CBS block (one conv2d)."""
-        self._register_conv(name, in_ch, out_ch, h, w, ks, stride, cols)
+        """Register a CBS block (conv2d with fused bias+SiLU)."""
+        self._register_conv(name, in_ch, out_ch, h, w, ks, stride, cols,
+                            activation="silu")
 
     def _register_bottleneck(self, name, channels, h, w, cols):
         """Register a Bottleneck block (two 3x3 convs)."""
@@ -367,6 +370,9 @@ class YOLOv8nPipeline(AIEOperatorBase):
                     w_sz = sub_op.out_channels * sub_op.in_channels
                 else:
                     w_sz = sub_op.out_channels * sub_op.in_channels * 9
+                # Fused bias+SiLU packs bias into weight buffer
+                if sub_op._fused_bias_silu:
+                    w_sz += sub_op.out_channels
                 out_sz = sub_op.out_channels * sub_op.out_height * sub_op.out_width
                 self.add_buffer(f"{lname}_input", in_sz)
                 self.add_buffer(f"{lname}_weights", w_sz)
@@ -385,7 +391,12 @@ class YOLOv8nPipeline(AIEOperatorBase):
                 self.add_buffer(f"{lname}_output", out_sz)
 
     def _run_conv(self, layer_name, x, weight, bias=None):
-        """Run a single conv2d layer through the pipeline."""
+        """Run a single conv2d layer through the pipeline.
+
+        When the sub-operator has fused bias+SiLU (activation='silu'),
+        bias is packed into the weight buffer and applied on-chip.
+        Otherwise, bias is applied in Python after the NPU returns.
+        """
         entry = self._get_layer_entry(layer_name)
         sub_op = entry["sub_op"]
 
@@ -398,6 +409,23 @@ class YOLOv8nPipeline(AIEOperatorBase):
             weight_tiled = weights_to_tiled(weight)
         else:
             weight_tiled = weights_to_tiled_3x3(weight)
+
+        # Pack bias into weight buffer when fused bias+SiLU
+        if sub_op._fused_bias_silu and bias is not None:
+            from iron.common.utils import torch_to_numpy
+            bias_np = torch_to_numpy(bias.to(torch.bfloat16)).ravel()
+            oc_per_col = sub_op.out_channels // sub_op.num_aie_columns
+            k_elems = sub_op.kernel_size * sub_op.kernel_size
+            wt_per_col = oc_per_col * sub_op.in_channels * k_elems
+            bias_per_col = oc_per_col
+            parts = []
+            for col in range(sub_op.num_aie_columns):
+                wt_start = col * wt_per_col
+                parts.append(weight_tiled[wt_start : wt_start + wt_per_col])
+                b_start = col * bias_per_col
+                parts.append(bias_np[b_start : b_start + bias_per_col])
+            weight_tiled = np.concatenate(parts)
+
         self.write_buffer(f"{layer_name}_weights", weight_tiled)
 
         # Zero output
@@ -405,7 +433,7 @@ class YOLOv8nPipeline(AIEOperatorBase):
         total_output = sub_op.out_channels * oh * ow
         self.write_buffer(f"{layer_name}_output", np.zeros(total_output, dtype=bfloat16))
 
-        # Run this single kernel (not the full runlist)
+        # Run this single kernel
         kernel_name = entry["kernel_name"]
         self._run_single_kernel(
             kernel_name,
@@ -420,16 +448,19 @@ class YOLOv8nPipeline(AIEOperatorBase):
         )
         result = tiled_to_nchw(output_flat, sub_op.out_channels, oh, ow)
 
-        # Apply bias in Python
-        if bias is not None:
-            result = result + bias.reshape(1, -1, 1, 1)
+        if sub_op._fused_bias_silu:
+            # Bias and SiLU already applied on-chip
+            pass
+        else:
+            # Apply bias in Python (non-fused path)
+            if bias is not None:
+                result = result + bias.reshape(1, -1, 1, 1)
 
         return result
 
     def _run_cbs(self, layer_name, x, weight, bias):
-        """Run a CBS layer (conv + bias + SiLU in Python)."""
-        result = self._run_conv(layer_name, x, weight, bias)
-        return F.silu(result)
+        """Run a CBS layer (conv + bias + SiLU fused on-chip)."""
+        return self._run_conv(layer_name, x, weight, bias)
 
     def _run_pool(self, layer_name, x):
         """Run a maxpool2d layer."""
