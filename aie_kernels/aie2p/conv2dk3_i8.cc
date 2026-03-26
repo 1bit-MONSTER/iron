@@ -452,6 +452,246 @@ void conv2dk3_i8_vectorized(int8_t *__restrict line0,
 }
 
 // ---------------------------------------------------------------------------
+// Vectorized stride-2 implementation
+//
+// Uses aie::mmul<8,8,8,int8,int8> to compute 8 output positions x 8 output
+// channels at a time. Each group of 8 outputs consumes 16 input positions
+// (stride 2), gathered via interleave_unzip into even/odd position vectors.
+//
+// Stride-2 gathering: load 16 consecutive input positions as two 64-element
+// vectors, then aie::interleave_unzip(..., 8) separates even positions
+// (for kw=1 center) and odd positions (for kw=2 right). The kw=0 left
+// vector is constructed by shuffle_up_fill of the odd vector with the
+// previous chunk's last position.
+//
+// Border handling: Left padding (position -1 for x_out=0, kw=0) is handled
+// by filling with zeros. No right padding is needed because stride-2 with
+// even input_width never accesses beyond input_width-1.
+//
+// Output: acc32 right-shifted by `scale` with rounding, saturated to int8.
+// ---------------------------------------------------------------------------
+void conv2dk3s2_i8_vectorized(int8_t *__restrict line0,
+                               int8_t *__restrict line1,
+                               int8_t *__restrict line2,
+                               int8_t *__restrict weights,
+                               int8_t *__restrict output,
+                               const int32_t input_width,
+                               const int32_t input_channels,
+                               const int32_t output_channels,
+                               const int32_t check,
+                               const int32_t scale) {
+    event0();
+
+    using MMUL = aie::mmul<8, 8, 8, int8, int8>;
+
+    const int ic_groups = input_channels / 8;
+    const int oc_groups = output_channels / 8;
+    const int output_width = input_width / 2;
+
+    const int wt_stride_kw = 64;
+    const int wt_stride_kh = 3 * 64;
+    const int wt_stride_ic = 3 * 3 * 64;
+    const int wt_stride_oc = ic_groups * wt_stride_ic;
+
+    int8_t *lines[3] = {line0, line1, line2};
+
+    constexpr int NUM_W = 8;           // output positions per vector iteration
+    constexpr int INPUT_PER_ITER = 16; // input positions consumed (stride 2)
+    const int vec_iters = output_width / NUM_W;
+    const int scalar_start = vec_iters * NUM_W;
+
+    aie::vector<int8, MMUL::size_A> zeros_v =
+        aie::zeros<int8, MMUL::size_A>();
+
+    ::aie::set_saturation(aie::saturation_mode::saturate);
+    ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
+
+    for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
+
+        // ---- Vectorized: groups of 8 output positions ----
+        for (int vi = 0; vi < vec_iters; vi++) {
+            int x_in = vi * INPUT_PER_ITER;
+
+            MMUL acc;
+            acc = aie::zeros<acc32, MMUL::size_C>();
+
+            // kh=0: skip if top border (check == CHECK_TOP)
+            if (check != CHECK_TOP) {
+                for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
+                    int8_t *__restrict lp =
+                        lines[0] + ic_g * (input_width * 8);
+
+                    // Load 16 consecutive input positions
+                    aie::vector<int8, MMUL::size_A> vec_lo =
+                        aie::load_v<MMUL::size_A>(lp + x_in * 8);
+                    aie::vector<int8, MMUL::size_A> vec_hi =
+                        aie::load_v<MMUL::size_A>(
+                            lp + (x_in + NUM_W) * 8);
+
+                    // Separate even/odd positions (8-byte groups)
+                    auto [v_even, v_odd] =
+                        aie::interleave_unzip(vec_lo, vec_hi, 8);
+
+                    // kw=0 (left): need pos[x_in-1, x_in+1, ..., x_in+13]
+                    aie::vector<int8, MMUL::size_A> v_left;
+                    if (vi > 0) {
+                        v_left = aie::shuffle_up_fill(
+                            v_odd,
+                            aie::load_v<MMUL::size_A>(
+                                lp + (x_in - NUM_W) * 8),
+                            8);
+                    } else {
+                        v_left = aie::shuffle_up_fill(
+                            v_odd, zeros_v, 8);
+                    }
+
+                    int8_t *__restrict wp =
+                        weights + oc_g * wt_stride_oc +
+                        ic_g * wt_stride_ic + 0 * wt_stride_kh;
+
+                    acc.mac(v_left,
+                            aie::load_v<MMUL::size_B>(wp));
+                    acc.mac(v_even,
+                            aie::load_v<MMUL::size_B>(
+                                wp + wt_stride_kw));
+                    acc.mac(v_odd,
+                            aie::load_v<MMUL::size_B>(
+                                wp + 2 * wt_stride_kw));
+                }
+            }
+
+            // kh=1: always process (middle row is always valid)
+            for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
+                int8_t *__restrict lp =
+                    lines[1] + ic_g * (input_width * 8);
+
+                aie::vector<int8, MMUL::size_A> vec_lo =
+                    aie::load_v<MMUL::size_A>(lp + x_in * 8);
+                aie::vector<int8, MMUL::size_A> vec_hi =
+                    aie::load_v<MMUL::size_A>(
+                        lp + (x_in + NUM_W) * 8);
+
+                auto [v_even, v_odd] =
+                    aie::interleave_unzip(vec_lo, vec_hi, 8);
+
+                aie::vector<int8, MMUL::size_A> v_left;
+                if (vi > 0) {
+                    v_left = aie::shuffle_up_fill(
+                        v_odd,
+                        aie::load_v<MMUL::size_A>(
+                            lp + (x_in - NUM_W) * 8),
+                        8);
+                } else {
+                    v_left = aie::shuffle_up_fill(
+                        v_odd, zeros_v, 8);
+                }
+
+                int8_t *__restrict wp =
+                    weights + oc_g * wt_stride_oc +
+                    ic_g * wt_stride_ic + 1 * wt_stride_kh;
+
+                acc.mac(v_left,
+                        aie::load_v<MMUL::size_B>(wp));
+                acc.mac(v_even,
+                        aie::load_v<MMUL::size_B>(
+                            wp + wt_stride_kw));
+                acc.mac(v_odd,
+                        aie::load_v<MMUL::size_B>(
+                            wp + 2 * wt_stride_kw));
+            }
+
+            // kh=2: skip if bottom border (check == CHECK_BOTTOM)
+            if (check != CHECK_BOTTOM) {
+                for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
+                    int8_t *__restrict lp =
+                        lines[2] + ic_g * (input_width * 8);
+
+                    aie::vector<int8, MMUL::size_A> vec_lo =
+                        aie::load_v<MMUL::size_A>(lp + x_in * 8);
+                    aie::vector<int8, MMUL::size_A> vec_hi =
+                        aie::load_v<MMUL::size_A>(
+                            lp + (x_in + NUM_W) * 8);
+
+                    auto [v_even, v_odd] =
+                        aie::interleave_unzip(vec_lo, vec_hi, 8);
+
+                    aie::vector<int8, MMUL::size_A> v_left;
+                    if (vi > 0) {
+                        v_left = aie::shuffle_up_fill(
+                            v_odd,
+                            aie::load_v<MMUL::size_A>(
+                                lp + (x_in - NUM_W) * 8),
+                            8);
+                    } else {
+                        v_left = aie::shuffle_up_fill(
+                            v_odd, zeros_v, 8);
+                    }
+
+                    int8_t *__restrict wp =
+                        weights + oc_g * wt_stride_oc +
+                        ic_g * wt_stride_ic + 2 * wt_stride_kh;
+
+                    acc.mac(v_left,
+                            aie::load_v<MMUL::size_B>(wp));
+                    acc.mac(v_even,
+                            aie::load_v<MMUL::size_B>(
+                                wp + wt_stride_kw));
+                    acc.mac(v_odd,
+                            aie::load_v<MMUL::size_B>(
+                                wp + 2 * wt_stride_kw));
+                }
+            }
+
+            aie::vector<int8, MMUL::size_C> result =
+                acc.to_vector<int8>(scale);
+            aie::store_v(
+                output + oc_g * (output_width * 8) + vi * NUM_W * 8,
+                result);
+        }
+
+        // ---- Scalar remainder (output_width not divisible by 8) ----
+        for (int x_out = scalar_start; x_out < output_width; x_out++) {
+            int x_in_base = x_out * 2;
+            for (int oc8 = 0; oc8 < 8; oc8++) {
+                int32_t sum = 0;
+                for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
+                    for (int ic8 = 0; ic8 < 8; ic8++) {
+                        for (int kh = 0; kh < 3; kh++) {
+                            if (kh == 0 && check == CHECK_TOP)
+                                continue;
+                            if (kh == 2 && check == CHECK_BOTTOM)
+                                continue;
+                            for (int kw = 0; kw < 3; kw++) {
+                                int input_x = x_in_base + kw - 1;
+                                if (input_x < 0 || input_x >= input_width)
+                                    continue;
+                                int in_idx =
+                                    ic_g * (input_width * 8) +
+                                    input_x * 8 + ic8;
+                                int wt_idx =
+                                    oc_g * wt_stride_oc +
+                                    ic_g * wt_stride_ic +
+                                    kh * wt_stride_kh +
+                                    kw * wt_stride_kw + ic8 * 8 + oc8;
+                                sum += (int32_t)lines[kh][in_idx] *
+                                       (int32_t)weights[wt_idx];
+                            }
+                        }
+                    }
+                }
+                output[oc_g * (output_width * 8) + x_out * 8 + oc8] =
+                    quantize_i8(sum, scale);
+            }
+        }
+    }
+
+    ::aie::set_saturation(aie::saturation_mode::none);
+    ::aie::set_rounding(aie::rounding_mode::floor);
+
+    event1();
+}
+
+// ---------------------------------------------------------------------------
 // extern "C" wrappers
 // ---------------------------------------------------------------------------
 extern "C" {
@@ -482,8 +722,15 @@ void conv2dk3s2_i8(int8_t *line0, int8_t *line1, int8_t *line2,
                     const int32_t input_width, const int32_t input_channels,
                     const int32_t output_channels, const int32_t check,
                     const int32_t scale) {
-    conv2dk3s2_i8_scalar(line0, line1, line2, weights, output,
-                          input_width, input_channels, output_channels, check, scale);
+    if (input_width % 8 == 0) {
+        conv2dk3s2_i8_vectorized(line0, line1, line2, weights, output,
+                                  input_width, input_channels,
+                                  output_channels, check, scale);
+    } else {
+        conv2dk3s2_i8_scalar(line0, line1, line2, weights, output,
+                              input_width, input_channels, output_channels,
+                              check, scale);
+    }
 }
 
 } // extern "C"
