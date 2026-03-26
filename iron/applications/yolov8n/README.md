@@ -505,12 +505,69 @@ detections = postproc(raw["reg"], raw["cls"])
 # detections = {"boxes": [N,4], "scores": [N], "labels": [N]}
 ```
 
+### Running with Pretrained Weights (Real Object Detection)
+
+Detect objects in an image using pretrained YOLOv8n weights on the NPU:
+
+```bash
+# Prerequisites
+pip install ultralytics opencv-python
+
+# Environment
+source ~/.bashrc
+source ironenv/bin/activate
+source /scratch/jmelber/mlir-aie/utils/env_setup.sh /scratch/jmelber/mlir-aie /opt/xrt
+
+# Run on the classic YOLO test image
+python3 -m iron.applications.yolov8n.run_pretrained --image test_bus.jpg
+```
+
+**Example output (bus.jpg):**
+```
+NPU DETECTIONS: 5
+  person: 0.848 [41, 236, 190, 537]
+  person: 0.840 [529, 230, 640, 519]
+  bus:    0.835 [7, 136, 637, 442]
+  person: 0.803 [176, 240, 272, 509]
+  person: 0.430 [-1, 324, 58, 516]
+```
+
+**How it works:**
+1. Loads ultralytics YOLOv8n pretrained weights (COCO, 80 classes)
+2. Fuses Conv+BatchNorm into single weight+bias per layer
+3. Converts weights to bfloat16, pads L0 from 3→8 input channels
+4. Runs backbone (L0-L9) → neck (L10-L21) → detect head (6 branches) on NPU
+5. Post-processes with DFL decode + dist2bbox + NMS
+6. Each block runs in its own AIEContext with XRT cache cleanup between blocks
+
+**Performance (unoptimized, scalar k3 kernels):**
+- Inference: ~88s (dominated by scalar 3×3 conv — vectorized would be ~10× faster)
+- Compilation: ~0s (cached after first run)
+- Post-processing: <0.01s
+
+**Accuracy:**
+- Matches ultralytics CPU reference: same objects detected (4 person + 1 bus)
+- Per-layer NPU vs CPU correlation: >0.999 through all backbone layers
+- Confidence scores within ~5% of float32 reference
+
+### Running the Full Model (Random Weights)
+
+For testing the pipeline without pretrained weights:
+
+```bash
+python3 -m iron.applications.yolov8n.run_full_model
+```
+
+This uses 2 multi-PDI xclbins (backbone+neck: 28 PDIs, detect: 17 PDIs)
+with random weights. Verifies all shapes and finite values.
+
 ## File Structure
 
 ```
 iron/applications/yolov8n/
 ├── __init__.py
 ├── README.md              # This file
+├── LAYER_CONFIGS.md       # All 68 operator configs with PDI map
 ├── pipeline.py            # YOLOv8nPipeline: multi-PDI full model
 ├── blocks.py              # CBS, Bottleneck, C2f, SPPF blocks
 ├── backbone.py            # YOLOv8nBackbone (layers 0-9)
@@ -518,6 +575,10 @@ iron/applications/yolov8n/
 ├── detect.py              # YOLOv8nDetect, DetectBranch (head)
 ├── postprocess.py         # YOLOv8nPostProcess (DFL + NMS)
 ├── model_prep.py          # BN fusion, weight export, layout utils
+├── run_full_model.py      # Full model with random weights (2 xclbins)
+├── run_pretrained.py      # Pretrained weights on real images
+├── bench_operators.py     # Operator benchmarking script
+├── benchmark_results.md   # Benchmark results table
 ├── test_pipeline.py       # Multi-PDI pipeline tests
 ├── test_backbone.py       # Backbone-only tests
 ├── test_neck_detect.py    # Neck + detect head tests
