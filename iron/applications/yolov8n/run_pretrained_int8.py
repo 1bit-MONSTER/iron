@@ -556,7 +556,7 @@ def main():
     print(f"{'=' * 70}")
 
     t0 = time.time()
-    ctx = AIEContext()
+    ctx = AIEContext(use_runlist=False)
     pipeline = Int8YOLOv8nPipeline(
         shifts, act_scales, int8_weights, context=ctx
     )

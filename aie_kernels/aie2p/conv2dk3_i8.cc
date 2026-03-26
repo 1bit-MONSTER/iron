@@ -461,9 +461,20 @@ void conv2dk3_i8(int8_t *line0, int8_t *line1, int8_t *line2,
                   const int32_t input_width, const int32_t input_channels,
                   const int32_t output_channels, const int32_t check,
                   const int32_t scale) {
-    conv2dk3_i8_vectorized(line0, line1, line2, weights, output,
+    // Vectorized path requires width*8 to be 64-byte aligned (i.e. width
+    // must be a multiple of 8) because aie::load_v<64> needs 64-byte
+    // alignment and the per-ic-group stride is width*8 bytes.  When
+    // width % 8 != 0 the stride is not a multiple of 64 and the loads
+    // for ic_g >= 1 silently read from a wrong aligned address.
+    if (input_width % 8 == 0) {
+        conv2dk3_i8_vectorized(line0, line1, line2, weights, output,
+                                input_width, input_channels, output_channels,
+                                check, scale);
+    } else {
+        conv2dk3_i8_scalar(line0, line1, line2, weights, output,
                             input_width, input_channels, output_channels,
                             check, scale);
+    }
 }
 
 void conv2dk3s2_i8(int8_t *line0, int8_t *line1, int8_t *line2,

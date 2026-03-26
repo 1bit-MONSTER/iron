@@ -150,6 +150,14 @@ class Int8ConvPipeline(AIEOperatorBase):
             self.add_buffer(f"{lname}_input", in_sz, dtype=np.int8)
             self.add_buffer(f"{lname}_weights", w_sz, dtype=np.int8)
             self.add_buffer(f"{lname}_output", out_sz, dtype=np.int8)
+            # Register in the runlist so the buffer pool allocator knows
+            # which buffers are used together and must not share a BO.
+            self.add_to_runlist(
+                entry["kernel_name"],
+                f"{lname}_input",
+                f"{lname}_weights",
+                f"{lname}_output",
+            )
 
     def _run_single_kernel(self, kernel_name, *buffer_names):
         """Execute a single kernel invocation."""
