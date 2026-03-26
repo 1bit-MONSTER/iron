@@ -221,12 +221,17 @@ void conv2dk3_i8_fused_scalar(int8_t *line0, int8_t *line1, int8_t *line2,
 // ---------------------------------------------------------------------------
 extern "C" {
 
+// Bias-packed variant: bias is appended after weights in the same buffer.
+// Layout: [weights (oc*ic*9 int8 bytes)] [bias (oc int32 values = oc*4 bytes)]
+// This avoids needing a 3rd input DMA channel (compute tile has only 2).
 void conv2dk3_i8_fused(int8_t *line0, int8_t *line1, int8_t *line2,
-                        int8_t *weights, int32_t *bias, int8_t *output,
+                        int8_t *weights_and_bias, int8_t *output,
                         const int32_t input_width,
                         const int32_t input_channels,
                         const int32_t output_channels, const int32_t check,
                         const int32_t shift1, const int32_t shift2) {
+    int8_t *weights = weights_and_bias;
+    int32_t *bias = (int32_t *)(weights_and_bias + output_channels * input_channels * 9);
     conv2dk3_i8_fused_scalar(line0, line1, line2, weights, bias, output,
                               input_width, input_channels, output_channels,
                               check, shift1, shift2);
