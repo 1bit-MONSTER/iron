@@ -22,6 +22,7 @@ Usage:
 
 import argparse
 import math
+import re
 import time
 import urllib.request
 from pathlib import Path
@@ -40,6 +41,45 @@ from iron.applications.yolov8n.run_pretrained import (
     COCO_NAMES,
     preprocess_image,
 )
+
+
+# -- Per-stage calibration percentile ----------------------------------------
+
+# Per-stage percentile map.  Controls how aggressively outlier activations
+# are clipped during calibration.  Lower percentile = more clipping = smaller
+# scale = better precision for typical values at the cost of clipping outliers.
+#
+# p100 (1.0) = absolute max (no clipping).  Use for backbone where outliers
+# carry real information and the shift is highly sensitive to scale changes.
+STAGE_PCT = {
+    "input": 1.0,  # Never clip the input image
+    "backbone": 1.0,  # L0-L9: backbone is very sensitive to scale changes
+    "neck": 1.0,  # L12-L21: moderate sensitivity
+    "detect_cbs": 1.0,  # Detect cv1/cv2 (CBS with SiLU)
+    "detect_bare": 1.0,  # Detect cv3 (bare conv, final logits)
+}
+
+
+def _get_stage(layer_name):
+    """Classify a layer name into its network stage."""
+    if layer_name == "input":
+        return "input"
+    if layer_name.startswith("det."):
+        if ".cv3" in layer_name:
+            return "detect_bare"
+        return "detect_cbs"
+    m = re.match(r"l(\d+)", layer_name)
+    if m:
+        layer_num = int(m.group(1))
+        if layer_num <= 9:
+            return "backbone"
+        return "neck"
+    return "backbone"
+
+
+def get_percentile(layer_name):
+    """Return the calibration percentile for a layer."""
+    return STAGE_PCT[_get_stage(layer_name)]
 
 
 # -- Predecessor map for activation scale lookup ----------------------------
@@ -494,7 +534,7 @@ def main():
     t0 = time.time()
     runner = Int8YOLOv8nCPU(args.model)
     img_tensor = preprocess_image(image_path, img_size=640)
-    runner.calibrate(img_tensor)
+    runner.calibrate(img_tensor, percentile_fn=get_percentile)
     calib_time = time.time() - t0
     print(f"    Calibration: {calib_time:.1f}s")
 

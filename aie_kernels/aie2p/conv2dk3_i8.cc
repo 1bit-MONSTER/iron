@@ -245,13 +245,6 @@ void conv2dk3_i8_vectorized(int8_t *__restrict line0,
     const int wt_stride_ic = 3 * 3 * 64;
     const int wt_stride_oc = ic_groups * wt_stride_ic;
 
-    int kh_start = 0;
-    int kh_end = 3;
-    if (check == CHECK_TOP)
-        kh_start = 1;
-    if (check == CHECK_BOTTOM)
-        kh_end = 2;
-
     int8_t *lines[3] = {line0, line1, line2};
 
     constexpr int NUM_W = 8;
@@ -260,6 +253,11 @@ void conv2dk3_i8_vectorized(int8_t *__restrict line0,
 
     aie::vector<int8, MMUL::size_A> zeros_v =
         aie::zeros<int8, MMUL::size_A>();
+
+    // Set saturation/rounding once at function start (same pattern as
+    // working conv2dk1_i8). Applies to to_vector<int8>(scale) SRS.
+    ::aie::set_saturation(aie::saturation_mode::saturate);
+    ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
 
@@ -270,45 +268,41 @@ void conv2dk3_i8_vectorized(int8_t *__restrict line0,
             MMUL acc;
             acc = aie::zeros<acc32, MMUL::size_C>();
 
-            for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
-                for (int kh = kh_start; kh < kh_end; kh++) {
+            // kh=0: skip if top border (check == CHECK_TOP)
+            if (check != CHECK_TOP) {
+                for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
                     int8_t *__restrict lp =
-                        lines[kh] + ic_g * (input_width * 8);
+                        lines[0] + ic_g * (input_width * 8);
 
-                    // Center column (kw=1): aligned load at x_base
                     aie::vector<int8, MMUL::size_A> v_c =
                         aie::load_v<MMUL::size_A>(lp + x_base * 8);
 
-                    // Left column (kw=0): positions [x_base-1 .. x_base+6]
-                    // Shift v_c up by 8, fill bottom 8 from previous block
                     aie::vector<int8, MMUL::size_A> v_kw0;
                     if (vi > 0) {
-                        aie::vector<int8, MMUL::size_A> v_prev =
+                        v_kw0 = aie::shuffle_up_fill(
+                            v_c,
                             aie::load_v<MMUL::size_A>(
-                                lp + (x_base - NUM_W) * 8);
-                        v_kw0 = aie::shuffle_up_fill(v_c, v_prev, 8);
+                                lp + (x_base - NUM_W) * 8),
+                            8);
                     } else {
                         v_kw0 = aie::shuffle_up_fill(v_c, zeros_v, 8);
                     }
 
-                    // Right column (kw=2): positions [x_base+1 .. x_base+8]
-                    // Shift v_c down by 8, fill top 8 from next block
                     aie::vector<int8, MMUL::size_A> v_kw2;
                     if (x_base + NUM_W < input_width) {
-                        aie::vector<int8, MMUL::size_A> v_next =
+                        v_kw2 = aie::shuffle_down_fill(
+                            v_c,
                             aie::load_v<MMUL::size_A>(
-                                lp + (x_base + NUM_W) * 8);
-                        v_kw2 =
-                            aie::shuffle_down_fill(v_c, v_next, 8);
+                                lp + (x_base + NUM_W) * 8),
+                            8);
                     } else {
                         v_kw2 =
                             aie::shuffle_down_fill(v_c, zeros_v, 8);
                     }
 
-                    // Weight loads (each kw tile is 64 bytes, aligned)
                     int8_t *__restrict wp =
                         weights + oc_g * wt_stride_oc +
-                        ic_g * wt_stride_ic + kh * wt_stride_kh;
+                        ic_g * wt_stride_ic + 0 * wt_stride_kh;
 
                     acc.mac(v_kw0,
                             aie::load_v<MMUL::size_B>(wp));
@@ -320,12 +314,98 @@ void conv2dk3_i8_vectorized(int8_t *__restrict line0,
                 }
             }
 
-            ::aie::set_saturation(aie::saturation_mode::saturate);
-            ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
+            // kh=1: always process (middle row is always valid)
+            for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
+                int8_t *__restrict lp =
+                    lines[1] + ic_g * (input_width * 8);
+
+                aie::vector<int8, MMUL::size_A> v_c =
+                    aie::load_v<MMUL::size_A>(lp + x_base * 8);
+
+                aie::vector<int8, MMUL::size_A> v_kw0;
+                if (vi > 0) {
+                    v_kw0 = aie::shuffle_up_fill(
+                        v_c,
+                        aie::load_v<MMUL::size_A>(
+                            lp + (x_base - NUM_W) * 8),
+                        8);
+                } else {
+                    v_kw0 = aie::shuffle_up_fill(v_c, zeros_v, 8);
+                }
+
+                aie::vector<int8, MMUL::size_A> v_kw2;
+                if (x_base + NUM_W < input_width) {
+                    v_kw2 = aie::shuffle_down_fill(
+                        v_c,
+                        aie::load_v<MMUL::size_A>(
+                            lp + (x_base + NUM_W) * 8),
+                        8);
+                } else {
+                    v_kw2 =
+                        aie::shuffle_down_fill(v_c, zeros_v, 8);
+                }
+
+                int8_t *__restrict wp =
+                    weights + oc_g * wt_stride_oc +
+                    ic_g * wt_stride_ic + 1 * wt_stride_kh;
+
+                acc.mac(v_kw0,
+                        aie::load_v<MMUL::size_B>(wp));
+                acc.mac(v_c,
+                        aie::load_v<MMUL::size_B>(wp + wt_stride_kw));
+                acc.mac(v_kw2,
+                        aie::load_v<MMUL::size_B>(
+                            wp + 2 * wt_stride_kw));
+            }
+
+            // kh=2: skip if bottom border (check == CHECK_BOTTOM)
+            if (check != CHECK_BOTTOM) {
+                for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
+                    int8_t *__restrict lp =
+                        lines[2] + ic_g * (input_width * 8);
+
+                    aie::vector<int8, MMUL::size_A> v_c =
+                        aie::load_v<MMUL::size_A>(lp + x_base * 8);
+
+                    aie::vector<int8, MMUL::size_A> v_kw0;
+                    if (vi > 0) {
+                        v_kw0 = aie::shuffle_up_fill(
+                            v_c,
+                            aie::load_v<MMUL::size_A>(
+                                lp + (x_base - NUM_W) * 8),
+                            8);
+                    } else {
+                        v_kw0 = aie::shuffle_up_fill(v_c, zeros_v, 8);
+                    }
+
+                    aie::vector<int8, MMUL::size_A> v_kw2;
+                    if (x_base + NUM_W < input_width) {
+                        v_kw2 = aie::shuffle_down_fill(
+                            v_c,
+                            aie::load_v<MMUL::size_A>(
+                                lp + (x_base + NUM_W) * 8),
+                            8);
+                    } else {
+                        v_kw2 =
+                            aie::shuffle_down_fill(v_c, zeros_v, 8);
+                    }
+
+                    int8_t *__restrict wp =
+                        weights + oc_g * wt_stride_oc +
+                        ic_g * wt_stride_ic + 2 * wt_stride_kh;
+
+                    acc.mac(v_kw0,
+                            aie::load_v<MMUL::size_B>(wp));
+                    acc.mac(v_c,
+                            aie::load_v<MMUL::size_B>(wp + wt_stride_kw));
+                    acc.mac(v_kw2,
+                            aie::load_v<MMUL::size_B>(
+                                wp + 2 * wt_stride_kw));
+                }
+            }
+
             aie::vector<int8, MMUL::size_C> result =
                 acc.to_vector<int8>(scale);
-            ::aie::set_saturation(aie::saturation_mode::none);
-            ::aie::set_rounding(aie::rounding_mode::floor);
             aie::store_v(output + oc_g * (output_width * 8) + x_base * 8,
                          result);
         }
@@ -336,7 +416,11 @@ void conv2dk3_i8_vectorized(int8_t *__restrict line0,
                 int32_t sum = 0;
                 for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
                     for (int ic8 = 0; ic8 < 8; ic8++) {
-                        for (int kh = kh_start; kh < kh_end; kh++) {
+                        for (int kh = 0; kh < 3; kh++) {
+                            if (kh == 0 && check == CHECK_TOP)
+                                continue;
+                            if (kh == 2 && check == CHECK_BOTTOM)
+                                continue;
                             for (int kw = 0; kw < 3; kw++) {
                                 int input_x = x + kw - 1;
                                 if (input_x < 0 || input_x >= input_width)
@@ -361,6 +445,9 @@ void conv2dk3_i8_vectorized(int8_t *__restrict line0,
         }
     }
 
+    ::aie::set_saturation(aie::saturation_mode::none);
+    ::aie::set_rounding(aie::rounding_mode::floor);
+
     event1();
 }
 
@@ -374,8 +461,9 @@ void conv2dk3_i8(int8_t *line0, int8_t *line1, int8_t *line2,
                   const int32_t input_width, const int32_t input_channels,
                   const int32_t output_channels, const int32_t check,
                   const int32_t scale) {
-    conv2dk3_i8_scalar(line0, line1, line2, weights, output,
-                        input_width, input_channels, output_channels, check, scale);
+    conv2dk3_i8_vectorized(line0, line1, line2, weights, output,
+                            input_width, input_channels, output_channels,
+                            check, scale);
 }
 
 void conv2dk3s2_i8(int8_t *line0, int8_t *line1, int8_t *line2,
