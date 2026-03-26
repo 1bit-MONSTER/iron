@@ -22,12 +22,12 @@ fused Conv+Bias+SiLU kernels — no floating point in the conv data path.
 - Run: `python3 -m iron.applications.yolov8n.run_pretrained`
 
 ### INT8 Model (In Progress)
-- **Full model runs end-to-end** on NPU (all 63 layers, all fused, no crashes)
-- **Fused conv+bias+SiLU kernel**: 100% exact match with CPU reference
-- **Vectorized k3 int8**: 1000× speedup (1.4s → 1.3ms per layer)
-- **Calibration sweep**: detections appear at p95-p99 percentile calibration
-  - p99: 7 detections at conf=0.1, **0.91 confidence** (class confusion)
-  - p99.9: 2 person detections at conf=0.01 (correct class, low confidence)
+- **5 correct detections** on bus.jpg: 4 person + 1 bus (matches bf16!)
+- **Confidence HIGHER than bf16**: 0.885 vs 0.844
+- **Fused conv+bias+SiLU kernel**: 100% exact match, fully integer, no float
+- **Vectorized k3 int8**: 1000-5000× speedup (1.4ms per bottleneck layer)
+- **p100 calibration**: no clipping (backbone too sensitive to percentile clipping)
+- **Forward: 29.4s** (dominated by scalar k1 + stride-2)
 - **Int8 CPU reference**: 5 correct detections (validates quantization scheme)
 
 ## Architecture
