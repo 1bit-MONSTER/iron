@@ -103,20 +103,62 @@ def weights_to_tiled_int8_k3(weight):
     return w.numpy().astype(np.int8).reshape(-1)
 
 
+def _compute_k3_fused_streaming(in_channels, out_channels, width, out_w):
+    """Compute OC streaming params for fused k3 conv (bias packed in weights).
+
+    Must match the L1 budget logic in my_conv2d_int8_k3_fused() exactly.
+
+    Returns:
+        (n_oc_groups, oc_chunk)
+    """
+    input_row_size = in_channels * width
+    _BD_WRAP_MAX = 64
+
+    for try_depth in [4, 3]:
+        phys_bufs = try_depth + 1
+        input_fbs = phys_bufs * input_row_size
+        avail = 65536 - 1040 - input_fbs
+        if avail <= 0:
+            continue
+        for try_oc in range(out_channels, 0, -8):
+            if out_channels % try_oc != 0 or try_oc % 8 != 0:
+                continue
+            wt_bytes = try_oc * in_channels * 9 + try_oc * 4
+            out_bytes = 2 * try_oc * out_w
+            if wt_bytes + out_bytes > avail:
+                continue
+            n_oc = out_channels // try_oc
+            if n_oc > _BD_WRAP_MAX:
+                continue
+            return (n_oc, try_oc)
+
+    raise ValueError(
+        f"k3 fused int8 conv2d infeasible: "
+        f"IC={in_channels}, OC={out_channels}, W={width}"
+    )
+
+
 class AIEConv2dInt8(AIEOperatorBase):
-    """AIE-accelerated 2D Convolution (1x1 kernel, int8).
+    """AIE-accelerated 2D Convolution (int8).
 
     Performs int8 x int8 -> int32 MAC with right-shift requantization
     to produce int8 output. Channels must be multiples of 8.
 
+    When fused=True (kernel_size=3 only), performs conv + bias + SiLU
+    using a fully integer pipeline with sigmoid LUT lookup. Bias is
+    packed at the end of the weight buffer to avoid a 3rd DMA channel.
+
     Args:
         in_channels: Number of input channels (must be multiple of 8).
         out_channels: Number of output channels (must be multiple of 8).
-        kernel_size: Convolution kernel size (only 1 supported).
-        stride: Convolution stride (only 1 supported).
+        kernel_size: Convolution kernel size (1 or 3).
+        stride: Convolution stride.
         height: Spatial height of input.
         width: Spatial width of input.
-        scale: Right-shift bits for int32 -> int8 requantization.
+        scale: Right-shift bits for int32 -> int8 requantization (non-fused).
+        fused: If True, use fused conv+bias+SiLU kernel (k3 only).
+        shift1: Acc -> int8 shift for LUT lookup (required if fused=True).
+        shift2: SiLU product -> int8 shift (required if fused=True).
         num_aie_columns: Number of AIE columns (only 1 supported).
         context: AIEContext instance.
     """
@@ -130,6 +172,9 @@ class AIEConv2dInt8(AIEOperatorBase):
         height=None,
         width=None,
         scale=10,
+        fused=False,
+        shift1=None,
+        shift2=None,
         num_aie_columns=1,
         context=None,
         register=True,
@@ -139,6 +184,11 @@ class AIEConv2dInt8(AIEOperatorBase):
             assert stride == 1, "Only stride=1 supported for 1x1 conv"
         else:
             assert stride in (1, 2), "Only stride 1 or 2 supported for 3x3 conv"
+        if fused:
+            assert kernel_size == 3, "fused mode only supported for kernel_size=3"
+            assert (
+                shift1 is not None and shift2 is not None
+            ), "shift1 and shift2 required for fused mode"
         assert (
             in_channels % 8 == 0
         ), f"in_channels ({in_channels}) must be a multiple of 8"
@@ -157,6 +207,9 @@ class AIEConv2dInt8(AIEOperatorBase):
         self.height = height
         self.width = width
         self.scale = scale
+        self.fused = fused
+        self.shift1 = shift1
+        self.shift2 = shift2
         self.num_aie_columns = num_aie_columns
 
         self.xclbin_artifact = None
@@ -190,7 +243,26 @@ class AIEConv2dInt8(AIEOperatorBase):
         """
         operator_dir = Path(__file__).parent
 
-        if self.kernel_size == 3:
+        if self.fused and self.kernel_size == 3:
+            file_name_base = (
+                f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
+                f"{self.height}h_{self.width}w_k3s{self.stride}_fused"
+            )
+            callback_fn = "my_conv2d_int8_k3_fused"
+            callback_args = [
+                self.context.device_manager.device_type,
+                self.height,
+                self.width,
+                self.in_channels,
+                self.out_channels,
+                self.shift1,
+                self.shift2,
+                self.stride,
+            ]
+            kernel_obj_name = "conv2dk3_i8_fused_packed.o"
+            kernel_src = "conv2dk3_i8_fused_packed.cc"
+            kernel_extra_flags = ["-DINT8_ACT"]
+        elif self.kernel_size == 3:
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
                 f"{self.height}h_{self.width}w_k3s{self.stride}"
@@ -217,9 +289,7 @@ class AIEConv2dInt8(AIEOperatorBase):
             kernel_src = "conv2dk1_i8.cc"
             # Vectorized path: width must be multiple of 32 (MMUL_M*NUM_ACC)
             # and in_channels >= 24 (IC/8 > 2 for pipeline min iterations)
-            use_vectorized = (
-                self.width % 32 == 0 and self.in_channels >= 24
-            )
+            use_vectorized = self.width % 32 == 0 and self.in_channels >= 24
             if use_vectorized:
                 kernel_obj_name = "conv2dk1_i8_vec.o"
                 kernel_extra_flags = ["-DINT8_ACT"]
@@ -250,10 +320,7 @@ class AIEConv2dInt8(AIEOperatorBase):
                     kernel_obj_name,
                     depends=[
                         SourceArtifact.new(
-                            self.context.base_dir
-                            / "aie_kernels"
-                            / "aie2p"
-                            / kernel_src
+                            self.context.base_dir / "aie_kernels" / "aie2p" / kernel_src
                         )
                     ],
                     extra_flags=kernel_extra_flags,
@@ -275,15 +342,20 @@ class AIEConv2dInt8(AIEOperatorBase):
 
     def set_up_runtime(self):
         total_input = self.in_channels * self.height * self.width
+        out_h = self.out_height
+        out_w = self.out_width
 
-        if self.kernel_size == 3:
+        if self.fused and self.kernel_size == 3:
+            # Packed weight buffer: weights + bias per OC chunk
+            n_oc_groups, oc_chunk = _compute_k3_fused_streaming(
+                self.in_channels, self.out_channels, self.width, out_w
+            )
+            wt_chunk_elems = oc_chunk * self.in_channels * 9 + oc_chunk * 4
+            total_weights = n_oc_groups * wt_chunk_elems
+        elif self.kernel_size == 3:
             total_weights = self.out_channels * self.in_channels * 9
-            out_h = self.height if self.stride == 1 else self.height // 2
-            out_w = self.width if self.stride == 1 else self.width // 2
         else:
             total_weights = self.out_channels * self.in_channels
-            out_h = self.height
-            out_w = self.width
 
         total_output = self.out_channels * out_h * out_w
 
@@ -299,12 +371,13 @@ class AIEConv2dInt8(AIEOperatorBase):
         )
         self.add_to_runlist("conv2d_int8", "input", "weights", "output")
 
-    def forward(self, x, weight):
+    def forward(self, x, weight, bias=None):
         """Run int8 conv2d on the NPU.
 
         Args:
             x: Input tensor of shape [N, C_in, H, W] in int8.
             weight: Weight tensor [C_out, C_in, K, K] in int8.
+            bias: (optional) Bias tensor [C_out] in int32. Required if fused.
 
         Returns:
             Output tensor of shape [N, C_out, H_out, W_out] in int8.
@@ -313,20 +386,38 @@ class AIEConv2dInt8(AIEOperatorBase):
             raise AIEOperatorConstraintError("AIEConv2dInt8: input must be int8")
         if x.shape[0] != 1:
             raise AIEOperatorConstraintError("AIEConv2dInt8: batch size must be 1")
+        if self.fused and bias is None:
+            raise AIEOperatorConstraintError(
+                "AIEConv2dInt8: bias required for fused mode"
+            )
 
         input_tiled = nchw_to_tiled_int8(x)
         self.write_buffer("input", input_tiled)
 
-        if self.kernel_size == 3:
+        out_h = self.out_height
+        out_w = self.out_width
+
+        if self.fused and self.kernel_size == 3:
+            # Pack weights with interleaved bias per OC chunk
+            n_oc_groups, oc_chunk = _compute_k3_fused_streaming(
+                self.in_channels, self.out_channels, self.width, out_w
+            )
             weight_tiled = weights_to_tiled_int8_k3(weight)
-            out_h = self.height if self.stride == 1 else self.height // 2
-            out_w = self.width if self.stride == 1 else self.width // 2
+            wt_per_chunk = oc_chunk * self.in_channels * 9
+            chunks = []
+            for g in range(n_oc_groups):
+                w_chunk = weight_tiled[g * wt_per_chunk : (g + 1) * wt_per_chunk]
+                b_chunk = bias[g * oc_chunk : (g + 1) * oc_chunk]
+                b_bytes = b_chunk.numpy().astype(np.int32).view(np.int8)
+                chunks.append(np.concatenate([w_chunk, b_bytes]))
+            packed = np.concatenate(chunks)
+            self.write_buffer("weights", packed)
+        elif self.kernel_size == 3:
+            weight_tiled = weights_to_tiled_int8_k3(weight)
+            self.write_buffer("weights", weight_tiled)
         else:
             weight_tiled = weights_to_tiled_int8(weight)
-            out_h = self.height
-            out_w = self.width
-
-        self.write_buffer("weights", weight_tiled)
+            self.write_buffer("weights", weight_tiled)
 
         total_output = self.out_channels * out_h * out_w
         self.write_buffer("output", np.zeros(total_output, dtype=np.int8))

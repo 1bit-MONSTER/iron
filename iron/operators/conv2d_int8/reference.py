@@ -1,6 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
+
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -26,7 +29,77 @@ def conv2d_int8_reference(x_int8, weight_int8, scale, stride=1, padding=0):
         x_int8.int(), weight_int8.int(), stride=stride, padding=padding
     )
     # Right-shift with rounding, saturate to int8 range
-    out_int8 = torch.clamp(
-        (out_int32 + (1 << (scale - 1))) >> scale, -128, 127
-    ).to(torch.int8)
+    out_int8 = torch.clamp((out_int32 + (1 << (scale - 1))) >> scale, -128, 127).to(
+        torch.int8
+    )
     return out_int8
+
+
+def _build_sigmoid_lut():
+    """Build the 256-entry sigmoid LUT matching the kernel's hardcoded table.
+
+    For index i in [0, 255], int8 value = i - 128,
+    real value x = (i - 128) * 8.0 / 128.0 (range [-8, +8]).
+    Entry = round(sigmoid(x) * 255).
+    """
+    lut = np.zeros(256, dtype=np.uint8)
+    for i in range(256):
+        x = (i - 128) * 8.0 / 128.0
+        lut[i] = int(round(1.0 / (1.0 + math.exp(-x)) * 255))
+    return lut
+
+
+_SIGMOID_LUT = _build_sigmoid_lut()
+
+
+def _srs_i8(val, shift):
+    """Right-shift with rounding and saturate to int8 (tensor version)."""
+    rounded = (val + (1 << (shift - 1))) >> shift
+    return torch.clamp(rounded, -128, 127)
+
+
+def conv2d_int8_fused_reference(
+    x_int8, weight_int8, bias_int32, shift1, shift2, stride=1
+):
+    """CPU reference for fused int8 conv + bias + SiLU.
+
+    Replicates the exact integer pipeline of conv2dk3_i8_fused_packed:
+      1. int8 x int8 -> int32 convolution (padding=1)
+      2. Add pre-scaled int32 bias
+      3. srs(acc, shift1) -> int8 for LUT index
+      4. Sigmoid LUT lookup -> uint8
+      5. acc_i8 * sigmoid -> int32
+      6. srs(product, shift2) -> int8 output
+
+    Args:
+        x_int8: Input [N, C_in, H, W] int8.
+        weight_int8: Weights [C_out, C_in, 3, 3] int8.
+        bias_int32: Bias [C_out] int32, pre-scaled.
+        shift1: Acc -> int8 shift for LUT index.
+        shift2: SiLU product -> int8 output shift.
+        stride: Convolution stride (1 or 2).
+
+    Returns:
+        Output [N, C_out, H_out, W_out] int8.
+    """
+    # 1. int8 conv -> int32
+    out_int32 = F.conv2d(x_int8.int(), weight_int8.int(), stride=stride, padding=1)
+
+    # 2. Add bias
+    out_int32 = out_int32 + bias_int32.view(1, -1, 1, 1).int()
+
+    # 3. Shift to int8 for LUT
+    acc_i8 = _srs_i8(out_int32, shift1)
+
+    # 4. Sigmoid LUT lookup
+    lut_indices = (acc_i8 + 128).clamp(0, 255).long()
+    lut_torch = torch.from_numpy(_SIGMOID_LUT.astype(np.int64))
+    sig = lut_torch[lut_indices]
+
+    # 5. SiLU = acc_i8 * sigmoid
+    silu = acc_i8 * sig
+
+    # 6. Shift product to output int8
+    out_i8 = _srs_i8(silu, shift2)
+
+    return out_i8.to(torch.int8)
