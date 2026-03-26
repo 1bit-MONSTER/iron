@@ -222,8 +222,16 @@ streams and buffers.
 | 43 | conv2d 80→80 k3s1 20×20 1col (wt stream) | cls_p5 cv2 | Ready |
 | 44 | conv2d 80→80 k1 20×20 1col | cls_p5 cv3 | Ready |
 
-**Total**: 29 backbone+neck PDIs (verified) + ~15 detect PDIs = ~44 unique PDIs.
-Some detect PDIs are shared with existing backbone/neck PDIs (e.g., 64→64 k3s1 40×40).
+**Total**: 28 backbone+neck PDIs + 17 detect PDIs = 45 unique PDIs.
+
+**Hardware limit: MAX_NUM_CUS = 32 per xclbin** (firmware protocol constant in
+`aie2_msg_priv.h`). Cannot fit all 45 in one xclbin. Solution: 2 xclbins.
+
+| XCLBIN | PDIs | ≤ 32? | HW Context |
+|--------|------|-------|------------|
+| Backbone+Neck | 28 | ✓ | 1 |
+| Detect Head | 17 | ✓ | 1 |
+| **Total** | **45** | 2 xclbins | **2 hw_contexts** |
 
 ## Bug Fixes Applied This Session
 
