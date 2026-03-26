@@ -6,9 +6,12 @@ SPDX-License-Identifier: Apache-2.0
 # YOLOv8n NPU Implementation
 
 End-to-end YOLOv8n object detection running on the AMD Ryzen AI NPU,
-implemented using the IRON operator API. All convolution, pooling, and
-upsampling operations execute on NPU hardware in bfloat16; concat,
-residual add, channel split, and post-processing run on the host CPU.
+implemented using the IRON operator API. Supports both **bfloat16** (production,
+5 detections on bus.jpg) and **int8** (in progress, fused conv+bias+SiLU kernels
+with 1000× vectorized speedup). See `INT8_STATUS.md` for detailed int8 architecture.
+
+**BF16 Results**: 5 detections on bus.jpg (4 person + 1 bus), matching ultralytics.
+**INT8 Results**: Full model runs end-to-end, calibration tuning in progress.
 
 ## Architecture Overview
 
