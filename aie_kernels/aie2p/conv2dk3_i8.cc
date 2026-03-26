@@ -203,6 +203,168 @@ void conv2dk3s2_i8_scalar(int8_t *line0, int8_t *line1, int8_t *line2,
 }
 
 // ---------------------------------------------------------------------------
+// Vectorized stride-1 implementation
+//
+// Uses aie::mmul<8,8,8,int8,int8> to compute 8 output positions x 8 output
+// channels at a time. Processes ALL positions (including borders) in aligned
+// groups of 8, starting from x=0.
+//
+// Alignment: AIE vector load/store requires the address to be aligned to
+// the vector width. For int8 with 8 channels/position, each position is
+// 8 bytes, so a 64-element load (64 bytes) must start at a 64-byte-aligned
+// address. Starting from x=0 (byte offset 0) ensures aligned stores.
+// For kw=0 and kw=2 (offsets ±1 position = ±8 bytes), we use
+// shuffle_up_fill / shuffle_down_fill to construct shifted input vectors
+// from two aligned loads, avoiding misaligned memory access.
+//
+// Border handling: Left/right zero-padding is built into the vectorized
+// path via shuffle with a zeros vector (no separate scalar border code).
+//
+// Output: acc32 right-shifted by `scale` with rounding, saturated to int8.
+// ---------------------------------------------------------------------------
+void conv2dk3_i8_vectorized(int8_t *__restrict line0,
+                             int8_t *__restrict line1,
+                             int8_t *__restrict line2,
+                             int8_t *__restrict weights,
+                             int8_t *__restrict output,
+                             const int32_t input_width,
+                             const int32_t input_channels,
+                             const int32_t output_channels,
+                             const int32_t check,
+                             const int32_t scale) {
+    event0();
+
+    using MMUL = aie::mmul<8, 8, 8, int8, int8>;
+
+    const int ic_groups = input_channels / 8;
+    const int oc_groups = output_channels / 8;
+    const int output_width = input_width;
+
+    const int wt_stride_kw = 64;
+    const int wt_stride_kh = 3 * 64;
+    const int wt_stride_ic = 3 * 3 * 64;
+    const int wt_stride_oc = ic_groups * wt_stride_ic;
+
+    int kh_start = 0;
+    int kh_end = 3;
+    if (check == CHECK_TOP)
+        kh_start = 1;
+    if (check == CHECK_BOTTOM)
+        kh_end = 2;
+
+    int8_t *lines[3] = {line0, line1, line2};
+
+    constexpr int NUM_W = 8;
+    const int vec_iters = input_width / NUM_W;
+    const int scalar_start = vec_iters * NUM_W;
+
+    aie::vector<int8, MMUL::size_A> zeros_v =
+        aie::zeros<int8, MMUL::size_A>();
+
+    for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
+
+        // ---- Vectorized: groups of 8 positions from x=0 ----
+        for (int vi = 0; vi < vec_iters; vi++) {
+            int x_base = vi * NUM_W;
+
+            MMUL acc;
+            acc = aie::zeros<acc32, MMUL::size_C>();
+
+            for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
+                for (int kh = kh_start; kh < kh_end; kh++) {
+                    int8_t *__restrict lp =
+                        lines[kh] + ic_g * (input_width * 8);
+
+                    // Center column (kw=1): aligned load at x_base
+                    aie::vector<int8, MMUL::size_A> v_c =
+                        aie::load_v<MMUL::size_A>(lp + x_base * 8);
+
+                    // Left column (kw=0): positions [x_base-1 .. x_base+6]
+                    // Shift v_c up by 8, fill bottom 8 from previous block
+                    aie::vector<int8, MMUL::size_A> v_kw0;
+                    if (vi > 0) {
+                        aie::vector<int8, MMUL::size_A> v_prev =
+                            aie::load_v<MMUL::size_A>(
+                                lp + (x_base - NUM_W) * 8);
+                        v_kw0 = aie::shuffle_up_fill(v_c, v_prev, 8);
+                    } else {
+                        v_kw0 = aie::shuffle_up_fill(v_c, zeros_v, 8);
+                    }
+
+                    // Right column (kw=2): positions [x_base+1 .. x_base+8]
+                    // Shift v_c down by 8, fill top 8 from next block
+                    aie::vector<int8, MMUL::size_A> v_kw2;
+                    if (x_base + NUM_W < input_width) {
+                        aie::vector<int8, MMUL::size_A> v_next =
+                            aie::load_v<MMUL::size_A>(
+                                lp + (x_base + NUM_W) * 8);
+                        v_kw2 =
+                            aie::shuffle_down_fill(v_c, v_next, 8);
+                    } else {
+                        v_kw2 =
+                            aie::shuffle_down_fill(v_c, zeros_v, 8);
+                    }
+
+                    // Weight loads (each kw tile is 64 bytes, aligned)
+                    int8_t *__restrict wp =
+                        weights + oc_g * wt_stride_oc +
+                        ic_g * wt_stride_ic + kh * wt_stride_kh;
+
+                    acc.mac(v_kw0,
+                            aie::load_v<MMUL::size_B>(wp));
+                    acc.mac(v_c,
+                            aie::load_v<MMUL::size_B>(wp + wt_stride_kw));
+                    acc.mac(v_kw2,
+                            aie::load_v<MMUL::size_B>(
+                                wp + 2 * wt_stride_kw));
+                }
+            }
+
+            ::aie::set_saturation(aie::saturation_mode::saturate);
+            ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
+            aie::vector<int8, MMUL::size_C> result =
+                acc.to_vector<int8>(scale);
+            ::aie::set_saturation(aie::saturation_mode::none);
+            ::aie::set_rounding(aie::rounding_mode::floor);
+            aie::store_v(output + oc_g * (output_width * 8) + x_base * 8,
+                         result);
+        }
+
+        // ---- Scalar remainder (input_width not divisible by 8) ----
+        for (int x = scalar_start; x < output_width; x++) {
+            for (int oc8 = 0; oc8 < 8; oc8++) {
+                int32_t sum = 0;
+                for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
+                    for (int ic8 = 0; ic8 < 8; ic8++) {
+                        for (int kh = kh_start; kh < kh_end; kh++) {
+                            for (int kw = 0; kw < 3; kw++) {
+                                int input_x = x + kw - 1;
+                                if (input_x < 0 || input_x >= input_width)
+                                    continue;
+                                int in_idx =
+                                    ic_g * (input_width * 8) + input_x * 8 +
+                                    ic8;
+                                int wt_idx = oc_g * wt_stride_oc +
+                                             ic_g * wt_stride_ic +
+                                             kh * wt_stride_kh +
+                                             kw * wt_stride_kw + ic8 * 8 +
+                                             oc8;
+                                sum += (int32_t)lines[kh][in_idx] *
+                                       (int32_t)weights[wt_idx];
+                            }
+                        }
+                    }
+                }
+                output[oc_g * (output_width * 8) + x * 8 + oc8] =
+                    quantize_i8(sum, scale);
+            }
+        }
+    }
+
+    event1();
+}
+
+// ---------------------------------------------------------------------------
 // extern "C" wrappers
 // ---------------------------------------------------------------------------
 extern "C" {
@@ -212,8 +374,8 @@ void conv2dk3_i8(int8_t *line0, int8_t *line1, int8_t *line2,
                   const int32_t input_width, const int32_t input_channels,
                   const int32_t output_channels, const int32_t check,
                   const int32_t scale) {
-    conv2dk3_i8_scalar(line0, line1, line2, weights, output,
-                        input_width, input_channels, output_channels, check, scale);
+    conv2dk3_i8_vectorized(line0, line1, line2, weights, output,
+                            input_width, input_channels, output_channels, check, scale);
 }
 
 void conv2dk3s2_i8(int8_t *line0, int8_t *line1, int8_t *line2,
