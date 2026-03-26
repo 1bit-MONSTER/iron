@@ -4,26 +4,24 @@
 
 """Run full YOLOv8n model end-to-end on NPU at 640x640.
 
-Uses sequential AIEContexts with XRT cache cleanup between stages:
-  - Context 1: Backbone L0-L9  (10 layers, ~30 operators)
-  - Context 2: Neck L10-L21    (8 NPU layers + 4 host concats + 2 upsamples)
-  - Context 3+: Detect head     (6 branches — TBD)
-  - Post-processing             (DFL decode + NMS — TBD)
+Uses 2 multi-PDI xclbins with sequential hw_contexts:
+  - XCLBIN 1: Backbone+Neck (L0-L21) — 28 unique PDIs, 1 hw_context
+  - XCLBIN 2: Detect Head (6 branches) — ~17 unique PDIs, 1 hw_context
+  - Post-processing: DFL decode + NMS (CPU)
 
-Each context is compiled, run, then cleaned up before the next to avoid
-driver hw_context exhaustion.
+Each xclbin merges all its operators into a single combined xclbin via
+PDI chaining. XRT cache is cleaned between stages to free hw_contexts.
 """
 
 import torch
 import torch.nn.functional as F
 import time
 import gc
-from iron.common import AIEContext
-from iron.applications.yolov8n.blocks import CBS, C2f, SPPF
-from iron.operators.upsample.op import AIEUpsample
-from aie.utils import DefaultNPURuntime
 
-torch.manual_seed(42)
+from iron.common import AIEContext
+from iron.applications.yolov8n.pipeline import YOLOv8nPipeline
+from iron.applications.yolov8n.postprocess import YOLOv8nPostProcess
+from aie.utils import DefaultNPURuntime
 
 
 def cleanup_xrt():
@@ -33,387 +31,419 @@ def cleanup_xrt():
     gc.collect()
 
 
-def run_backbone(x):
-    """Run backbone L0-L9 on NPU.
+# ── XCLBIN 1: Backbone + Neck ───────────────────────────────────────────────
 
-    Args:
-        x: Input tensor [1, 8, 640, 640] in bfloat16 (3ch padded to 8ch).
 
-    Returns:
-        (p3, p4, p5) feature maps:
-            p3: [1,  64, 80, 80]
-            p4: [1, 128, 40, 40]
-            p5: [1, 256, 20, 20]
+class BackboneNeckPipeline(YOLOv8nPipeline):
+    """Multi-PDI pipeline for backbone (L0-L9) + neck (L10-L21).
+
+    28 unique PDIs in one combined xclbin, 50 layer mappings.
     """
-    print("=== Context 1: Backbone L0-L9 ===")
-    t0 = time.time()
 
-    ctx = AIEContext()
+    def _register_all_layers(self):
+        H, W = self.img_height, self.img_width
+        cols = 0
 
-    l0 = CBS(8, 16, 3, 2, 640, 640, context=ctx)
-    l1 = CBS(16, 32, 3, 2, 320, 320, context=ctx)
-    l2 = C2f(32, 32, 1, 160, 160, context=ctx)
-    l3 = CBS(32, 64, 3, 2, 160, 160, context=ctx)
-    l4 = C2f(64, 64, 2, 80, 80, context=ctx)
-    l5 = CBS(64, 128, 3, 2, 80, 80, context=ctx)
-    l6 = C2f(128, 128, 2, 40, 40, context=ctx)
-    l7 = CBS(128, 256, 3, 2, 40, 40, context=ctx)
-    l8 = C2f(256, 256, 1, 20, 20, context=ctx)
-    l9 = SPPF(256, 256, 20, 20, kernel_size=5, context=ctx)
+        # Backbone
+        self._register_cbs("bb_l0", 8, 16, 3, 2, H, W, cols)
+        h2, w2 = H // 2, W // 2
+        self._register_cbs("bb_l1", 16, 32, 3, 2, h2, w2, cols)
+        h4, w4 = h2 // 2, w2 // 2
+        self._register_c2f("bb_l2", 32, 32, 1, h4, w4, cols)
+        self._register_cbs("bb_l3", 32, 64, 3, 2, h4, w4, cols)
+        h8, w8 = h4 // 2, w4 // 2
+        self._register_c2f("bb_l4", 64, 64, 2, h8, w8, cols)
+        self._register_cbs("bb_l5", 64, 128, 3, 2, h8, w8, cols)
+        h16, w16 = h8 // 2, w8 // 2
+        self._register_c2f("bb_l6", 128, 128, 2, h16, w16, cols)
+        self._register_cbs("bb_l7", 128, 256, 3, 2, h16, w16, cols)
+        h32, w32 = h16 // 2, w16 // 2
+        self._register_c2f("bb_l8", 256, 256, 1, h32, w32, cols)
+        self._register_sppf("bb_l9", 256, 256, h32, w32, 5, cols)
 
-    ctx.compile_all()
+        # Neck (FPN up-path)
+        self._register_upsample("nk_up1", 256, h32, w32, 2, cols)
+        self._register_c2f("nk_l12", 384, 128, 1, h16, w16, cols)
+        self._register_upsample("nk_up2", 128, h16, w16, 2, cols)
+        self._register_c2f("nk_l15", 192, 64, 1, h8, w8, cols)
 
-    # Load random weights (scaled small to keep outputs finite)
-    l0.load_weights(
-        torch.randn(16, 8, 3, 3, dtype=torch.bfloat16) * 0.01,
-        torch.randn(16, dtype=torch.bfloat16) * 0.01,
-    )
-    l1.load_weights(
-        torch.randn(32, 16, 3, 3, dtype=torch.bfloat16) * 0.01,
-        torch.randn(32, dtype=torch.bfloat16) * 0.01,
-    )
+        # Neck (PAN down-path)
+        self._register_cbs("nk_l16", 64, 64, 3, 2, h8, w8, cols)
+        self._register_c2f("nk_l18", 192, 128, 1, h16, w16, cols)
+        self._register_cbs("nk_l19", 128, 128, 3, 2, h16, w16, cols)
+        self._register_c2f("nk_l21", 384, 256, 1, h32, w32, cols)
 
-    c2 = 32 // 2
-    l2.load_weights(
-        torch.randn(2 * c2, 32, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(2 * c2, dtype=torch.bfloat16) * 0.01,
-        [
-            (
-                torch.randn(c2, c2, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c2, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c2, c2, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c2, dtype=torch.bfloat16) * 0.01,
-            )
-            for _ in range(1)
-        ],
-        torch.randn(32, 3 * c2, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(32, dtype=torch.bfloat16) * 0.01,
-    )
+    def forward(self, x):
+        """Run backbone + neck.
 
-    l3.load_weights(
-        torch.randn(64, 32, 3, 3, dtype=torch.bfloat16) * 0.01,
-        torch.randn(64, dtype=torch.bfloat16) * 0.01,
-    )
+        Args:
+            x: Input [1, 3, H, W] in bfloat16.
 
-    c4 = 64 // 2
-    l4.load_weights(
-        torch.randn(2 * c4, 64, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(2 * c4, dtype=torch.bfloat16) * 0.01,
-        [
-            (
-                torch.randn(c4, c4, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c4, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c4, c4, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c4, dtype=torch.bfloat16) * 0.01,
-            )
-            for _ in range(2)
-        ],
-        torch.randn(64, 4 * c4, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(64, dtype=torch.bfloat16) * 0.01,
-    )
+        Returns:
+            (det_p3, det_p4, det_p5) feature maps.
+        """
+        bb = self._weights["backbone"]
+        nk = self._weights["neck"]
 
-    l5.load_weights(
-        torch.randn(128, 64, 3, 3, dtype=torch.bfloat16) * 0.01,
-        torch.randn(128, dtype=torch.bfloat16) * 0.01,
-    )
+        x = F.pad(x, (0, 0, 0, 0, 0, 5))
 
-    c6 = 128 // 2
-    l6.load_weights(
-        torch.randn(2 * c6, 128, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(2 * c6, dtype=torch.bfloat16) * 0.01,
-        [
-            (
-                torch.randn(c6, c6, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c6, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c6, c6, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c6, dtype=torch.bfloat16) * 0.01,
-            )
-            for _ in range(2)
-        ],
-        torch.randn(128, 4 * c6, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(128, dtype=torch.bfloat16) * 0.01,
-    )
+        # Backbone
+        x = self._run_cbs("bb_l0", x, bb["l0"]["weight"], bb["l0"]["bias"])
+        print(f"  L0:  {x.shape}")
+        x = self._run_cbs("bb_l1", x, bb["l1"]["weight"], bb["l1"]["bias"])
+        print(f"  L1:  {x.shape}")
+        x = self._run_c2f("bb_l2", x, bb["l2"])
+        print(f"  L2:  {x.shape}")
+        x = self._run_cbs("bb_l3", x, bb["l3"]["weight"], bb["l3"]["bias"])
+        print(f"  L3:  {x.shape}")
+        p3 = self._run_c2f("bb_l4", x, bb["l4"])
+        print(f"  L4:  {p3.shape}  [P3]")
+        x = self._run_cbs("bb_l5", p3, bb["l5"]["weight"], bb["l5"]["bias"])
+        print(f"  L5:  {x.shape}")
+        p4 = self._run_c2f("bb_l6", x, bb["l6"])
+        print(f"  L6:  {p4.shape}  [P4]")
+        x = self._run_cbs("bb_l7", p4, bb["l7"]["weight"], bb["l7"]["bias"])
+        print(f"  L7:  {x.shape}")
+        x = self._run_c2f("bb_l8", x, bb["l8"])
+        print(f"  L8:  {x.shape}")
+        p5 = self._run_sppf("bb_l9", x, bb["l9"])
+        print(f"  L9:  {p5.shape}  [P5]")
 
-    l7.load_weights(
-        torch.randn(256, 128, 3, 3, dtype=torch.bfloat16) * 0.01,
-        torch.randn(256, dtype=torch.bfloat16) * 0.01,
-    )
+        # Neck (FPN up-path)
+        x = self._run_upsample("nk_up1", p5)
+        print(f"  L10: {x.shape}  (upsample)")
+        x = torch.cat([x, p4], dim=1)
+        print(f"  L11: {x.shape}  (concat)")
+        l12_out = self._run_c2f("nk_l12", x, nk["l12"], shortcut=False)
+        print(f"  L12: {l12_out.shape}")
+        x = self._run_upsample("nk_up2", l12_out)
+        print(f"  L13: {x.shape}  (upsample)")
+        x = torch.cat([x, p3], dim=1)
+        print(f"  L14: {x.shape}  (concat)")
+        det_p3 = self._run_c2f("nk_l15", x, nk["l15"], shortcut=False)
+        print(f"  L15: {det_p3.shape}  [det_p3]")
 
-    c8 = 256 // 2
-    l8.load_weights(
-        torch.randn(2 * c8, 256, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(2 * c8, dtype=torch.bfloat16) * 0.01,
-        [
-            (
-                torch.randn(c8, c8, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c8, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c8, c8, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c8, dtype=torch.bfloat16) * 0.01,
-            )
-            for _ in range(1)
-        ],
-        torch.randn(256, 3 * c8, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(256, dtype=torch.bfloat16) * 0.01,
-    )
+        # Neck (PAN down-path)
+        x = self._run_cbs("nk_l16", det_p3, nk["l16"]["weight"], nk["l16"]["bias"])
+        print(f"  L16: {x.shape}")
+        x = torch.cat([x, l12_out], dim=1)
+        print(f"  L17: {x.shape}  (concat)")
+        det_p4 = self._run_c2f("nk_l18", x, nk["l18"], shortcut=False)
+        print(f"  L18: {det_p4.shape}  [det_p4]")
+        x = self._run_cbs("nk_l19", det_p4, nk["l19"]["weight"], nk["l19"]["bias"])
+        print(f"  L19: {x.shape}")
+        x = torch.cat([x, p5], dim=1)
+        print(f"  L20: {x.shape}  (concat)")
+        det_p5 = self._run_c2f("nk_l21", x, nk["l21"], shortcut=False)
+        print(f"  L21: {det_p5.shape}  [det_p5]")
 
-    c9_ = 256 // 2
-    l9.load_weights(
-        torch.randn(c9_, 256, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(c9_, dtype=torch.bfloat16) * 0.01,
-        torch.randn(256, c9_ * 4, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(256, dtype=torch.bfloat16) * 0.01,
-    )
-
-    ctx.prepare_runtime()
-    compile_t = time.time() - t0
-    print(f"Backbone compiled + prepared in {compile_t:.1f}s")
-
-    # Forward pass
-    print("\nRunning backbone L0-L9...")
-    t0_fwd = time.time()
-
-    x = l0.forward(x)
-    print(f"  L0:  {x.shape}")
-    x = l1.forward(x)
-    print(f"  L1:  {x.shape}")
-    x = l2.forward(x)
-    print(f"  L2:  {x.shape}")
-    x = l3.forward(x)
-    print(f"  L3:  {x.shape}")
-    p3 = l4.forward(x)
-    print(f"  L4:  {p3.shape}  [P3]")
-    x = l5.forward(p3)
-    print(f"  L5:  {x.shape}")
-    p4 = l6.forward(x)
-    print(f"  L6:  {p4.shape}  [P4]")
-    x = l7.forward(p4)
-    print(f"  L7:  {x.shape}")
-    x = l8.forward(x)
-    print(f"  L8:  {x.shape}")
-    p5 = l9.forward(x)
-    print(f"  L9:  {p5.shape}  [P5]")
-
-    fwd_t = time.time() - t0_fwd
-    print(f"Backbone forward: {fwd_t:.3f}s")
-
-    # Verify
-    assert p3.shape == (1, 64, 80, 80), f"P3 shape mismatch: {p3.shape}"
-    assert p4.shape == (1, 128, 40, 40), f"P4 shape mismatch: {p4.shape}"
-    assert p5.shape == (1, 256, 20, 20), f"P5 shape mismatch: {p5.shape}"
-    assert torch.isfinite(p3).all(), "P3 has non-finite values"
-    assert torch.isfinite(p4).all(), "P4 has non-finite values"
-    assert torch.isfinite(p5).all(), "P5 has non-finite values"
-    print("Backbone PASS")
-
-    # Cleanup
-    del l0, l1, l2, l3, l4, l5, l6, l7, l8, l9, ctx
-    cleanup_xrt()
-
-    return p3, p4, p5, compile_t, fwd_t
+        return det_p3, det_p4, det_p5
 
 
-def run_neck(p3, p4, p5):
-    """Run neck L10-L21 on NPU.
+# ── XCLBIN 2: Detect Head ───────────────────────────────────────────────────
 
-    Args:
-        p3: [1,  64, 80, 80] from backbone.
-        p4: [1, 128, 40, 40] from backbone.
-        p5: [1, 256, 20, 20] from backbone.
 
-    Returns:
-        (det_p3, det_p4, det_p5) detection feature maps:
-            det_p3: [1,  64, 80, 80]
-            det_p4: [1, 128, 40, 40]
-            det_p5: [1, 256, 20, 20]
+class DetectHeadPipeline(YOLOv8nPipeline):
+    """Multi-PDI pipeline for detect head (6 branches).
+
+    ~17 unique PDIs in one combined xclbin.
     """
-    print("\n=== Context 2: Neck L10-L21 ===")
-    t0 = time.time()
 
-    ctx = AIEContext()
+    def _register_all_layers(self):
+        H, W = self.img_height, self.img_width
+        cols = 0
+        h8, w8 = H // 8, W // 8      # 80x80
+        h16, w16 = H // 16, W // 16   # 40x40
+        h32, w32 = H // 32, W // 32   # 20x20
 
-    up1 = AIEUpsample(256, 20, 20, scale_factor=2, context=ctx)
-    l12 = C2f(384, 128, 1, 40, 40, shortcut=False, context=ctx)
-    up2 = AIEUpsample(128, 40, 40, scale_factor=2, context=ctx)
-    l15 = C2f(192, 64, 1, 80, 80, shortcut=False, context=ctx)
-    l16 = CBS(64, 64, 3, 2, 80, 80, context=ctx)
-    l18 = C2f(192, 128, 1, 40, 40, shortcut=False, context=ctx)
-    l19 = CBS(128, 128, 3, 2, 40, 40, context=ctx)
-    l21 = C2f(384, 256, 1, 20, 20, shortcut=False, context=ctx)
+        c_reg = 4 * self.reg_max  # 64
+        c_cls = self.nc            # 80
+        c2 = 64                    # reg intermediate
+        c3 = max(self.nc, 16)      # cls intermediate (80)
 
-    ctx.compile_all()
+        self._register_detect_branch("det_reg_p3", 64, c2, c_reg, h8, w8, cols)
+        self._register_detect_branch("det_cls_p3", 64, c3, c_cls, h8, w8, cols)
+        self._register_detect_branch("det_reg_p4", 128, c2, c_reg, h16, w16, cols)
+        self._register_detect_branch("det_cls_p4", 128, c3, c_cls, h16, w16, cols)
+        self._register_detect_branch("det_reg_p5", 256, c2, c_reg, h32, w32, cols)
+        self._register_detect_branch("det_cls_p5", 256, c3, c_cls, h32, w32, cols)
 
-    # Load weights
-    c12 = 128 // 2
-    l12.load_weights(
-        torch.randn(2 * c12, 384, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(2 * c12, dtype=torch.bfloat16) * 0.01,
-        [
-            (
-                torch.randn(c12, c12, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c12, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c12, c12, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c12, dtype=torch.bfloat16) * 0.01,
-            )
-            for _ in range(1)
-        ],
-        torch.randn(128, 3 * c12, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(128, dtype=torch.bfloat16) * 0.01,
-    )
+    def forward(self, det_p3, det_p4, det_p5):
+        """Run detect head on neck outputs.
 
-    c15 = 64 // 2
-    l15.load_weights(
-        torch.randn(2 * c15, 192, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(2 * c15, dtype=torch.bfloat16) * 0.01,
-        [
-            (
-                torch.randn(c15, c15, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c15, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c15, c15, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c15, dtype=torch.bfloat16) * 0.01,
-            )
-            for _ in range(1)
-        ],
-        torch.randn(64, 3 * c15, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(64, dtype=torch.bfloat16) * 0.01,
-    )
+        Args:
+            det_p3: [1, 64, 80, 80] from neck.
+            det_p4: [1, 128, 40, 40] from neck.
+            det_p5: [1, 256, 20, 20] from neck.
 
-    l16.load_weights(
-        torch.randn(64, 64, 3, 3, dtype=torch.bfloat16) * 0.01,
-        torch.randn(64, dtype=torch.bfloat16) * 0.01,
-    )
+        Returns:
+            dict with 'reg': [reg_p3, reg_p4, reg_p5],
+                       'cls': [cls_p3, cls_p4, cls_p5]
+        """
+        dt = self._weights["detect"]
 
-    c18 = 128 // 2
-    l18.load_weights(
-        torch.randn(2 * c18, 192, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(2 * c18, dtype=torch.bfloat16) * 0.01,
-        [
-            (
-                torch.randn(c18, c18, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c18, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c18, c18, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c18, dtype=torch.bfloat16) * 0.01,
-            )
-            for _ in range(1)
-        ],
-        torch.randn(128, 3 * c18, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(128, dtype=torch.bfloat16) * 0.01,
-    )
+        reg_p3 = self._run_detect_branch("det_reg_p3", det_p3, dt["reg_p3"])
+        print(f"  reg_p3: {reg_p3.shape}")
+        cls_p3 = self._run_detect_branch("det_cls_p3", det_p3, dt["cls_p3"])
+        print(f"  cls_p3: {cls_p3.shape}")
 
-    l19.load_weights(
-        torch.randn(128, 128, 3, 3, dtype=torch.bfloat16) * 0.01,
-        torch.randn(128, dtype=torch.bfloat16) * 0.01,
-    )
+        reg_p4 = self._run_detect_branch("det_reg_p4", det_p4, dt["reg_p4"])
+        print(f"  reg_p4: {reg_p4.shape}")
+        cls_p4 = self._run_detect_branch("det_cls_p4", det_p4, dt["cls_p4"])
+        print(f"  cls_p4: {cls_p4.shape}")
 
-    c21 = 256 // 2
-    l21.load_weights(
-        torch.randn(2 * c21, 384, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(2 * c21, dtype=torch.bfloat16) * 0.01,
-        [
-            (
-                torch.randn(c21, c21, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c21, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c21, c21, 3, 3, dtype=torch.bfloat16) * 0.01,
-                torch.randn(c21, dtype=torch.bfloat16) * 0.01,
-            )
-            for _ in range(1)
-        ],
-        torch.randn(256, 3 * c21, 1, 1, dtype=torch.bfloat16) * 0.01,
-        torch.randn(256, dtype=torch.bfloat16) * 0.01,
-    )
+        reg_p5 = self._run_detect_branch("det_reg_p5", det_p5, dt["reg_p5"])
+        print(f"  reg_p5: {reg_p5.shape}")
+        cls_p5 = self._run_detect_branch("det_cls_p5", det_p5, dt["cls_p5"])
+        print(f"  cls_p5: {cls_p5.shape}")
 
-    ctx.prepare_runtime()
-    compile_t = time.time() - t0
-    print(f"Neck compiled + prepared in {compile_t:.1f}s")
+        return {
+            "reg": [reg_p3, reg_p4, reg_p5],
+            "cls": [cls_p3, cls_p4, cls_p5],
+        }
 
-    # Forward pass
-    print("\nRunning neck L10-L21...")
-    t0_fwd = time.time()
 
-    # FPN up-path
-    x = up1.forward(p5)
-    print(f"  L10: {x.shape}  (upsample)")
-    x = torch.cat([x, p4], dim=1)
-    print(f"  L11: {x.shape}  (concat)")
-    l12_out = l12.forward(x)
-    print(f"  L12: {l12_out.shape}")
-    x = up2.forward(l12_out)
-    print(f"  L13: {x.shape}  (upsample)")
-    x = torch.cat([x, p3], dim=1)
-    print(f"  L14: {x.shape}  (concat)")
-    det_p3 = l15.forward(x)
-    print(f"  L15: {det_p3.shape}  [det_p3]")
+# ── Weight Generation ────────────────────────────────────────────────────────
 
-    # PAN down-path
-    x = l16.forward(det_p3)
-    print(f"  L16: {x.shape}")
-    x = torch.cat([x, l12_out], dim=1)
-    print(f"  L17: {x.shape}  (concat)")
-    det_p4 = l18.forward(x)
-    print(f"  L18: {det_p4.shape}  [det_p4]")
-    x = l19.forward(det_p4)
-    print(f"  L19: {x.shape}")
-    x = torch.cat([x, p5], dim=1)
-    print(f"  L20: {x.shape}  (concat)")
-    det_p5 = l21.forward(x)
-    print(f"  L21: {det_p5.shape}  [det_p5]")
 
-    fwd_t = time.time() - t0_fwd
-    print(f"Neck forward: {fwd_t:.3f}s")
+def _make_random_cbs_weights(in_ch, out_ch, kernel_size):
+    return {
+        "weight": torch.randn(out_ch, in_ch, kernel_size, kernel_size, dtype=torch.bfloat16) * 0.01,
+        "bias": torch.randn(out_ch, dtype=torch.bfloat16) * 0.01,
+    }
 
-    # Verify
-    assert det_p3.shape == (1, 64, 80, 80), f"det_p3 shape mismatch: {det_p3.shape}"
-    assert det_p4.shape == (1, 128, 40, 40), f"det_p4 shape mismatch: {det_p4.shape}"
-    assert det_p5.shape == (1, 256, 20, 20), f"det_p5 shape mismatch: {det_p5.shape}"
-    assert torch.isfinite(det_p3).all(), "det_p3 has non-finite values"
-    assert torch.isfinite(det_p4).all(), "det_p4 has non-finite values"
-    assert torch.isfinite(det_p5).all(), "det_p5 has non-finite values"
-    print("Neck PASS")
 
-    # Cleanup
-    del up1, l12, up2, l15, l16, l18, l19, l21, ctx
-    cleanup_xrt()
+def _make_random_bottleneck_weights(channels, n=1):
+    return [
+        (
+            torch.randn(channels, channels, 3, 3, dtype=torch.bfloat16) * 0.01,
+            torch.randn(channels, dtype=torch.bfloat16) * 0.01,
+            torch.randn(channels, channels, 3, 3, dtype=torch.bfloat16) * 0.01,
+            torch.randn(channels, dtype=torch.bfloat16) * 0.01,
+        )
+        for _ in range(n)
+    ]
 
-    return det_p3, det_p4, det_p5, compile_t, fwd_t
+
+def _make_random_c2f_weights(c_in, c_out, n_bottlenecks):
+    c = c_out // 2
+    return {
+        "cv1_weight": torch.randn(2 * c, c_in, 1, 1, dtype=torch.bfloat16) * 0.01,
+        "cv1_bias": torch.randn(2 * c, dtype=torch.bfloat16) * 0.01,
+        "bottlenecks": _make_random_bottleneck_weights(c, n_bottlenecks),
+        "cv2_weight": torch.randn(c_out, (2 + n_bottlenecks) * c, 1, 1, dtype=torch.bfloat16) * 0.01,
+        "cv2_bias": torch.randn(c_out, dtype=torch.bfloat16) * 0.01,
+    }
+
+
+def _make_random_sppf_weights(c_in, c_out):
+    c_ = c_in // 2
+    return {
+        "cv1_weight": torch.randn(c_, c_in, 1, 1, dtype=torch.bfloat16) * 0.01,
+        "cv1_bias": torch.randn(c_, dtype=torch.bfloat16) * 0.01,
+        "cv2_weight": torch.randn(c_out, c_ * 4, 1, 1, dtype=torch.bfloat16) * 0.01,
+        "cv2_bias": torch.randn(c_out, dtype=torch.bfloat16) * 0.01,
+    }
+
+
+def _make_random_detect_branch_weights(c_in, c_mid, c_out):
+    return {
+        "cv1_weight": torch.randn(c_mid, c_in, 3, 3, dtype=torch.bfloat16) * 0.01,
+        "cv1_bias": torch.randn(c_mid, dtype=torch.bfloat16) * 0.01,
+        "cv2_weight": torch.randn(c_mid, c_mid, 3, 3, dtype=torch.bfloat16) * 0.01,
+        "cv2_bias": torch.randn(c_mid, dtype=torch.bfloat16) * 0.01,
+        "cv3_weight": torch.randn(c_out, c_mid, 1, 1, dtype=torch.bfloat16) * 0.01,
+        "cv3_bias": torch.randn(c_out, dtype=torch.bfloat16) * 0.01,
+    }
+
+
+def make_all_weights(nc=80, reg_max=16):
+    """Generate random weights for full YOLOv8n model."""
+    backbone = {
+        "l0": _make_random_cbs_weights(8, 16, 3),
+        "l1": _make_random_cbs_weights(16, 32, 3),
+        "l2": _make_random_c2f_weights(32, 32, 1),
+        "l3": _make_random_cbs_weights(32, 64, 3),
+        "l4": _make_random_c2f_weights(64, 64, 2),
+        "l5": _make_random_cbs_weights(64, 128, 3),
+        "l6": _make_random_c2f_weights(128, 128, 2),
+        "l7": _make_random_cbs_weights(128, 256, 3),
+        "l8": _make_random_c2f_weights(256, 256, 1),
+        "l9": _make_random_sppf_weights(256, 256),
+    }
+    neck = {
+        "l12": _make_random_c2f_weights(384, 128, 1),
+        "l15": _make_random_c2f_weights(192, 64, 1),
+        "l16": _make_random_cbs_weights(64, 64, 3),
+        "l18": _make_random_c2f_weights(192, 128, 1),
+        "l19": _make_random_cbs_weights(128, 128, 3),
+        "l21": _make_random_c2f_weights(384, 256, 1),
+    }
+    c_reg = 4 * reg_max
+    c_cls = nc
+    c2 = 64
+    c3 = max(nc, 16)
+    detect = {
+        "reg_p3": _make_random_detect_branch_weights(64, c2, c_reg),
+        "reg_p4": _make_random_detect_branch_weights(128, c2, c_reg),
+        "reg_p5": _make_random_detect_branch_weights(256, c2, c_reg),
+        "cls_p3": _make_random_detect_branch_weights(64, c3, c_cls),
+        "cls_p4": _make_random_detect_branch_weights(128, c3, c_cls),
+        "cls_p5": _make_random_detect_branch_weights(256, c3, c_cls),
+    }
+    return {"backbone": backbone, "neck": neck, "detect": detect}
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    torch.manual_seed(42)
+    H, W = 640, 640
+
     print("=" * 60)
-    print("YOLOv8n Full Model — NPU End-to-End")
+    print("YOLOv8n Full Model — 2 Multi-PDI XCLBINs on NPU")
     print("=" * 60)
 
     total_t0 = time.time()
 
-    # Prepare input: 3ch RGB padded to 8ch
-    x_input = F.pad(
-        torch.randn(1, 3, 640, 640, dtype=torch.bfloat16),
-        (0, 0, 0, 0, 0, 5),
-    )
-    print(f"Input: {x_input.shape} (3ch padded to 8ch)\n")
+    # Generate all weights upfront
+    print("\nGenerating random weights...")
+    weights = make_all_weights()
 
-    # Stage 1: Backbone
-    p3, p4, p5, bb_compile, bb_fwd = run_backbone(x_input)
+    x = torch.randn(1, 3, H, W, dtype=torch.bfloat16)
+    print(f"Input: {x.shape}")
 
-    # Stage 2: Neck
-    det_p3, det_p4, det_p5, neck_compile, neck_fwd = run_neck(p3, p4, p5)
+    # ── XCLBIN 1: Backbone + Neck ────────────────────────────────────────
 
-    # TODO: Stage 3 — Detect head (6 branches)
-    # TODO: Stage 4 — Post-processing (DFL decode + NMS)
+    print(f"\n{'─' * 60}")
+    print("XCLBIN 1: Backbone + Neck (L0-L21)")
+    print(f"{'─' * 60}")
 
-    # Summary
+    t0 = time.time()
+    ctx1 = AIEContext()
+    bb_neck = BackboneNeckPipeline(img_height=H, img_width=W, context=ctx1)
+    ctx1.compile_all()
+    bb_neck.load_weights(weights)
+    ctx1.prepare_runtime()
+    prep1_t = time.time() - t0
+
+    n_pdis_1 = len(bb_neck._pdi_map)
+    print(f"Ready: {n_pdis_1} PDIs, compiled+prepared in {prep1_t:.1f}s\n")
+
+    t0_fwd1 = time.time()
+    det_p3, det_p4, det_p5 = bb_neck.forward(x)
+    fwd1_t = time.time() - t0_fwd1
+
+    # Verify backbone+neck outputs
+    bb_neck_pass = True
+    for name, tensor, exp in [
+        ("det_p3", det_p3, (1, 64, 80, 80)),
+        ("det_p4", det_p4, (1, 128, 40, 40)),
+        ("det_p5", det_p5, (1, 256, 20, 20)),
+    ]:
+        ok = tensor.shape == exp and torch.isfinite(tensor).all().item()
+        if not ok:
+            bb_neck_pass = False
+        print(f"  {name}: {tensor.shape} finite={torch.isfinite(tensor).all().item()} {'PASS' if ok else 'FAIL'}")
+
+    print(f"\nBackbone+Neck forward: {fwd1_t:.3f}s  {'PASS' if bb_neck_pass else 'FAIL'}")
+
+    if not bb_neck_pass:
+        print("ABORTING — backbone+neck failed")
+        raise SystemExit(1)
+
+    # Clean up XCLBIN 1 hw_context
+    del bb_neck, ctx1
+    cleanup_xrt()
+
+    # ── XCLBIN 2: Detect Head ────────────────────────────────────────────
+
+    print(f"\n{'─' * 60}")
+    print("XCLBIN 2: Detect Head (6 branches)")
+    print(f"{'─' * 60}")
+
+    t0 = time.time()
+    ctx2 = AIEContext()
+    detect = DetectHeadPipeline(img_height=H, img_width=W, context=ctx2)
+    ctx2.compile_all()
+    detect.load_weights(weights)
+    ctx2.prepare_runtime()
+    prep2_t = time.time() - t0
+
+    n_pdis_2 = len(detect._pdi_map)
+    print(f"Ready: {n_pdis_2} PDIs, compiled+prepared in {prep2_t:.1f}s\n")
+
+    t0_fwd2 = time.time()
+    det_result = detect.forward(det_p3, det_p4, det_p5)
+    fwd2_t = time.time() - t0_fwd2
+
+    # Verify detect outputs
+    reg_list = det_result["reg"]
+    cls_list = det_result["cls"]
+
+    detect_pass = True
+    for name, tensor, exp in [
+        ("reg_p3", reg_list[0], (1, 64, 80, 80)),
+        ("cls_p3", cls_list[0], (1, 80, 80, 80)),
+        ("reg_p4", reg_list[1], (1, 64, 40, 40)),
+        ("cls_p4", cls_list[1], (1, 80, 40, 40)),
+        ("reg_p5", reg_list[2], (1, 64, 20, 20)),
+        ("cls_p5", cls_list[2], (1, 80, 20, 20)),
+    ]:
+        ok = tensor.shape == exp and torch.isfinite(tensor).all().item()
+        if not ok:
+            detect_pass = False
+        print(f"  {name}: {tensor.shape} finite={torch.isfinite(tensor).all().item()} {'PASS' if ok else 'FAIL'}")
+
+    print(f"\nDetect head forward: {fwd2_t:.3f}s  {'PASS' if detect_pass else 'FAIL'}")
+
+    if not detect_pass:
+        print("ABORTING — detect head failed")
+        raise SystemExit(1)
+
+    # Clean up XCLBIN 2 hw_context
+    del detect, ctx2
+    cleanup_xrt()
+
+    # ── Post-Processing (CPU) ────────────────────────────────────────────
+
+    print(f"\n{'─' * 60}")
+    print("Post-Processing (DFL decode + NMS)")
+    print(f"{'─' * 60}")
+
+    t0_pp = time.time()
+    pp = YOLOv8nPostProcess(conf_thres=0.25, iou_thres=0.45)
+    detections = pp(reg_list, cls_list)
+    pp_t = time.time() - t0_pp
+
+    n_boxes = len(detections["boxes"])
+    print(f"  Detections: {n_boxes} boxes")
+    if n_boxes > 0:
+        print(f"  Top score: {detections['scores'][0]:.4f}")
+        print(f"  Top box: {detections['boxes'][0].tolist()}")
+        print(f"  Top label: {detections['labels'][0].item()}")
+    print(f"  Post-processing: {pp_t:.4f}s")
+
+    # ── Summary ──────────────────────────────────────────────────────────
+
     total_t = time.time() - total_t0
-    total_compile = bb_compile + neck_compile
-    total_fwd = bb_fwd + neck_fwd
+    total_fwd = fwd1_t + fwd2_t
 
-    print("\n" + "=" * 60)
-    print("SUMMARY")
-    print("=" * 60)
-    print(f"Compile time: {total_compile:.1f}s  (backbone {bb_compile:.1f}s + neck {neck_compile:.1f}s)")
-    print(f"Forward time: {total_fwd:.3f}s  (backbone {bb_fwd:.3f}s + neck {neck_fwd:.3f}s)")
-    print(f"Total wall time: {total_t:.1f}s")
+    print(f"\n{'=' * 60}")
+    print("FULL MODEL SUMMARY")
+    print(f"{'=' * 60}")
+    print(f"XCLBIN 1 (BB+Neck):  {n_pdis_1} PDIs  prep={prep1_t:.1f}s  fwd={fwd1_t:.3f}s")
+    print(f"XCLBIN 2 (Detect):   {n_pdis_2} PDIs  prep={prep2_t:.1f}s  fwd={fwd2_t:.3f}s")
+    print(f"Post-processing:     {pp_t:.4f}s")
+    print(f"Total forward:       {total_fwd:.3f}s")
+    print(f"Total wall time:     {total_t:.1f}s")
+    print(f"Detections:          {n_boxes} boxes")
     print()
-    for name, t in [("det_p3", det_p3), ("det_p4", det_p4), ("det_p5", det_p5)]:
-        print(f"  {name}: {t.shape}  finite={torch.isfinite(t).all()}")
-    print()
-    print("BACKBONE + NECK (L0-L21) ALL PASS ON NPU")
+
+    all_pass = bb_neck_pass and detect_pass
+    if all_pass:
+        print("ALL PASS — FULL YOLOv8n MODEL ON NPU")
+        print("  2 xclbins, 2 hw_contexts, L0-L21 + detect + post-processing")
+    else:
+        print("FAIL — see errors above")
+        raise SystemExit(1)
