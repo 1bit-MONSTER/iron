@@ -127,13 +127,26 @@ Computation (per output element):
 | MaxPool2d int8 | 3.8 ms | 3.3 ms | 1.15× |
 | Upsample2x int8 | 1.0 ms | **0.16 ms** | **6.2×** |
 
+### Per-Layer Timing: BF16 vs INT8 (Scalar)
+
+| Config | BF16 (ms) | INT8 scalar (ms) | INT8 vec (ms) |
+|--------|-----------|-------------------|---------------|
+| 8→16 k3s2 640×640 (L0) | 4,875 | 2,980 | ~5 (projected) |
+| 16→32 k3s2 320×320 (L1) | 2,211 | 2,956 | ~3 |
+| 32→32 k3s1 80×80 (bn) | 2,081 | 1,461 | ~1.3 |
+| 64→64 k1 80×80 (cv1) | 2.6 | 64 | ~1.5 |
+| 128→128 k3s1 40×40 (bn) | 1,976 | 5,775 | ~1.3 |
+
+**Key finding**: Scalar int8 is NOT faster than bf16 (bf16 uses vectorized mmul).
+The vectorized int8 k3 kernel (1000× speedup) is critical for int8 to beat bf16.
+
 ### Full Model Timing
 
 | Model | Inference | Notes |
 |-------|-----------|-------|
 | BF16 (scalar k3) | 88s | 5 detections, production quality |
 | INT8 (scalar k3) | 130s | All fused, calibration WIP |
-| INT8 (vectorized k3, projected) | **~10s** | 1000× k3 speedup |
+| INT8 (vectorized k3, projected) | **~5-10s** | 1000× k3 speedup |
 
 ## Files
 
