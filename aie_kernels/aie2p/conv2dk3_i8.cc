@@ -374,8 +374,8 @@ void conv2dk3_i8(int8_t *line0, int8_t *line1, int8_t *line2,
                   const int32_t input_width, const int32_t input_channels,
                   const int32_t output_channels, const int32_t check,
                   const int32_t scale) {
-    conv2dk3_i8_vectorized(line0, line1, line2, weights, output,
-                            input_width, input_channels, output_channels, check, scale);
+    conv2dk3_i8_scalar(line0, line1, line2, weights, output,
+                        input_width, input_channels, output_channels, check, scale);
 }
 
 void conv2dk3s2_i8(int8_t *line0, int8_t *line1, int8_t *line2,
