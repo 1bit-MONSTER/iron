@@ -1179,3 +1179,56 @@ def my_conv2d_int8_k3_fused(
             rt.finish_task_group(tg)
 
     return Program(dev_ty, rt).resolve_program(SequentialPlacer())
+
+
+def my_conv2d_int8_fused(
+    dev, height, width, in_channels, out_channels, shift1, shift2,
+):
+    """Fused 1x1 int8 conv+bias+SiLU. Bias packed at end of weight buffer."""
+    xfr_dtype = np.int8
+    assert in_channels % 8 == 0 and out_channels % 8 == 0
+
+    input_row_size = in_channels * width
+    total_input = in_channels * height * width
+    total_output = out_channels * height * width
+    wt_chunk = out_channels * in_channels + out_channels * 4
+    total_wt = wt_chunk
+    out_row = out_channels * width
+
+    dev_ty = NPU2()
+    in_ty = np.ndarray[(input_row_size,), np.dtype[xfr_dtype]]
+    wt_ty = np.ndarray[(wt_chunk,), np.dtype[xfr_dtype]]
+    out_ty = np.ndarray[(out_row,), np.dtype[xfr_dtype]]
+    in_l3_ty = np.ndarray[(total_input,), np.dtype[xfr_dtype]]
+    wt_l3_ty = np.ndarray[(total_wt,), np.dtype[xfr_dtype]]
+    out_l3_ty = np.ndarray[(total_output,), np.dtype[xfr_dtype]]
+
+    kernel = Kernel("conv2dk1_i8_fused", "conv2dk1_i8_fused.o",
+                     [in_ty, wt_ty, out_ty, np.int32, np.int32, np.int32, np.int32, np.int32])
+    in_fifo = ObjectFifo(in_ty, name="in", depth=2)
+    wt_fifo = ObjectFifo(wt_ty, name="wt", depth=1)
+    out_fifo = ObjectFifo(out_ty, name="out", depth=2)
+
+    def core_fn(oi, ow, oo, k):
+        wt = ow.acquire(1)
+        for _ in range_(height):
+            ei = oi.acquire(1); eo = oo.acquire(1)
+            k(ei, wt, eo, width, in_channels, out_channels, shift1, shift2)
+            oi.release(1); oo.release(1)
+        ow.release(1)
+
+    worker = Worker(core_fn, [in_fifo.cons(), wt_fifo.cons(), out_fifo.prod(), kernel])
+    in_tap = TensorAccessPattern((1, total_input), offset=0, sizes=[1,1,1,total_input], strides=[0,0,0,1])
+    wt_tap = TensorAccessPattern((1, total_wt), offset=0, sizes=[1,1,1,total_wt], strides=[0,0,0,1])
+    out_tap = TensorAccessPattern((1, total_output), offset=0, sizes=[1,1,1,total_output], strides=[0,0,0,1])
+
+    rt = Runtime()
+    with rt.sequence(in_l3_ty, wt_l3_ty, out_l3_ty) as (inp, wts, out):
+        rt.start(worker)
+        tg = rt.task_group()
+        rt.fill(in_fifo.prod(), inp, in_tap, task_group=tg)
+        rt.fill(wt_fifo.prod(), wts, wt_tap, task_group=tg)
+        rt.drain(out_fifo.cons(), out, out_tap, wait=True, task_group=tg)
+        rt.finish_task_group(tg)
+
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())

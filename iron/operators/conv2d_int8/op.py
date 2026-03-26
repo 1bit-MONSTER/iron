@@ -185,7 +185,7 @@ class AIEConv2dInt8(AIEOperatorBase):
         else:
             assert stride in (1, 2), "Only stride 1 or 2 supported for 3x3 conv"
         if fused:
-            assert kernel_size == 3, "fused mode only supported for kernel_size=3"
+            assert kernel_size in (1, 3), "fused mode supported for kernel_size=1 and 3"
             assert (
                 shift1 is not None and shift2 is not None
             ), "shift1 and shift2 required for fused mode"
@@ -279,6 +279,24 @@ class AIEConv2dInt8(AIEOperatorBase):
             ]
             kernel_obj_name = "conv2dk3_i8.o"
             kernel_src = "conv2dk3_i8.cc"
+            kernel_extra_flags = ["-DINT8_ACT"]
+        elif self.fused and self.kernel_size == 1:
+            file_name_base = (
+                f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
+                f"{self.height}h_{self.width}w_k1_fused"
+            )
+            callback_fn = "my_conv2d_int8_fused"
+            callback_args = [
+                self.context.device_manager.device_type,
+                self.height,
+                self.width,
+                self.in_channels,
+                self.out_channels,
+                self.shift1,
+                self.shift2,
+            ]
+            kernel_obj_name = "conv2dk1_i8_fused.o"
+            kernel_src = "conv2dk1_i8_fused.cc"
             kernel_extra_flags = ["-DINT8_ACT"]
         else:
             file_name_base = (
