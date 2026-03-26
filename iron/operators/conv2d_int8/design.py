@@ -1242,9 +1242,14 @@ def my_conv2d_int8_fused(
 
     kernel = Kernel("conv2dk1_i8_fused", "conv2dk1_i8_fused.o",
                      [in_ty, wt_ty, out_ty, np.int32, np.int32, np.int32, np.int32, np.int32])
-    in_fifo = ObjectFifo(in_ty, name="in", depth=2)
+
+    # MemTile forwarding for input and output (same as non-fused k1)
+    from aie.iron.device import AnyMemTile
+    in_l3_fifo = ObjectFifo(in_ty, name="in_l3", depth=2)
+    in_fifo = in_l3_fifo.cons().forward(obj_type=in_ty, name="in_l1")
     wt_fifo = ObjectFifo(wt_ty, name="wt", depth=1)
-    out_fifo = ObjectFifo(out_ty, name="out", depth=2)
+    out_fifo = ObjectFifo(out_ty, name="out_l1", depth=2)
+    out_l3_fifo = out_fifo.cons().forward(obj_type=out_ty, name="out_l3")
 
     def core_fn(oi, ow, oo, k):
         s1, s2 = shift1, shift2
@@ -1259,28 +1264,48 @@ def my_conv2d_int8_fused(
 
     worker = Worker(core_fn, [in_fifo.cons(), wt_fifo.cons(), out_fifo.prod(), kernel])
 
-    # TAPs
-    in_tap = TensorAccessPattern((1, total_input), offset=0,
-                                  sizes=[1, 1, 1, total_input], strides=[0, 0, 0, 1])
-    wt_tap = TensorAccessPattern((1, total_wt), offset=0,
-                                  sizes=[1, 1, 1, total_wt], strides=[0, 0, 0, 1])
-    # Output TAP: interleave OC chunks across rows
-    output_row_total = out_channels * width
-    if n_oc_groups == 1:
-        out_tap = TensorAccessPattern((1, total_output), offset=0,
-                                       sizes=[1, 1, 1, total_output], strides=[0, 0, 0, 1])
-    else:
-        out_tap = TensorAccessPattern((1, total_output), offset=0,
-            sizes=[n_oc_groups, height, 1, output_row_size],
-            strides=[output_row_size, output_row_total, 0, 1])
-
     rt = Runtime()
-    with rt.sequence(in_l3_ty, wt_l3_ty, out_l3_ty) as (inp, wts, out):
+    with rt.sequence(in_l3_ty, wt_l3_ty, out_l3_ty) as (I, W, O):
         rt.start(worker)
-        tg = rt.task_group()
-        rt.fill(in_fifo.prod(), inp, in_tap, task_group=tg)
-        rt.fill(wt_fifo.prod(), wts, wt_tap, task_group=tg)
-        rt.drain(out_fifo.cons(), out, out_tap, wait=True, task_group=tg)
-        rt.finish_task_group(tg)
+
+        if n_oc_groups == 1:
+            in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input)
+            rt.fill(in_l3_fifo.prod(), I, TensorAccessPattern((1, total_input), offset=0,
+                sizes=[in_d3, in_d2, in_d1, in_d0],
+                strides=[in_d2*in_d1*in_d0, in_d1*in_d0, in_d0, 1]))
+            wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt)
+            rt.fill(wt_fifo.prod(), W, TensorAccessPattern((1, total_wt), offset=0,
+                sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+                strides=[wt_d2*wt_d1*wt_d0, wt_d1*wt_d0, wt_d0, 1]))
+            out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output)
+            rt.drain(out_l3_fifo.cons(), O, TensorAccessPattern((1, total_output), offset=0,
+                sizes=[out_d3, out_d2, out_d1, out_d0],
+                strides=[out_d2*out_d1*out_d0, out_d1*out_d0, out_d0, 1]), wait=True)
+        else:
+            tg = rt.task_group()
+            # Input: re-stream n_oc_groups times via stride-0 repeat
+            in_d2, in_d1, in_d0 = _factorize_3d(total_input)
+            rt.fill(in_l3_fifo.prod(), I, TensorAccessPattern((1, total_input), offset=0,
+                sizes=[n_oc_groups, in_d2, in_d1, in_d0],
+                strides=[0, in_d1*in_d0, in_d0, 1]), task_group=tg)
+            # Weights: contiguous transfer of all chunks
+            wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt)
+            rt.fill(wt_fifo.prod(), W, TensorAccessPattern((1, total_wt), offset=0,
+                sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+                strides=[wt_d2*wt_d1*wt_d0, wt_d1*wt_d0, wt_d0, 1]), task_group=tg)
+            # Output: scatter OC groups to correct DDR positions
+            output_row_total = out_channels * width
+            per_elem = output_row_size
+            pe_d0 = min(per_elem, 1023)
+            while pe_d0 % 4 != 0: pe_d0 -= 1
+            while pe_d0 >= 4:
+                if per_elem % pe_d0 == 0: break
+                pe_d0 -= 4
+            pe_d1 = per_elem // pe_d0
+            rt.drain(out_l3_fifo.cons(), O, TensorAccessPattern((1, total_output), offset=0,
+                sizes=[n_oc_groups, height, pe_d1, pe_d0],
+                strides=[oc_chunk*width, output_row_total, pe_d0, 1]),
+                wait=True, task_group=tg)
+            rt.finish_task_group(tg)
 
     return Program(dev_ty, rt).resolve_program(SequentialPlacer())
