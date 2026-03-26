@@ -13,7 +13,7 @@
 | P4: Composites | **DONE** | 5/5 HW | CBS now uses fused bias+SiLU kernel on-chip |
 | P5.1: Neck (FPN+PAN) | **DONE** | 5/5 HW | FPN up, PAN down, auto-column for L1 fit |
 | P5.2: Detect Head | **DONE** | 5/5 HW | Reg + Cls branches, bare Conv1×1 final layer |
-| P5.3: Full pipeline | **ALL OPS DONE** | 68/68 NPU | 2-xclbin approach: BB+neck (29 PDIs) + detect (15 PDIs), detect verified 6/6 |
+| P5.3: Full pipeline | **COMPLETE** | 68/68 NPU | 2 xclbins (28+17 PDIs), full e2e verified, 271 detections, 64.7s forward |
 | P6.0: Multi-PDI XCLBIN | **DONE** | 5/5 HW | `YOLOv8nPipeline` chains ~52 PDIs, SwiGLU pattern |
 | P6.1: SiLU/Bias Fusion | **DONE** | 5/5 HW | Bias packed in weights, Padé tanh approx, CBS verified |
 | P6.2: Post-Processing | **DONE** | 110/110 CPU | DFL decode + dist2bbox + NMS, full unit tests |
