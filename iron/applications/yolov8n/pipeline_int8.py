@@ -92,8 +92,7 @@ def _auto_columns_int8(
                     if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
                         continue
                     wt_bytes = (
-                        try_oc * in_channels * k_elems
-                        + try_oc * bias_bytes_per_oc
+                        try_oc * in_channels * k_elems + try_oc * bias_bytes_per_oc
                     )
                     out_bytes = 2 * try_oc * out_w
                     if wt_bytes + out_bytes <= avail:
@@ -134,6 +133,7 @@ class Int8ConvPipeline(AIEOperatorBase):
         self._preprocessor = preprocessor
         self._prof = {}  # profiling: name -> total_seconds
         self._prof_n = {}  # profiling: name -> count
+        self._chains = {}  # chain_name -> {layers, bos, runlist}
 
         super().__init__(context=context)
 
@@ -274,11 +274,13 @@ class Int8ConvPipeline(AIEOperatorBase):
                 w_sz = sub_op.out_channels * sub_op.in_channels
 
             self.add_buffer(f"{lname}_input", in_sz, dtype=np.int8)
-            # When a preprocessor is available, register weight data as
-            # static — this gives each layer a dedicated BO that is
-            # written once during prepare_runtime() and never touched
-            # again during inference.
-            if self._preprocessor is not None:
+            # When a preprocessor is available and the layer is NOT fused,
+            # register weight data as static — this gives each layer a
+            # dedicated BO that is written once during prepare_runtime()
+            # and never touched again during inference.
+            # Fused layers have packed bias in the weight buffer, which
+            # the preprocessor doesn't compute, so they use regular BOs.
+            if self._preprocessor is not None and not getattr(sub_op, "fused", False):
                 static_w = self._preprocessor.get_static_weight_data(lname)
                 self.add_buffer(
                     f"{lname}_weights", w_sz, dtype=np.int8, static_data=static_w
@@ -337,9 +339,27 @@ class Int8ConvPipeline(AIEOperatorBase):
                 buf_name = _buf(dot_name)
                 if buf_name not in self._pdi_map:
                     continue
-                self._layer_cache[buf_name] = (
-                    self._preprocessor.get_layer_data(buf_name)
-                )
+                entry = self._pdi_map[buf_name]
+                sub_op = entry["sub_op"]
+                if getattr(sub_op, "fused", False):
+                    # Fused layers need packed weights+bias — fall through
+                    # to the inline packing path below.
+                    w_int8, w_scale, bias = lookup_weight(self.int8_weights, dot_name)
+                    pred = PRED_MAP[dot_name]
+                    in_act_scale = self._preprocessor.act_scales.get(pred, 1.0)
+                    if in_act_scale == 0:
+                        in_act_scale = 1.0
+                    tiled_w = self._pack_fused_weights(
+                        sub_op, w_int8, w_scale, bias, in_act_scale
+                    )
+                    self._layer_cache[buf_name] = {
+                        "tiled_weights": tiled_w,
+                        "in_act_scale": in_act_scale,
+                    }
+                else:
+                    self._layer_cache[buf_name] = self._preprocessor.get_layer_data(
+                        buf_name
+                    )
             self._weights_prepared = True
             return
 
@@ -440,8 +460,10 @@ class Int8ConvPipeline(AIEOperatorBase):
         oc_per_col = sub_op.out_channels // sub_op.num_aie_columns
         chunks = []
         for col in range(sub_op.num_aie_columns):
-            col_wt_base = col * oc_per_col * (
-                sub_op.in_channels * (9 if sub_op.kernel_size == 3 else 1)
+            col_wt_base = (
+                col
+                * oc_per_col
+                * (sub_op.in_channels * (9 if sub_op.kernel_size == 3 else 1))
             )
             col_bias_base = col * oc_per_col
             for g in range(n_oc_groups):
@@ -971,7 +993,9 @@ class Int8BackboneNeckPipeline(Int8ConvPipeline):
     dequantization, bias, and SiLU run on CPU in float.
     """
 
-    def __init__(self, shifts, act_scales, int8_weights, context=None, preprocessor=None):
+    def __init__(
+        self, shifts, act_scales, int8_weights, context=None, preprocessor=None
+    ):
         self.shifts = shifts
         self.act_scales = act_scales
         self.int8_weights = int8_weights
@@ -1213,7 +1237,9 @@ class Int8DetectHeadPipeline(Int8ConvPipeline):
     Bare conv layers (cv3) use int8 conv + dequant + bias (no activation).
     """
 
-    def __init__(self, shifts, act_scales, int8_weights, context=None, preprocessor=None):
+    def __init__(
+        self, shifts, act_scales, int8_weights, context=None, preprocessor=None
+    ):
         self.shifts = shifts
         self.act_scales = act_scales
         self.int8_weights = int8_weights

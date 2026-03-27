@@ -89,19 +89,45 @@ def get_percentile(layer_name):
 
 
 class Int8YOLOv8nPipeline(Int8ConvPipeline):
-    """Full YOLOv8n int8 pipeline: all 63 conv PDIs in one xclbin."""
+    """Full YOLOv8n int8 pipeline: all 63 conv PDIs in one xclbin.
 
-    def __init__(self, shifts, act_scales, int8_weights, context=None):
-        self.shifts = shifts
-        self.act_scales = act_scales
-        self.int8_weights = int8_weights
-        super().__init__(context=context)
+    Accepts either a preprocessor or raw data (backwards compatible):
+        Int8YOLOv8nPipeline(preprocessor, context=ctx)
+        Int8YOLOv8nPipeline(shifts, act_scales, int8_weights, context=ctx)
+    """
+
+    def __init__(
+        self, shifts_or_preprocessor, act_scales=None, int8_weights=None, context=None
+    ):
+        from iron.applications.yolov8n.preprocessor_int8 import Int8ModelPreprocessor
+
+        if isinstance(shifts_or_preprocessor, Int8ModelPreprocessor):
+            preprocessor = shifts_or_preprocessor
+            self.shifts = preprocessor.shifts
+            self.act_scales = preprocessor.act_scales
+            self.int8_weights = preprocessor.int8_weights
+        else:
+            preprocessor = None
+            self.shifts = shifts_or_preprocessor
+            self.act_scales = act_scales
+            self.int8_weights = int8_weights
+        super().__init__(context=context, preprocessor=preprocessor)
 
     def _register_all_layers(self):
         s = self.shifts
 
-        def reg(name, ic, oc, h, w, ks, stride):
-            self._register_int8_conv(_buf(name), ic, oc, h, w, ks, stride, s[name])
+        def reg(name, ic, oc, h, w, ks, stride, fused=True):
+            shift = s[name]
+            if fused and isinstance(shift, tuple):
+                s1, s2 = shift
+                self._register_int8_conv(_buf(name), ic, oc, h, w, ks, stride, s1,
+                                          fused=True, shift1=s1, shift2=s2)
+            elif fused:
+                # Compute fused shifts from calibration
+                self._register_int8_conv(_buf(name), ic, oc, h, w, ks, stride, shift,
+                                          fused=True, shift1=shift, shift2=8)
+            else:
+                self._register_int8_conv(_buf(name), ic, oc, h, w, ks, stride, shift)
 
         # ---- BACKBONE ----
         reg("l0", 8, 16, 640, 640, 3, 2)
@@ -182,26 +208,30 @@ class Int8YOLOv8nPipeline(Int8ConvPipeline):
             c_out = 64 if branch.startswith("reg") else 80
             reg(f"det.{branch}.cv1", 64, c_mid, 80, 80, 3, 1)
             reg(f"det.{branch}.cv2", c_mid, c_mid, 80, 80, 3, 1)
-            reg(f"det.{branch}.cv3", c_mid, c_out, 80, 80, 1, 1)
+            reg(f"det.{branch}.cv3", c_mid, c_out, 80, 80, 1, 1, fused=False)
 
         for branch in ["reg_p4", "cls_p4"]:
             c_mid = 64 if branch.startswith("reg") else 80
             c_out = 64 if branch.startswith("reg") else 80
             reg(f"det.{branch}.cv1", 128, c_mid, 40, 40, 3, 1)
             reg(f"det.{branch}.cv2", c_mid, c_mid, 40, 40, 3, 1)
-            reg(f"det.{branch}.cv3", c_mid, c_out, 40, 40, 1, 1)
+            reg(f"det.{branch}.cv3", c_mid, c_out, 40, 40, 1, 1, fused=False)
 
         for branch in ["reg_p5", "cls_p5"]:
             c_mid = 64 if branch.startswith("reg") else 80
             c_out = 64 if branch.startswith("reg") else 80
             reg(f"det.{branch}.cv1", 256, c_mid, 20, 20, 3, 1)
             reg(f"det.{branch}.cv2", c_mid, c_mid, 20, 20, 3, 1)
-            reg(f"det.{branch}.cv3", c_mid, c_out, 20, 20, 1, 1)
+            reg(f"det.{branch}.cv3", c_mid, c_out, 20, 20, 1, 1, fused=False)
 
     def _cbs(self, x, name):
-        """Run CBS layer: int8 conv NPU -> dequant -> bias -> SiLU."""
+        """Run CBS layer: fused int8 conv+bias+SiLU on NPU (no Python SiLU)."""
+        buf_name = _buf(name)
+        entry = self._get_layer_entry(buf_name)
+        if hasattr(entry.get('sub_op', None), 'fused') and entry['sub_op'].fused:
+            return self.int8_cbs_fused_fast(x, buf_name)
         if self._weights_prepared:
-            return self.int8_cbs_fast(x, _buf(name))
+            return self.int8_cbs_fast(x, buf_name)
         w, ws, b = lookup_weight(self.int8_weights, name)
         pred = PRED_MAP[name]
         in_scale = self.act_scales.get(pred, 1.0)
