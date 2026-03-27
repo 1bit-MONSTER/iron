@@ -87,6 +87,7 @@ def my_conv2d_int8(
     out_channels,
     scale,
     kernel_obj="conv2dk1_i8.o",
+    num_columns=1,
 ):
     """ObjectFIFO design for 1x1 int8 conv2d on NPU2.
 
@@ -97,15 +98,24 @@ def my_conv2d_int8(
 
     Supports OC streaming when weights don't fit in L1: splits output
     channels into chunks, re-streams input for each chunk.
+
+    Each column handles out_channels/num_columns output channels.
     """
     xfr_dtype = np.int8
     _BD_WRAP_MAX = 64
 
     assert in_channels % 8 == 0, "in_channels must be a multiple of 8"
     assert out_channels % 8 == 0, "out_channels must be a multiple of 8"
+    assert (
+        out_channels % num_columns == 0
+    ), "out_channels must be divisible by num_columns"
+
+    # Per-column output channels
+    oc_per_col = out_channels // num_columns
 
     # Sizes for one row of data
     input_row_size = in_channels * width
+    output_row_size_per_col = oc_per_col * width
 
     # Total tensor sizes
     total_input_size = in_channels * height * width
@@ -117,7 +127,7 @@ def my_conv2d_int8(
     # output_fifo: 2 * oc_chunk * width
     # overhead: 1040 bytes (stack + misc)
     n_oc_groups = 1
-    oc_chunk = out_channels
+    oc_chunk = oc_per_col
     input_bufs = 2 * input_row_size
     avail = 65536 - 1040 - input_bufs
 
@@ -127,19 +137,19 @@ def my_conv2d_int8(
             f"(IC={in_channels}, W={width})"
         )
 
-    wt_bytes = out_channels * in_channels
-    out_bytes = 2 * out_channels * width
+    wt_bytes = oc_per_col * in_channels
+    out_bytes = 2 * oc_per_col * width
     if wt_bytes + out_bytes > avail:
         # Need OC streaming — find largest oc_chunk that fits
         found = False
-        for try_oc in range(out_channels, 0, -8):
-            if out_channels % try_oc != 0 or try_oc % 8 != 0:
+        for try_oc in range(oc_per_col, 0, -8):
+            if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
                 continue
             wt_b = try_oc * in_channels
             out_b = 2 * try_oc * width
             if wt_b + out_b > avail:
                 continue
-            n_oc = out_channels // try_oc
+            n_oc = oc_per_col // try_oc
             if n_oc > _BD_WRAP_MAX:
                 continue
             oc_chunk = try_oc
@@ -156,6 +166,10 @@ def my_conv2d_int8(
     wt_chunk_size = oc_chunk * in_channels
     output_row_size = oc_chunk * width
 
+    # Per-column weight size and total weight buffer
+    weights_per_col = n_oc_groups * wt_chunk_size
+    total_weights_size = weights_per_col * num_columns
+
     if dev == "npu":
         dev_ty = NPU1()
     else:
@@ -168,7 +182,7 @@ def my_conv2d_int8(
 
     # L3 (DDR) tensor types for runtime sequence
     input_l3_ty = np.ndarray[(total_input_size,), np.dtype[xfr_dtype]]
-    weights_l3_ty = np.ndarray[(n_oc_groups * wt_chunk_size,), np.dtype[xfr_dtype]]
+    weights_l3_ty = np.ndarray[(total_weights_size,), np.dtype[xfr_dtype]]
     output_l3_ty = np.ndarray[(total_output_size,), np.dtype[xfr_dtype]]
 
     # Kernel declaration
@@ -186,14 +200,33 @@ def my_conv2d_int8(
         ],
     )
 
-    # ObjectFIFOs with MemTile forwarding for input and output
-    in_l3_fifo = ObjectFifo(input_row_ty, name="in_l3", depth=2)
-    in_fifo = in_l3_fifo.cons().forward(obj_type=input_row_ty, name="in_l1")
+    # ObjectFIFOs per column with MemTile forwarding for input and output
+    from aie.iron.device import AnyMemTile
 
-    wt_fifo = ObjectFifo(weights_ty, name="wt_fifo", depth=1)
-
-    out_fifo = ObjectFifo(output_row_ty, name="out_l1", depth=2)
-    out_l3_fifo = out_fifo.cons().forward(obj_type=output_row_ty, name="out_l3")
+    in_l3_fifos = [
+        ObjectFifo(input_row_ty, name=f"in_l3_{i}", depth=2)
+        for i in range(num_columns)
+    ]
+    in_fifos = [
+        in_l3_fifos[i].cons().forward(
+            obj_type=input_row_ty, name=f"in_l1_{i}"
+        )
+        for i in range(num_columns)
+    ]
+    wt_fifos = [
+        ObjectFifo(weights_ty, name=f"wt_{i}", depth=1)
+        for i in range(num_columns)
+    ]
+    out_fifos = [
+        ObjectFifo(output_row_ty, name=f"out_l1_{i}", depth=2)
+        for i in range(num_columns)
+    ]
+    out_l3_fifos = [
+        out_fifos[i].cons().forward(
+            obj_type=output_row_ty, name=f"out_l3_{i}"
+        )
+        for i in range(num_columns)
+    ]
 
     # Core function
     def core_fn(of_in, of_wt, of_out, kernel_fn):
@@ -213,143 +246,175 @@ def my_conv2d_int8(
                 of_out.release(1)
             of_wt.release(1)
 
-    worker = Worker(
-        core_fn,
-        [
-            in_fifo.cons(),
-            wt_fifo.cons(),
-            out_fifo.prod(),
-            conv2dk1_i8_kernel,
-        ],
+    # Workers — one per column
+    workers = [
+        Worker(
+            core_fn,
+            [
+                in_fifos[i].cons(),
+                wt_fifos[i].cons(),
+                out_fifos[i].prod(),
+                conv2dk1_i8_kernel,
+            ],
+        )
+        for i in range(num_columns)
+    ]
+
+    # Input TAPs: all columns receive the same contiguous input
+    in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input_size)
+    in_tap_contiguous = TensorAccessPattern(
+        (1, total_input_size),
+        offset=0,
+        sizes=[in_d3, in_d2, in_d1, in_d0],
+        strides=[in_d2 * in_d1 * in_d0, in_d1 * in_d0, in_d0, 1],
     )
+
+    if n_oc_groups > 1:
+        in_d2_3d, in_d1_3d, in_d0_3d = _factorize_3d(total_input_size)
+        in_tap_streaming = TensorAccessPattern(
+            (1, total_input_size),
+            offset=0,
+            sizes=[n_oc_groups, in_d2_3d, in_d1_3d, in_d0_3d],
+            strides=[0, in_d1_3d * in_d0_3d, in_d0_3d, 1],
+        )
+
+    # Weight TAPs: each column gets its contiguous weight slice
+    wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(weights_per_col)
+    wt_taps = [
+        TensorAccessPattern(
+            (1, total_weights_size),
+            offset=i * weights_per_col,
+            sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+            strides=[wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1],
+        )
+        for i in range(num_columns)
+    ]
+
+    # Output TAPs: each column writes to its OC slice in DDR
+    output_row_total = out_channels * width
+    if n_oc_groups > 1:
+        per_elem = output_row_size  # oc_chunk * width
+        pe_d0 = min(per_elem, 1023)
+        while pe_d0 % 4 != 0:
+            pe_d0 -= 1
+        while pe_d0 >= 4:
+            if per_elem % pe_d0 == 0:
+                break
+            pe_d0 -= 4
+        pe_d1 = per_elem // pe_d0
+        out_taps = [
+            TensorAccessPattern(
+                (1, total_output_size),
+                offset=i * oc_per_col * width,
+                sizes=[n_oc_groups, height, pe_d1, pe_d0],
+                strides=[oc_chunk * width, output_row_total, pe_d0, 1],
+            )
+            for i in range(num_columns)
+        ]
+    elif num_columns == 1:
+        out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output_size)
+        out_taps = [
+            TensorAccessPattern(
+                (1, total_output_size),
+                offset=0,
+                sizes=[out_d3, out_d2, out_d1, out_d0],
+                strides=[
+                    out_d2 * out_d1 * out_d0,
+                    out_d1 * out_d0,
+                    out_d0,
+                    1,
+                ],
+            )
+        ]
+    else:
+        per_row = output_row_size_per_col
+        _BD_WRAP_MAX_OUT = 64
+        if height <= _BD_WRAP_MAX_OUT:
+            pr_d2, pr_d1, pr_d0 = _factorize_3d(per_row)
+            out_taps = [
+                TensorAccessPattern(
+                    (1, total_output_size),
+                    offset=i * oc_per_col * width,
+                    sizes=[height, pr_d2, pr_d1, pr_d0],
+                    strides=[output_row_total, pr_d1 * pr_d0, pr_d0, 1],
+                )
+                for i in range(num_columns)
+            ]
+        else:
+            h_outer = min(height, _BD_WRAP_MAX_OUT)
+            while h_outer >= 1 and (
+                height % h_outer != 0 or height // h_outer > 1023
+            ):
+                h_outer -= 1
+            assert h_outer >= 1, (
+                f"Cannot split height={height} into valid BD dims"
+            )
+            h_inner = height // h_outer
+            d0 = min(per_row, 1023)
+            while d0 % 4 != 0:
+                d0 -= 1
+            while d0 >= 4 and per_row % d0 != 0:
+                d0 -= 4
+            assert d0 >= 4, (
+                f"Cannot factorize per_row={per_row} into 2D BD dims"
+            )
+            d1 = per_row // d0
+            assert d1 <= 1023, (
+                f"per_row={per_row} too large for 2D BD factorization"
+            )
+            out_taps = [
+                TensorAccessPattern(
+                    (1, total_output_size),
+                    offset=i * oc_per_col * width,
+                    sizes=[h_outer, h_inner, d1, d0],
+                    strides=[
+                        output_row_total * h_inner,
+                        output_row_total,
+                        d0,
+                        1,
+                    ],
+                )
+                for i in range(num_columns)
+            ]
 
     # Runtime sequence
     rt = Runtime()
     with rt.sequence(input_l3_ty, weights_l3_ty, output_l3_ty) as (I, W, O):
-        rt.start(worker)
+        rt.start(*workers)
 
-        if n_oc_groups == 1:
-            # No OC streaming — contiguous transfers.
-            # The FIFO hardware handles element-level buffering independently
-            # of the TAP structure; just transfer all data contiguously.
-            in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input_size)
-            rt.fill(
-                in_l3_fifo.prod(),
-                I,
-                TensorAccessPattern(
-                    (1, total_input_size),
-                    offset=0,
-                    sizes=[in_d3, in_d2, in_d1, in_d0],
-                    strides=[
-                        in_d2 * in_d1 * in_d0,
-                        in_d1 * in_d0,
-                        in_d0,
-                        1,
-                    ],
-                ),
-            )
-            wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(wt_chunk_size)
-            rt.fill(
-                wt_fifo.prod(),
-                W,
-                TensorAccessPattern(
-                    (1, wt_chunk_size),
-                    offset=0,
-                    sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
-                    strides=[
-                        wt_d2 * wt_d1 * wt_d0,
-                        wt_d1 * wt_d0,
-                        wt_d0,
-                        1,
-                    ],
-                ),
-            )
-            out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output_size)
-            rt.drain(
-                out_l3_fifo.cons(),
-                O,
-                TensorAccessPattern(
-                    (1, total_output_size),
-                    offset=0,
-                    sizes=[out_d3, out_d2, out_d1, out_d0],
-                    strides=[
-                        out_d2 * out_d1 * out_d0,
-                        out_d1 * out_d0,
-                        out_d0,
-                        1,
-                    ],
-                ),
-                wait=True,
-            )
+        tg = rt.task_group()
+
+        # Fill input FIFOs: broadcast input to all columns
+        if n_oc_groups > 1:
+            for i in range(num_columns):
+                rt.fill(
+                    in_l3_fifos[i].prod(), I, in_tap_streaming, task_group=tg
+                )
         else:
-            # OC streaming: single TAPs with stride-0 repeat for input
-            tg = rt.task_group()
+            for _g in range(n_oc_groups):
+                for i in range(num_columns):
+                    rt.fill(
+                        in_l3_fifos[i].prod(),
+                        I,
+                        in_tap_contiguous,
+                        task_group=tg,
+                    )
 
-            # Input: re-stream n_oc_groups times via stride-0 on d3
-            in_d2, in_d1, in_d0 = _factorize_3d(total_input_size)
-            rt.fill(
-                in_l3_fifo.prod(),
-                I,
-                TensorAccessPattern(
-                    (1, total_input_size),
-                    offset=0,
-                    sizes=[n_oc_groups, in_d2, in_d1, in_d0],
-                    strides=[0, in_d1 * in_d0, in_d0, 1],
-                ),
-                task_group=tg,
-            )
+        # Fill weight FIFOs: each column gets its weight slice
+        for i in range(num_columns):
+            rt.fill(wt_fifos[i].prod(), W, wt_taps[i], task_group=tg)
 
-            # Weights: single contiguous transfer of all chunks
-            total_wt = n_oc_groups * wt_chunk_size
-            wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt)
-            rt.fill(
-                wt_fifo.prod(),
-                W,
-                TensorAccessPattern(
-                    (1, total_wt),
-                    offset=0,
-                    sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
-                    strides=[
-                        wt_d2 * wt_d1 * wt_d0,
-                        wt_d1 * wt_d0,
-                        wt_d0,
-                        1,
-                    ],
-                ),
-                task_group=tg,
-            )
-
-            # Output: scatter OC groups to correct DDR positions
-            # Each element is one row of oc_chunk channels: oc_chunk * width bytes
-            # In DDR, a full output row is out_channels * width bytes
-            per_elem = output_row_size  # oc_chunk * width
-            pe_d0 = min(per_elem, 1023)
-            while pe_d0 % 4 != 0:
-                pe_d0 -= 1
-            while pe_d0 >= 4:
-                if per_elem % pe_d0 == 0:
-                    break
-                pe_d0 -= 4
-            pe_d1 = per_elem // pe_d0
+        # Drain output FIFOs: each column drains to correct DDR position
+        for i in range(num_columns):
             rt.drain(
-                out_l3_fifo.cons(),
+                out_l3_fifos[i].cons(),
                 O,
-                TensorAccessPattern(
-                    (1, total_output_size),
-                    offset=0,
-                    sizes=[n_oc_groups, height, pe_d1, pe_d0],
-                    strides=[
-                        oc_chunk * width,
-                        out_channels * width,
-                        pe_d0,
-                        1,
-                    ],
-                ),
+                out_taps[i],
                 wait=True,
                 task_group=tg,
             )
 
-            rt.finish_task_group(tg)
+        rt.finish_task_group(tg)
 
     return Program(dev_ty, rt).resolve_program(SequentialPlacer())
 
@@ -362,6 +427,7 @@ def my_conv2d_int8_k3(
     out_channels,
     scale,
     stride,
+    num_columns=1,
 ):
     """ObjectFIFO design for 3x3 int8 conv2d on NPU2.
 
@@ -373,11 +439,16 @@ def my_conv2d_int8_k3(
     Supports stride=1 (same spatial) and stride=2 (halved spatial).
     The kernel handles vertical border (check=0/1/2) and horizontal zero-padding.
     Output quantization: int32 accumulate, right-shift by scale, saturate to int8.
+
+    Each column handles out_channels/num_columns output channels.
     """
     xfr_dtype = np.int8
 
     assert in_channels % 8 == 0, "in_channels must be a multiple of 8"
     assert out_channels % 8 == 0, "out_channels must be a multiple of 8"
+    assert (
+        out_channels % num_columns == 0
+    ), "out_channels must be divisible by num_columns"
     assert height >= 2, "height must be >= 2 for 3x3 conv"
     assert stride in (1, 2), "Only stride 1 and 2 supported for 3x3 conv"
 
@@ -389,9 +460,13 @@ def my_conv2d_int8_k3(
     out_h = height if stride == 1 else height // 2
     out_w = width if stride == 1 else width // 2
 
+    # Per-column output channels
+    oc_per_col = out_channels // num_columns
+
     # Sizes for one row of data
     input_row_size = in_channels * width
     k_elems = 9  # 3x3
+    output_row_size_per_col = oc_per_col * out_w
 
     # Total tensor sizes
     total_input_size = in_channels * height * width
@@ -404,7 +479,7 @@ def my_conv2d_int8_k3(
     # output_fifo: 2 * oc_chunk * out_w bytes
     # overhead:    1040 bytes (stack + misc)
     n_oc_groups = 1
-    oc_chunk = out_channels
+    oc_chunk = oc_per_col
     input_depth = 4  # preferred (3-row window + 1 prefetch)
     _BD_WRAP_MAX = 64  # Max for d3 (outermost) TAP dimension
 
@@ -415,14 +490,14 @@ def my_conv2d_int8_k3(
         avail = 65536 - 1040 - input_fbs
         if avail <= 0:
             continue
-        for try_oc in range(out_channels, 0, -8):
-            if out_channels % try_oc != 0 or try_oc % 8 != 0:
+        for try_oc in range(oc_per_col, 0, -8):
+            if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
                 continue
             wt_bytes = try_oc * in_channels * k_elems
             out_bytes = 2 * try_oc * out_w
             if wt_bytes + out_bytes > avail:
                 continue
-            n_oc = out_channels // try_oc
+            n_oc = oc_per_col // try_oc
             if n_oc > _BD_WRAP_MAX:
                 continue
             oc_chunk = try_oc
@@ -444,6 +519,10 @@ def my_conv2d_int8_k3(
     wt_chunk_elems = oc_chunk * in_channels * k_elems
     output_elem_size = oc_chunk * out_w
 
+    # Per-column weight size and total weight buffer
+    weights_per_col = n_oc_groups * wt_chunk_elems
+    total_weights_size = weights_per_col * num_columns
+
     if dev == "npu":
         dev_ty = NPU1()
     else:
@@ -456,7 +535,7 @@ def my_conv2d_int8_k3(
 
     # L3 (DDR) tensor types
     input_l3_ty = np.ndarray[(total_input_size,), np.dtype[xfr_dtype]]
-    weights_l3_ty = np.ndarray[(n_oc_groups * wt_chunk_elems,), np.dtype[xfr_dtype]]
+    weights_l3_ty = np.ndarray[(total_weights_size,), np.dtype[xfr_dtype]]
     output_l3_ty = np.ndarray[(total_output_size,), np.dtype[xfr_dtype]]
 
     # Kernel declaration: conv2dk3_i8 or conv2dk3s2_i8
@@ -496,10 +575,19 @@ def my_conv2d_int8_k3(
             ],
         )
 
-    # ObjectFIFOs
-    in_fifo = ObjectFifo(input_row_ty, name="in_fifo", depth=input_depth)
-    wt_fifo = ObjectFifo(weights_ty, name="wt_fifo", depth=1)
-    out_fifo = ObjectFifo(output_row_ty, name="out_fifo", depth=2)
+    # ObjectFIFOs per column
+    in_fifos = [
+        ObjectFifo(input_row_ty, name=f"in_{i}", depth=input_depth)
+        for i in range(num_columns)
+    ]
+    wt_fifos = [
+        ObjectFifo(weights_ty, name=f"wt_{i}", depth=1)
+        for i in range(num_columns)
+    ]
+    out_fifos = [
+        ObjectFifo(output_row_ty, name=f"out_{i}", depth=2)
+        for i in range(num_columns)
+    ]
 
     # Core function: sliding window pattern
     if stride == 1:
@@ -624,143 +712,165 @@ def my_conv2d_int8_k3(
                 of_in.release(1)
                 of_wt.release(1)
 
-    # Worker
-    worker = Worker(
-        core_fn,
-        [in_fifo.cons(), wt_fifo.cons(), out_fifo.prod(), kernel],
+    # Workers — one per column
+    workers = [
+        Worker(
+            core_fn,
+            [in_fifos[i].cons(), wt_fifos[i].cons(), out_fifos[i].prod(), kernel],
+        )
+        for i in range(num_columns)
+    ]
+
+    # Input TAPs: all columns receive the same contiguous input
+    in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input_size)
+    in_tap_contiguous = TensorAccessPattern(
+        (1, total_input_size),
+        offset=0,
+        sizes=[in_d3, in_d2, in_d1, in_d0],
+        strides=[in_d2 * in_d1 * in_d0, in_d1 * in_d0, in_d0, 1],
     )
+
+    # For OC streaming: input re-streamed n_oc_groups times via stride-0
+    if n_oc_groups > 1:
+        in_d2_3d, in_d1_3d, in_d0_3d = _factorize_3d(total_input_size)
+        in_tap_streaming = TensorAccessPattern(
+            (1, total_input_size),
+            offset=0,
+            sizes=[n_oc_groups, in_d2_3d, in_d1_3d, in_d0_3d],
+            strides=[0, in_d1_3d * in_d0_3d, in_d0_3d, 1],
+        )
+
+    # Weight TAPs: each column gets its contiguous weight slice
+    wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(weights_per_col)
+    wt_taps = [
+        TensorAccessPattern(
+            (1, total_weights_size),
+            offset=i * weights_per_col,
+            sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+            strides=[wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1],
+        )
+        for i in range(num_columns)
+    ]
+
+    # Output TAPs: each column writes to its OC slice in DDR
+    output_row_total = out_channels * out_w
+    if n_oc_groups > 1:
+        # OC streaming: scatter [n_oc_groups, out_h] output rows
+        per_elem = output_elem_size  # oc_chunk * out_w
+        pe_d0 = min(per_elem, 1023)
+        while pe_d0 % 4 != 0:
+            pe_d0 -= 1
+        while pe_d0 >= 4:
+            if per_elem % pe_d0 == 0:
+                break
+            pe_d0 -= 4
+        pe_d1 = per_elem // pe_d0
+        out_taps = [
+            TensorAccessPattern(
+                (1, total_output_size),
+                offset=i * oc_per_col * out_w,
+                sizes=[n_oc_groups, out_h, pe_d1, pe_d0],
+                strides=[oc_chunk * out_w, output_row_total, pe_d0, 1],
+            )
+            for i in range(num_columns)
+        ]
+    elif num_columns == 1:
+        # Single column, no OC streaming: contiguous output
+        out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output_size)
+        out_taps = [
+            TensorAccessPattern(
+                (1, total_output_size),
+                offset=0,
+                sizes=[out_d3, out_d2, out_d1, out_d0],
+                strides=[
+                    out_d2 * out_d1 * out_d0,
+                    out_d1 * out_d0,
+                    out_d0,
+                    1,
+                ],
+            )
+        ]
+    else:
+        # Multi-column, no OC streaming: scatter per-column OC slices
+        per_row = output_row_size_per_col  # oc_per_col * out_w
+        _BD_WRAP_MAX_OUT = 64
+        if out_h <= _BD_WRAP_MAX_OUT:
+            pr_d2, pr_d1, pr_d0 = _factorize_3d(per_row)
+            out_taps = [
+                TensorAccessPattern(
+                    (1, total_output_size),
+                    offset=i * oc_per_col * out_w,
+                    sizes=[out_h, pr_d2, pr_d1, pr_d0],
+                    strides=[output_row_total, pr_d1 * pr_d0, pr_d0, 1],
+                )
+                for i in range(num_columns)
+            ]
+        else:
+            h_outer = min(out_h, _BD_WRAP_MAX_OUT)
+            while h_outer >= 1 and (
+                out_h % h_outer != 0 or out_h // h_outer > 1023
+            ):
+                h_outer -= 1
+            assert h_outer >= 1, (
+                f"Cannot split out_h={out_h} into valid BD dims"
+            )
+            h_inner = out_h // h_outer
+            d0 = min(per_row, 1023)
+            while d0 % 4 != 0:
+                d0 -= 1
+            while d0 >= 4 and per_row % d0 != 0:
+                d0 -= 4
+            assert d0 >= 4, (
+                f"Cannot factorize per_row={per_row} into 2D BD dims"
+            )
+            d1 = per_row // d0
+            assert d1 <= 1023, (
+                f"per_row={per_row} too large for 2D BD factorization"
+            )
+            out_taps = [
+                TensorAccessPattern(
+                    (1, total_output_size),
+                    offset=i * oc_per_col * out_w,
+                    sizes=[h_outer, h_inner, d1, d0],
+                    strides=[
+                        output_row_total * h_inner,
+                        output_row_total,
+                        d0,
+                        1,
+                    ],
+                )
+                for i in range(num_columns)
+            ]
 
     # Runtime sequence
     rt = Runtime()
     with rt.sequence(input_l3_ty, weights_l3_ty, output_l3_ty) as (I, W, O):
-        rt.start(worker)
+        rt.start(*workers)
 
-        if n_oc_groups == 1:
-            # No OC streaming — contiguous transfers with task_group
-            tg = rt.task_group()
+        tg = rt.task_group()
 
-            in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input_size)
-            rt.fill(
-                in_fifo.prod(),
-                I,
-                TensorAccessPattern(
-                    (1, total_input_size),
-                    offset=0,
-                    sizes=[in_d3, in_d2, in_d1, in_d0],
-                    strides=[
-                        in_d2 * in_d1 * in_d0,
-                        in_d1 * in_d0,
-                        in_d0,
-                        1,
-                    ],
-                ),
-                task_group=tg,
-            )
-            wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(wt_chunk_elems)
-            rt.fill(
-                wt_fifo.prod(),
-                W,
-                TensorAccessPattern(
-                    (1, wt_chunk_elems),
-                    offset=0,
-                    sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
-                    strides=[
-                        wt_d2 * wt_d1 * wt_d0,
-                        wt_d1 * wt_d0,
-                        wt_d0,
-                        1,
-                    ],
-                ),
-                task_group=tg,
-            )
-            out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output_size)
-            rt.drain(
-                out_fifo.cons(),
-                O,
-                TensorAccessPattern(
-                    (1, total_output_size),
-                    offset=0,
-                    sizes=[out_d3, out_d2, out_d1, out_d0],
-                    strides=[
-                        out_d2 * out_d1 * out_d0,
-                        out_d1 * out_d0,
-                        out_d0,
-                        1,
-                    ],
-                ),
-                wait=True,
-                task_group=tg,
-            )
-
-            rt.finish_task_group(tg)
+        # Fill input FIFOs: broadcast input to all columns
+        if n_oc_groups > 1:
+            for i in range(num_columns):
+                rt.fill(in_fifos[i].prod(), I, in_tap_streaming, task_group=tg)
         else:
-            # OC streaming: single TAPs with stride-0 repeat for input
-            tg = rt.task_group()
+            for _g in range(n_oc_groups):
+                for i in range(num_columns):
+                    rt.fill(
+                        in_fifos[i].prod(), I, in_tap_contiguous, task_group=tg
+                    )
 
-            # Input: re-stream n_oc_groups times via stride-0 on d3
-            in_d2, in_d1, in_d0 = _factorize_3d(total_input_size)
-            rt.fill(
-                in_fifo.prod(),
-                I,
-                TensorAccessPattern(
-                    (1, total_input_size),
-                    offset=0,
-                    sizes=[n_oc_groups, in_d2, in_d1, in_d0],
-                    strides=[0, in_d1 * in_d0, in_d0, 1],
-                ),
-                task_group=tg,
-            )
+        # Fill weight FIFOs: each column gets its weight slice
+        for i in range(num_columns):
+            rt.fill(wt_fifos[i].prod(), W, wt_taps[i], task_group=tg)
 
-            # Weights: single contiguous transfer of all chunks
-            total_wt = n_oc_groups * wt_chunk_elems
-            wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt)
-            rt.fill(
-                wt_fifo.prod(),
-                W,
-                TensorAccessPattern(
-                    (1, total_wt),
-                    offset=0,
-                    sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
-                    strides=[
-                        wt_d2 * wt_d1 * wt_d0,
-                        wt_d1 * wt_d0,
-                        wt_d0,
-                        1,
-                    ],
-                ),
-                task_group=tg,
-            )
-
-            # Output: scatter OC groups to correct DDR positions
-            output_row_total = out_channels * out_w
-            per_elem = output_elem_size
-            pe_d0 = min(per_elem, 1023)
-            while pe_d0 % 4 != 0:
-                pe_d0 -= 1
-            while pe_d0 >= 4:
-                if per_elem % pe_d0 == 0:
-                    break
-                pe_d0 -= 4
-            pe_d1 = per_elem // pe_d0
+        # Drain output FIFOs: each column drains to correct DDR position
+        for i in range(num_columns):
             rt.drain(
-                out_fifo.cons(),
-                O,
-                TensorAccessPattern(
-                    (1, total_output_size),
-                    offset=0,
-                    sizes=[n_oc_groups, out_h, pe_d1, pe_d0],
-                    strides=[
-                        oc_chunk * out_w,
-                        output_row_total,
-                        pe_d0,
-                        1,
-                    ],
-                ),
-                wait=True,
-                task_group=tg,
+                out_fifos[i].cons(), O, out_taps[i], wait=True, task_group=tg
             )
 
-            rt.finish_task_group(tg)
+        rt.finish_task_group(tg)
 
     return Program(dev_ty, rt).resolve_program(SequentialPlacer())
 
@@ -774,6 +884,7 @@ def my_conv2d_int8_k3_fused(
     shift1,
     shift2,
     stride,
+    num_columns=1,
 ):
     """ObjectFIFO design for fused 3x3 int8 conv + bias + SiLU on NPU2.
 
@@ -784,11 +895,16 @@ def my_conv2d_int8_k3_fused(
       Input row:    [C_in/8, W, 8]   (int8)
       Weight FIFO:  [C_out/8, C_in/8, 3, 3, 8, 8] ++ [C_out int32 bias]
       Output row:   [C_out/8, W_out, 8]  (int8)
+
+    Each column handles out_channels/num_columns output channels.
     """
     xfr_dtype = np.int8
 
     assert in_channels % 8 == 0, "in_channels must be a multiple of 8"
     assert out_channels % 8 == 0, "out_channels must be a multiple of 8"
+    assert (
+        out_channels % num_columns == 0
+    ), "out_channels must be divisible by num_columns"
     assert height >= 2, "height must be >= 2 for 3x3 conv"
     assert stride in (1, 2), "Only stride 1 and 2 supported for 3x3 conv"
 
@@ -800,9 +916,13 @@ def my_conv2d_int8_k3_fused(
     out_h = height if stride == 1 else height // 2
     out_w = width if stride == 1 else width // 2
 
+    # Per-column output channels
+    oc_per_col = out_channels // num_columns
+
     # Sizes for one row of data
     input_row_size = in_channels * width
     k_elems = 9  # 3x3
+    output_row_size_per_col = oc_per_col * out_w
 
     # Total tensor sizes
     total_input_size = in_channels * height * width
@@ -811,7 +931,7 @@ def my_conv2d_int8_k3_fused(
     # --- L1 budget: find oc_chunk that fits ---
     # Fused weights include bias: oc_chunk * ic * 9 + oc_chunk * 4 (int32 bias)
     n_oc_groups = 1
-    oc_chunk = out_channels
+    oc_chunk = oc_per_col
     input_depth = 4
     _BD_WRAP_MAX = 64
 
@@ -822,15 +942,15 @@ def my_conv2d_int8_k3_fused(
         avail = 65536 - 1040 - input_fbs
         if avail <= 0:
             continue
-        for try_oc in range(out_channels, 0, -8):
-            if out_channels % try_oc != 0 or try_oc % 8 != 0:
+        for try_oc in range(oc_per_col, 0, -8):
+            if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
                 continue
             # Weight bytes + bias bytes (int32 = 4 bytes per OC element)
             wt_bytes = try_oc * in_channels * k_elems + try_oc * 4
             out_bytes = 2 * try_oc * out_w
             if wt_bytes + out_bytes > avail:
                 continue
-            n_oc = out_channels // try_oc
+            n_oc = oc_per_col // try_oc
             if n_oc > _BD_WRAP_MAX:
                 continue
             oc_chunk = try_oc
@@ -852,6 +972,10 @@ def my_conv2d_int8_k3_fused(
     wt_chunk_elems = oc_chunk * in_channels * k_elems + oc_chunk * 4
     output_elem_size = oc_chunk * out_w
 
+    # Per-column weight size and total weight buffer
+    weights_per_col = n_oc_groups * wt_chunk_elems
+    total_weights_size = weights_per_col * num_columns
+
     if dev == "npu":
         dev_ty = NPU1()
     else:
@@ -864,7 +988,7 @@ def my_conv2d_int8_k3_fused(
 
     # L3 (DDR) tensor types
     input_l3_ty = np.ndarray[(total_input_size,), np.dtype[xfr_dtype]]
-    weights_l3_ty = np.ndarray[(n_oc_groups * wt_chunk_elems,), np.dtype[xfr_dtype]]
+    weights_l3_ty = np.ndarray[(total_weights_size,), np.dtype[xfr_dtype]]
     output_l3_ty = np.ndarray[(total_output_size,), np.dtype[xfr_dtype]]
 
     # Kernel declaration (packed bias: 5 buffer args + 6 scalar args)
@@ -905,10 +1029,19 @@ def my_conv2d_int8_k3_fused(
             ],
         )
 
-    # ObjectFIFOs
-    in_fifo = ObjectFifo(input_row_ty, name="in_fifo", depth=input_depth)
-    wt_fifo = ObjectFifo(weights_ty, name="wt_fifo", depth=1)
-    out_fifo = ObjectFifo(output_row_ty, name="out_fifo", depth=2)
+    # ObjectFIFOs per column
+    in_fifos = [
+        ObjectFifo(input_row_ty, name=f"in_{i}", depth=input_depth)
+        for i in range(num_columns)
+    ]
+    wt_fifos = [
+        ObjectFifo(weights_ty, name=f"wt_{i}", depth=1)
+        for i in range(num_columns)
+    ]
+    out_fifos = [
+        ObjectFifo(output_row_ty, name=f"out_{i}", depth=2)
+        for i in range(num_columns)
+    ]
 
     # Core function: sliding window with fused activation
     if stride == 1:
@@ -1040,143 +1173,162 @@ def my_conv2d_int8_k3_fused(
                 of_in.release(1)
                 of_wt.release(1)
 
-    # Worker
-    worker = Worker(
-        core_fn,
-        [in_fifo.cons(), wt_fifo.cons(), out_fifo.prod(), kernel],
+    # Workers — one per column
+    workers = [
+        Worker(
+            core_fn,
+            [in_fifos[i].cons(), wt_fifos[i].cons(), out_fifos[i].prod(), kernel],
+        )
+        for i in range(num_columns)
+    ]
+
+    # Input TAPs: all columns receive the same contiguous input
+    in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input_size)
+    in_tap_contiguous = TensorAccessPattern(
+        (1, total_input_size),
+        offset=0,
+        sizes=[in_d3, in_d2, in_d1, in_d0],
+        strides=[in_d2 * in_d1 * in_d0, in_d1 * in_d0, in_d0, 1],
     )
+
+    # For OC streaming: input re-streamed n_oc_groups times via stride-0
+    if n_oc_groups > 1:
+        in_d2_3d, in_d1_3d, in_d0_3d = _factorize_3d(total_input_size)
+        in_tap_streaming = TensorAccessPattern(
+            (1, total_input_size),
+            offset=0,
+            sizes=[n_oc_groups, in_d2_3d, in_d1_3d, in_d0_3d],
+            strides=[0, in_d1_3d * in_d0_3d, in_d0_3d, 1],
+        )
+
+    # Weight TAPs: each column gets its contiguous weight slice
+    wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(weights_per_col)
+    wt_taps = [
+        TensorAccessPattern(
+            (1, total_weights_size),
+            offset=i * weights_per_col,
+            sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+            strides=[wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1],
+        )
+        for i in range(num_columns)
+    ]
+
+    # Output TAPs: each column writes to its OC slice in DDR
+    output_row_total = out_channels * out_w
+    if n_oc_groups > 1:
+        per_elem = output_elem_size
+        pe_d0 = min(per_elem, 1023)
+        while pe_d0 % 4 != 0:
+            pe_d0 -= 1
+        while pe_d0 >= 4:
+            if per_elem % pe_d0 == 0:
+                break
+            pe_d0 -= 4
+        pe_d1 = per_elem // pe_d0
+        out_taps = [
+            TensorAccessPattern(
+                (1, total_output_size),
+                offset=i * oc_per_col * out_w,
+                sizes=[n_oc_groups, out_h, pe_d1, pe_d0],
+                strides=[oc_chunk * out_w, output_row_total, pe_d0, 1],
+            )
+            for i in range(num_columns)
+        ]
+    elif num_columns == 1:
+        out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output_size)
+        out_taps = [
+            TensorAccessPattern(
+                (1, total_output_size),
+                offset=0,
+                sizes=[out_d3, out_d2, out_d1, out_d0],
+                strides=[
+                    out_d2 * out_d1 * out_d0,
+                    out_d1 * out_d0,
+                    out_d0,
+                    1,
+                ],
+            )
+        ]
+    else:
+        per_row = output_row_size_per_col
+        _BD_WRAP_MAX_OUT = 64
+        if out_h <= _BD_WRAP_MAX_OUT:
+            pr_d2, pr_d1, pr_d0 = _factorize_3d(per_row)
+            out_taps = [
+                TensorAccessPattern(
+                    (1, total_output_size),
+                    offset=i * oc_per_col * out_w,
+                    sizes=[out_h, pr_d2, pr_d1, pr_d0],
+                    strides=[output_row_total, pr_d1 * pr_d0, pr_d0, 1],
+                )
+                for i in range(num_columns)
+            ]
+        else:
+            h_outer = min(out_h, _BD_WRAP_MAX_OUT)
+            while h_outer >= 1 and (
+                out_h % h_outer != 0 or out_h // h_outer > 1023
+            ):
+                h_outer -= 1
+            assert h_outer >= 1, (
+                f"Cannot split out_h={out_h} into valid BD dims"
+            )
+            h_inner = out_h // h_outer
+            d0 = min(per_row, 1023)
+            while d0 % 4 != 0:
+                d0 -= 1
+            while d0 >= 4 and per_row % d0 != 0:
+                d0 -= 4
+            assert d0 >= 4, (
+                f"Cannot factorize per_row={per_row} into 2D BD dims"
+            )
+            d1 = per_row // d0
+            assert d1 <= 1023, (
+                f"per_row={per_row} too large for 2D BD factorization"
+            )
+            out_taps = [
+                TensorAccessPattern(
+                    (1, total_output_size),
+                    offset=i * oc_per_col * out_w,
+                    sizes=[h_outer, h_inner, d1, d0],
+                    strides=[
+                        output_row_total * h_inner,
+                        output_row_total,
+                        d0,
+                        1,
+                    ],
+                )
+                for i in range(num_columns)
+            ]
 
     # Runtime sequence
     rt = Runtime()
     with rt.sequence(input_l3_ty, weights_l3_ty, output_l3_ty) as (I, W, O):
-        rt.start(worker)
+        rt.start(*workers)
 
-        if n_oc_groups == 1:
-            # No OC streaming — contiguous transfers with task_group
-            tg = rt.task_group()
+        tg = rt.task_group()
 
-            in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input_size)
-            rt.fill(
-                in_fifo.prod(),
-                I,
-                TensorAccessPattern(
-                    (1, total_input_size),
-                    offset=0,
-                    sizes=[in_d3, in_d2, in_d1, in_d0],
-                    strides=[
-                        in_d2 * in_d1 * in_d0,
-                        in_d1 * in_d0,
-                        in_d0,
-                        1,
-                    ],
-                ),
-                task_group=tg,
-            )
-            wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(wt_chunk_elems)
-            rt.fill(
-                wt_fifo.prod(),
-                W,
-                TensorAccessPattern(
-                    (1, wt_chunk_elems),
-                    offset=0,
-                    sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
-                    strides=[
-                        wt_d2 * wt_d1 * wt_d0,
-                        wt_d1 * wt_d0,
-                        wt_d0,
-                        1,
-                    ],
-                ),
-                task_group=tg,
-            )
-            out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output_size)
-            rt.drain(
-                out_fifo.cons(),
-                O,
-                TensorAccessPattern(
-                    (1, total_output_size),
-                    offset=0,
-                    sizes=[out_d3, out_d2, out_d1, out_d0],
-                    strides=[
-                        out_d2 * out_d1 * out_d0,
-                        out_d1 * out_d0,
-                        out_d0,
-                        1,
-                    ],
-                ),
-                wait=True,
-                task_group=tg,
-            )
-
-            rt.finish_task_group(tg)
+        # Fill input FIFOs: broadcast input to all columns
+        if n_oc_groups > 1:
+            for i in range(num_columns):
+                rt.fill(in_fifos[i].prod(), I, in_tap_streaming, task_group=tg)
         else:
-            # OC streaming: single TAPs with stride-0 repeat for input
-            tg = rt.task_group()
+            for _g in range(n_oc_groups):
+                for i in range(num_columns):
+                    rt.fill(
+                        in_fifos[i].prod(), I, in_tap_contiguous, task_group=tg
+                    )
 
-            # Input: re-stream n_oc_groups times via stride-0 on d3
-            in_d2, in_d1, in_d0 = _factorize_3d(total_input_size)
-            rt.fill(
-                in_fifo.prod(),
-                I,
-                TensorAccessPattern(
-                    (1, total_input_size),
-                    offset=0,
-                    sizes=[n_oc_groups, in_d2, in_d1, in_d0],
-                    strides=[0, in_d1 * in_d0, in_d0, 1],
-                ),
-                task_group=tg,
-            )
+        # Fill weight FIFOs: each column gets its weight slice
+        for i in range(num_columns):
+            rt.fill(wt_fifos[i].prod(), W, wt_taps[i], task_group=tg)
 
-            # Weights: single contiguous transfer of all chunks
-            total_wt = n_oc_groups * wt_chunk_elems
-            wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt)
-            rt.fill(
-                wt_fifo.prod(),
-                W,
-                TensorAccessPattern(
-                    (1, total_wt),
-                    offset=0,
-                    sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
-                    strides=[
-                        wt_d2 * wt_d1 * wt_d0,
-                        wt_d1 * wt_d0,
-                        wt_d0,
-                        1,
-                    ],
-                ),
-                task_group=tg,
-            )
-
-            # Output: scatter OC groups to correct DDR positions
-            output_row_total = out_channels * out_w
-            per_elem = output_elem_size
-            pe_d0 = min(per_elem, 1023)
-            while pe_d0 % 4 != 0:
-                pe_d0 -= 1
-            while pe_d0 >= 4:
-                if per_elem % pe_d0 == 0:
-                    break
-                pe_d0 -= 4
-            pe_d1 = per_elem // pe_d0
+        # Drain output FIFOs: each column drains to correct DDR position
+        for i in range(num_columns):
             rt.drain(
-                out_fifo.cons(),
-                O,
-                TensorAccessPattern(
-                    (1, total_output_size),
-                    offset=0,
-                    sizes=[n_oc_groups, out_h, pe_d1, pe_d0],
-                    strides=[
-                        oc_chunk * out_w,
-                        output_row_total,
-                        pe_d0,
-                        1,
-                    ],
-                ),
-                wait=True,
-                task_group=tg,
+                out_fifos[i].cons(), O, out_taps[i], wait=True, task_group=tg
             )
 
-            rt.finish_task_group(tg)
+        rt.finish_task_group(tg)
 
     return Program(dev_ty, rt).resolve_program(SequentialPlacer())
 
@@ -1314,6 +1466,7 @@ def my_conv2d_int8_fused(
 def my_conv2d_int8_silu(
     dev, height, width, in_channels, out_channels, shift1, shift2,
     kernel_obj="conv2dk1_i8_silu.o",
+    num_columns=1,
 ):
     """Fused 1x1 int8 conv+bias+SiLU using tanh (no LUT).
 
@@ -1323,36 +1476,45 @@ def my_conv2d_int8_silu(
 
     Bias packed at end of weight buffer. Supports OC streaming when
     weights+bias don't fit in L1 (same as non-fused k1).
+
+    Each column handles out_channels/num_columns output channels.
     """
     xfr_dtype = np.int8
     _BD_WRAP_MAX = 64
     assert in_channels % 8 == 0 and out_channels % 8 == 0
+    assert (
+        out_channels % num_columns == 0
+    ), "out_channels must be divisible by num_columns"
+
+    # Per-column output channels
+    oc_per_col = out_channels // num_columns
 
     input_row_size = in_channels * width
+    output_row_size_per_col = oc_per_col * width
     total_input = in_channels * height * width
     total_output = out_channels * height * width
 
     # L1 budget: find oc_chunk that fits (including bias bytes)
     n_oc_groups = 1
-    oc_chunk = out_channels
+    oc_chunk = oc_per_col
     input_bufs = 2 * input_row_size  # depth=2
     avail = 65536 - 1040 - input_bufs
 
     if avail <= 0:
         raise ValueError(f"k1 silu int8 infeasible: IC={in_channels}, W={width}")
 
-    wt_bytes = out_channels * in_channels + out_channels * 4  # weights + bias
-    out_bytes = 2 * out_channels * width  # depth=2 output
+    wt_bytes = oc_per_col * in_channels + oc_per_col * 4  # weights + bias
+    out_bytes = 2 * oc_per_col * width  # depth=2 output
     if wt_bytes + out_bytes > avail:
         found = False
-        for try_oc in range(out_channels, 0, -8):
-            if out_channels % try_oc != 0 or try_oc % 8 != 0:
+        for try_oc in range(oc_per_col, 0, -8):
+            if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
                 continue
             wt_b = try_oc * in_channels + try_oc * 4
             out_b = 2 * try_oc * width
             if wt_b + out_b > avail:
                 continue
-            n_oc = out_channels // try_oc
+            n_oc = oc_per_col // try_oc
             if n_oc > _BD_WRAP_MAX:
                 continue
             oc_chunk = try_oc
@@ -1367,7 +1529,8 @@ def my_conv2d_int8_silu(
 
     wt_chunk_size = oc_chunk * in_channels + oc_chunk * 4
     output_row_size = oc_chunk * width
-    total_wt = wt_chunk_size * n_oc_groups
+    weights_per_col = wt_chunk_size * n_oc_groups
+    total_wt = weights_per_col * num_columns
 
     dev_ty = NPU2()
     in_ty = np.ndarray[(input_row_size,), np.dtype[xfr_dtype]]
@@ -1384,11 +1547,27 @@ def my_conv2d_int8_silu(
 
     from aie.iron.device import AnyMemTile
 
-    in_l3_fifo = ObjectFifo(in_ty, name="in_l3", depth=2)
-    in_fifo = in_l3_fifo.cons().forward(obj_type=in_ty, name="in_l1")
-    wt_fifo = ObjectFifo(wt_ty, name="wt", depth=1)
-    out_fifo = ObjectFifo(out_ty, name="out_l1", depth=2)
-    out_l3_fifo = out_fifo.cons().forward(obj_type=out_ty, name="out_l3")
+    # ObjectFIFOs per column with MemTile forwarding
+    in_l3_fifos = [
+        ObjectFifo(in_ty, name=f"in_l3_{i}", depth=2)
+        for i in range(num_columns)
+    ]
+    in_fifos = [
+        in_l3_fifos[i].cons().forward(obj_type=in_ty, name=f"in_l1_{i}")
+        for i in range(num_columns)
+    ]
+    wt_fifos = [
+        ObjectFifo(wt_ty, name=f"wt_{i}", depth=1)
+        for i in range(num_columns)
+    ]
+    out_fifos = [
+        ObjectFifo(out_ty, name=f"out_l1_{i}", depth=2)
+        for i in range(num_columns)
+    ]
+    out_l3_fifos = [
+        out_fifos[i].cons().forward(obj_type=out_ty, name=f"out_l3_{i}")
+        for i in range(num_columns)
+    ]
 
     def core_fn(oi, ow, oo, k):
         s1, s2 = shift1, shift2
@@ -1403,95 +1582,140 @@ def my_conv2d_int8_silu(
                 oo.release(1)
             ow.release(1)
 
-    worker = Worker(
-        core_fn, [in_fifo.cons(), wt_fifo.cons(), out_fifo.prod(), kernel]
+    # Workers — one per column
+    workers = [
+        Worker(
+            core_fn,
+            [in_fifos[i].cons(), wt_fifos[i].cons(), out_fifos[i].prod(), kernel],
+        )
+        for i in range(num_columns)
+    ]
+
+    # Input TAPs: all columns receive the same contiguous input
+    in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input)
+    in_tap_contiguous = TensorAccessPattern(
+        (1, total_input), offset=0,
+        sizes=[in_d3, in_d2, in_d1, in_d0],
+        strides=[in_d2 * in_d1 * in_d0, in_d1 * in_d0, in_d0, 1],
     )
+    if n_oc_groups > 1:
+        in_d2_3d, in_d1_3d, in_d0_3d = _factorize_3d(total_input)
+        in_tap_streaming = TensorAccessPattern(
+            (1, total_input), offset=0,
+            sizes=[n_oc_groups, in_d2_3d, in_d1_3d, in_d0_3d],
+            strides=[0, in_d1_3d * in_d0_3d, in_d0_3d, 1],
+        )
+
+    # Weight TAPs: each column gets its contiguous weight slice
+    wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(weights_per_col)
+    wt_taps = [
+        TensorAccessPattern(
+            (1, total_wt), offset=i * weights_per_col,
+            sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+            strides=[wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1],
+        )
+        for i in range(num_columns)
+    ]
+
+    # Output TAPs: each column writes to its OC slice in DDR
+    output_row_total = out_channels * width
+    if n_oc_groups > 1:
+        per_elem = output_row_size  # oc_chunk * width
+        pe_d0 = min(per_elem, 1023)
+        while pe_d0 % 4 != 0:
+            pe_d0 -= 1
+        while pe_d0 >= 4:
+            if per_elem % pe_d0 == 0:
+                break
+            pe_d0 -= 4
+        pe_d1 = per_elem // pe_d0
+        out_taps = [
+            TensorAccessPattern(
+                (1, total_output), offset=i * oc_per_col * width,
+                sizes=[n_oc_groups, height, pe_d1, pe_d0],
+                strides=[oc_chunk * width, output_row_total, pe_d0, 1],
+            )
+            for i in range(num_columns)
+        ]
+    elif num_columns == 1:
+        out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output)
+        out_taps = [
+            TensorAccessPattern(
+                (1, total_output), offset=0,
+                sizes=[out_d3, out_d2, out_d1, out_d0],
+                strides=[
+                    out_d2 * out_d1 * out_d0, out_d1 * out_d0, out_d0, 1
+                ],
+            )
+        ]
+    else:
+        per_row = output_row_size_per_col
+        _BD_WRAP_MAX_OUT = 64
+        if height <= _BD_WRAP_MAX_OUT:
+            pr_d2, pr_d1, pr_d0 = _factorize_3d(per_row)
+            out_taps = [
+                TensorAccessPattern(
+                    (1, total_output), offset=i * oc_per_col * width,
+                    sizes=[height, pr_d2, pr_d1, pr_d0],
+                    strides=[output_row_total, pr_d1 * pr_d0, pr_d0, 1],
+                )
+                for i in range(num_columns)
+            ]
+        else:
+            h_outer = min(height, _BD_WRAP_MAX_OUT)
+            while h_outer >= 1 and (
+                height % h_outer != 0 or height // h_outer > 1023
+            ):
+                h_outer -= 1
+            h_inner = height // h_outer
+            d0 = min(per_row, 1023)
+            while d0 % 4 != 0:
+                d0 -= 1
+            while d0 >= 4 and per_row % d0 != 0:
+                d0 -= 4
+            d1 = per_row // d0
+            out_taps = [
+                TensorAccessPattern(
+                    (1, total_output), offset=i * oc_per_col * width,
+                    sizes=[h_outer, h_inner, d1, d0],
+                    strides=[
+                        output_row_total * h_inner, output_row_total, d0, 1
+                    ],
+                )
+                for i in range(num_columns)
+            ]
 
     rt = Runtime()
     with rt.sequence(in_l3_ty, wt_l3_ty, out_l3_ty) as (I, W, O):
-        rt.start(worker)
+        rt.start(*workers)
 
-        if n_oc_groups == 1:
-            in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input)
-            rt.fill(
-                in_l3_fifo.prod(), I,
-                TensorAccessPattern(
-                    (1, total_input), offset=0,
-                    sizes=[in_d3, in_d2, in_d1, in_d0],
-                    strides=[
-                        in_d2 * in_d1 * in_d0, in_d1 * in_d0, in_d0, 1
-                    ],
-                ),
-            )
-            wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt)
-            rt.fill(
-                wt_fifo.prod(), W,
-                TensorAccessPattern(
-                    (1, total_wt), offset=0,
-                    sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
-                    strides=[
-                        wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1
-                    ],
-                ),
-            )
-            out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output)
-            rt.drain(
-                out_l3_fifo.cons(), O,
-                TensorAccessPattern(
-                    (1, total_output), offset=0,
-                    sizes=[out_d3, out_d2, out_d1, out_d0],
-                    strides=[
-                        out_d2 * out_d1 * out_d0, out_d1 * out_d0, out_d0, 1
-                    ],
-                ),
-                wait=True,
-            )
+        tg = rt.task_group()
+
+        # Fill input FIFOs: broadcast input to all columns
+        if n_oc_groups > 1:
+            for i in range(num_columns):
+                rt.fill(
+                    in_l3_fifos[i].prod(), I, in_tap_streaming, task_group=tg
+                )
         else:
-            tg = rt.task_group()
-            in_d2, in_d1, in_d0 = _factorize_3d(total_input)
-            rt.fill(
-                in_l3_fifo.prod(), I,
-                TensorAccessPattern(
-                    (1, total_input), offset=0,
-                    sizes=[n_oc_groups, in_d2, in_d1, in_d0],
-                    strides=[0, in_d1 * in_d0, in_d0, 1],
-                ),
-                task_group=tg,
-            )
-            wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt)
-            rt.fill(
-                wt_fifo.prod(), W,
-                TensorAccessPattern(
-                    (1, total_wt), offset=0,
-                    sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
-                    strides=[
-                        wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1
-                    ],
-                ),
-                task_group=tg,
-            )
-            output_row_total = out_channels * width
-            per_elem = output_row_size
-            pe_d0 = min(per_elem, 1023)
-            while pe_d0 % 4 != 0:
-                pe_d0 -= 1
-            while pe_d0 >= 4:
-                if per_elem % pe_d0 == 0:
-                    break
-                pe_d0 -= 4
-            pe_d1 = per_elem // pe_d0
+            for _g in range(n_oc_groups):
+                for i in range(num_columns):
+                    rt.fill(
+                        in_l3_fifos[i].prod(), I, in_tap_contiguous,
+                        task_group=tg,
+                    )
+
+        # Fill weight FIFOs: each column gets its weight slice
+        for i in range(num_columns):
+            rt.fill(wt_fifos[i].prod(), W, wt_taps[i], task_group=tg)
+
+        # Drain output FIFOs
+        for i in range(num_columns):
             rt.drain(
-                out_l3_fifo.cons(), O,
-                TensorAccessPattern(
-                    (1, total_output), offset=0,
-                    sizes=[n_oc_groups, height, pe_d1, pe_d0],
-                    strides=[
-                        oc_chunk * width, output_row_total, pe_d0, 1
-                    ],
-                ),
-                wait=True,
-                task_group=tg,
+                out_l3_fifos[i].cons(), O, out_taps[i],
+                wait=True, task_group=tg,
             )
-            rt.finish_task_group(tg)
+
+        rt.finish_task_group(tg)
 
     return Program(dev_ty, rt).resolve_program(SequentialPlacer())

@@ -103,14 +103,18 @@ def weights_to_tiled_int8_k3(weight):
     return w.numpy().astype(np.int8).reshape(-1)
 
 
-def _compute_k3_fused_streaming(in_channels, out_channels, width, out_w):
+def _compute_k3_fused_streaming(
+    in_channels, out_channels, width, out_w, num_columns=1
+):
     """Compute OC streaming params for fused k3 conv (bias packed in weights).
 
     Must match the L1 budget logic in my_conv2d_int8_k3_fused() exactly.
+    Uses oc_per_col (out_channels // num_columns) for L1 budget.
 
     Returns:
         (n_oc_groups, oc_chunk)
     """
+    oc_per_col = out_channels // num_columns
     input_row_size = in_channels * width
     _BD_WRAP_MAX = 64
 
@@ -120,20 +124,64 @@ def _compute_k3_fused_streaming(in_channels, out_channels, width, out_w):
         avail = 65536 - 1040 - input_fbs
         if avail <= 0:
             continue
-        for try_oc in range(out_channels, 0, -8):
-            if out_channels % try_oc != 0 or try_oc % 8 != 0:
+        for try_oc in range(oc_per_col, 0, -8):
+            if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
                 continue
             wt_bytes = try_oc * in_channels * 9 + try_oc * 4
             out_bytes = 2 * try_oc * out_w
             if wt_bytes + out_bytes > avail:
                 continue
-            n_oc = out_channels // try_oc
+            n_oc = oc_per_col // try_oc
             if n_oc > _BD_WRAP_MAX:
                 continue
             return (n_oc, try_oc)
 
     raise ValueError(
         f"k3 fused int8 conv2d infeasible: "
+        f"IC={in_channels}, OC={out_channels}, W={width}"
+    )
+
+
+def _compute_k1_silu_streaming(in_channels, out_channels, width, num_columns=1):
+    """Compute OC streaming params for k1 fused conv+bias+SiLU.
+
+    Must match the L1 budget logic in my_conv2d_int8_silu() exactly.
+    Uses oc_per_col (out_channels // num_columns) for L1 budget.
+
+    Returns:
+        (n_oc_groups, oc_chunk)
+    """
+    oc_per_col = out_channels // num_columns
+    input_row_size = in_channels * width
+    _BD_WRAP_MAX = 64
+
+    input_bufs = 2 * input_row_size  # depth=2
+    avail = 65536 - 1040 - input_bufs
+
+    if avail <= 0:
+        raise ValueError(
+            f"k1 silu int8 infeasible: IC={in_channels}, W={width}"
+        )
+
+    wt_bytes = oc_per_col * in_channels + oc_per_col * 4
+    out_bytes = 2 * oc_per_col * width
+    if wt_bytes + out_bytes <= avail:
+        return (1, oc_per_col)
+
+    for try_oc in range(oc_per_col, 0, -8):
+        if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
+            continue
+        wt_b = try_oc * in_channels + try_oc * 4
+        out_b = 2 * try_oc * width
+        if wt_b + out_b > avail:
+            continue
+        n_oc = oc_per_col // try_oc
+        if n_oc > _BD_WRAP_MAX:
+            continue
+        return (n_oc, try_oc)
+
+    raise ValueError(
+        f"k1 silu int8 infeasible: "
         f"IC={in_channels}, OC={out_channels}, W={width}"
     )
 
@@ -159,7 +207,7 @@ class AIEConv2dInt8(AIEOperatorBase):
         fused: If True, use fused conv+bias+SiLU kernel (k3 only).
         shift1: Acc -> int8 shift for LUT lookup (required if fused=True).
         shift2: SiLU product -> int8 shift (required if fused=True).
-        num_aie_columns: Number of AIE columns (only 1 supported).
+        num_aie_columns: Number of AIE columns for parallelism.
         context: AIEContext instance.
     """
 
@@ -198,7 +246,9 @@ class AIEConv2dInt8(AIEOperatorBase):
         assert (
             height is not None and width is not None
         ), "height and width must be specified"
-        assert num_aie_columns == 1, "Only 1 column supported for int8 conv2d"
+        assert (
+            out_channels % num_aie_columns == 0
+        ), f"out_channels ({out_channels}) must be divisible by num_aie_columns ({num_aie_columns})"
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -243,11 +293,15 @@ class AIEConv2dInt8(AIEOperatorBase):
         """
         operator_dir = Path(__file__).parent
 
+        col_suffix = (
+            f"_{self.num_aie_columns}col" if self.num_aie_columns > 1 else ""
+        )
+
         if self.fused and self.kernel_size == 3:
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
                 f"{self.height}h_{self.width}w_k3s{self.stride}"
-                f"_fused_sh{self.shift1}_{self.shift2}"
+                f"_fused_sh{self.shift1}_{self.shift2}{col_suffix}"
             )
             callback_fn = "my_conv2d_int8_k3_fused"
             callback_args = [
@@ -259,6 +313,7 @@ class AIEConv2dInt8(AIEOperatorBase):
                 self.shift1,
                 self.shift2,
                 self.stride,
+                self.num_aie_columns,
             ]
             kernel_obj_name = "conv2dk3_i8_silu.o"
             kernel_src = "conv2dk3_i8_silu.cc"
@@ -267,7 +322,7 @@ class AIEConv2dInt8(AIEOperatorBase):
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
                 f"{self.height}h_{self.width}w_k3s{self.stride}"
-                f"_sc{self.scale}"
+                f"_sc{self.scale}{col_suffix}"
             )
             callback_fn = "my_conv2d_int8_k3"
             callback_args = [
@@ -278,6 +333,7 @@ class AIEConv2dInt8(AIEOperatorBase):
                 self.out_channels,
                 self.scale,
                 self.stride,
+                self.num_aie_columns,
             ]
             kernel_obj_name = "conv2dk3_i8.o"
             kernel_src = "conv2dk3_i8.cc"
@@ -286,7 +342,7 @@ class AIEConv2dInt8(AIEOperatorBase):
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
                 f"{self.height}h_{self.width}w_k1"
-                f"_silu_sh{self.shift1}_{self.shift2}"
+                f"_silu_sh{self.shift1}_{self.shift2}{col_suffix}"
             )
             callback_fn = "my_conv2d_int8_silu"
             # Vectorize when IC >= 24 and width is a multiple of 8
@@ -308,11 +364,12 @@ class AIEConv2dInt8(AIEOperatorBase):
                 self.shift1,
                 self.shift2,
                 kernel_obj_name,
+                self.num_aie_columns,
             ]
         else:
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
-                f"{self.height}h_{self.width}w_sc{self.scale}"
+                f"{self.height}h_{self.width}w_sc{self.scale}{col_suffix}"
             )
             callback_fn = "my_conv2d_int8"
             kernel_src = "conv2dk1_i8.cc"
@@ -320,9 +377,9 @@ class AIEConv2dInt8(AIEOperatorBase):
             # Compute n_rows to match design.py multi-row batching logic.
             _L1 = 65536
             _OH = 1040
-            oc_c = self.out_channels
-            wt_sz = oc_c * self.in_channels
-            per_row = 2 * self.in_channels * self.width + 2 * oc_c * self.width
+            oc_per_col = self.out_channels // self.num_aie_columns
+            wt_sz = oc_per_col * self.in_channels
+            per_row = 2 * self.in_channels * self.width + 2 * oc_per_col * self.width
             avail_rows = _L1 - _OH - wt_sz
             max_nr = avail_rows // per_row if per_row > 0 else 1
             n_rows = 1  # TEMP: force n_rows=1 to verify baseline
@@ -364,6 +421,7 @@ class AIEConv2dInt8(AIEOperatorBase):
                 self.out_channels,
                 self.scale,
                 kernel_obj_name,
+                self.num_aie_columns,
             ]
 
         mlir_artifact = PythonGeneratedMLIRArtifact.new(
@@ -407,12 +465,13 @@ class AIEConv2dInt8(AIEOperatorBase):
         out_w = self.out_width
 
         if self.fused and self.kernel_size == 3:
-            # Packed weight buffer: weights + bias per OC chunk
+            # Packed weight buffer: weights + bias per OC chunk per column
             n_oc_groups, oc_chunk = _compute_k3_fused_streaming(
-                self.in_channels, self.out_channels, self.width, out_w
+                self.in_channels, self.out_channels, self.width, out_w,
+                self.num_aie_columns,
             )
             wt_chunk_elems = oc_chunk * self.in_channels * 9 + oc_chunk * 4
-            total_weights = n_oc_groups * wt_chunk_elems
+            total_weights = n_oc_groups * wt_chunk_elems * self.num_aie_columns
         elif self.kernel_size == 3:
             total_weights = self.out_channels * self.in_channels * 9
         elif self.fused and self.kernel_size == 1:
@@ -464,23 +523,52 @@ class AIEConv2dInt8(AIEOperatorBase):
         out_w = self.out_width
 
         if self.fused and self.kernel_size == 3:
-            # Pack weights with interleaved bias per OC chunk
+            # Pack weights with interleaved bias per OC chunk, per column
             n_oc_groups, oc_chunk = _compute_k3_fused_streaming(
-                self.in_channels, self.out_channels, self.width, out_w
+                self.in_channels, self.out_channels, self.width, out_w,
+                self.num_aie_columns,
             )
+            oc_per_col = self.out_channels // self.num_aie_columns
             weight_tiled = weights_to_tiled_int8_k3(weight)
             wt_per_chunk = oc_chunk * self.in_channels * 9
             chunks = []
-            for g in range(n_oc_groups):
-                w_chunk = weight_tiled[g * wt_per_chunk : (g + 1) * wt_per_chunk]
-                b_chunk = bias[g * oc_chunk : (g + 1) * oc_chunk]
-                b_bytes = b_chunk.numpy().astype(np.int32).view(np.int8)
-                chunks.append(np.concatenate([w_chunk, b_bytes]))
+            for col in range(self.num_aie_columns):
+                col_wt_base = col * oc_per_col * self.in_channels * 9
+                col_bias_base = col * oc_per_col
+                for g in range(n_oc_groups):
+                    w_start = col_wt_base + g * wt_per_chunk
+                    w_chunk = weight_tiled[w_start : w_start + wt_per_chunk]
+                    b_start = col_bias_base + g * oc_chunk
+                    b_chunk = bias[b_start : b_start + oc_chunk]
+                    b_bytes = b_chunk.numpy().astype(np.int32).view(np.int8)
+                    chunks.append(np.concatenate([w_chunk, b_bytes]))
             packed = np.concatenate(chunks)
             self.write_buffer("weights", packed)
         elif self.kernel_size == 3:
             weight_tiled = weights_to_tiled_int8_k3(weight)
             self.write_buffer("weights", weight_tiled)
+        elif self.fused and self.kernel_size == 1:
+            # Pack weights with bias per OC chunk, per column
+            n_oc_groups, oc_chunk = _compute_k1_silu_streaming(
+                self.in_channels, self.out_channels, self.width,
+                self.num_aie_columns,
+            )
+            oc_per_col = self.out_channels // self.num_aie_columns
+            weight_tiled = weights_to_tiled_int8(weight)
+            wt_per_chunk = oc_chunk * self.in_channels
+            chunks = []
+            for col in range(self.num_aie_columns):
+                col_wt_base = col * oc_per_col * self.in_channels
+                col_bias_base = col * oc_per_col
+                for g in range(n_oc_groups):
+                    w_start = col_wt_base + g * wt_per_chunk
+                    w_chunk = weight_tiled[w_start : w_start + wt_per_chunk]
+                    b_start = col_bias_base + g * oc_chunk
+                    b_chunk = bias[b_start : b_start + oc_chunk]
+                    b_bytes = b_chunk.numpy().astype(np.int32).view(np.int8)
+                    chunks.append(np.concatenate([w_chunk, b_bytes]))
+            packed = np.concatenate(chunks)
+            self.write_buffer("weights", packed)
         else:
             weight_tiled = weights_to_tiled_int8(weight)
             self.write_buffer("weights", weight_tiled)
