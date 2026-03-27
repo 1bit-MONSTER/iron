@@ -169,7 +169,14 @@ static void conv2dk1_i8_silu_vector_row(
 
     // Temporary buffers on stack for SiLU processing
     alignas(64) int32_t acc_buf[MMUL_MN];
+    alignas(64) bfloat16 bf16_buf[MMUL_N];
     alignas(64) int8_t out_buf[MMUL_MN];
+
+    // SiLU constants for vectorized hardware tanh
+    aie::vector<bfloat16, MMUL_N> half_v =
+        aie::broadcast<bfloat16, MMUL_N>((bfloat16)0.5f);
+    aie::vector<bfloat16, MMUL_N> one_v =
+        aie::broadcast<bfloat16, MMUL_N>((bfloat16)1.0f);
 
     MMUL8x8x8 acc_mmul;
 
@@ -194,23 +201,46 @@ static void conv2dk1_i8_silu_vector_row(
                 acc_mmul.mac(in_a, in_b);
             }
 
-            // Dump raw int32 accumulators to memory buffer
+            // Extract raw int32 accumulators
             aie::vector<int32, MMUL_MN> acc_i32 =
                 acc_mmul.to_vector<int32>(0);
             aie::store_v(acc_buf, acc_i32);
 
-            // Per-element: add bias, SiLU in float, requantize to int8
-            for (int i = 0; i < MMUL_MN; i++) {
-                int oc8 = i % MMUL_N; // OC index within group
-                int32_t val = acc_buf[i] + bias[oc_g * 8 + oc8];
+            // Vectorized SiLU: process 8 elements at a time
+            // (one spatial position = MMUL_N output channels)
+            for (int sp = 0; sp < MMUL_M; sp++) {
+                // Phase 1: add bias + dequantize (int32 -> bfloat16)
+                for (int j = 0; j < MMUL_N; j++) {
+                    int32_t val =
+                        acc_buf[sp * MMUL_N + j] + bias[oc_g * 8 + j];
+                    bf16_buf[j] =
+                        (bfloat16)((float)val * scale_in);
+                }
 
-                float fval = (float)val * scale_in;
-                float sval = silu_float(fval);
-                int32_t oval = float_to_int_round(sval * scale_out);
-                oval = (oval > 127)    ? 127
-                       : (oval < -128) ? -128
-                                       : oval;
-                out_buf[i] = (int8_t)oval;
+                // Phase 2: vectorized SiLU via hardware tanh
+                aie::vector<bfloat16, MMUL_N> x_bf16 =
+                    aie::load_v<MMUL_N>(bf16_buf);
+                auto half_x = aie::mul(x_bf16, half_v);
+                auto tanh_hx =
+                    aie::tanh<bfloat16>(half_x.to_vector<float>());
+                auto one_plus = aie::add(tanh_hx, one_v);
+                aie::vector<bfloat16, MMUL_N> sigmoid =
+                    aie::mul(one_plus, half_v);
+                auto silu_acc = aie::mul(x_bf16, sigmoid);
+                aie::vector<bfloat16, MMUL_N> silu_bf16 =
+                    silu_acc.to_vector<bfloat16>();
+
+                // Phase 3: requantize (bfloat16 -> int8)
+                aie::store_v(bf16_buf, silu_bf16);
+                for (int j = 0; j < MMUL_N; j++) {
+                    float sval = (float)bf16_buf[j];
+                    int32_t oval =
+                        float_to_int_round(sval * scale_out);
+                    oval = (oval > 127)    ? 127
+                           : (oval < -128) ? -128
+                                           : oval;
+                    out_buf[sp * MMUL_N + j] = (int8_t)oval;
+                }
             }
 
             // Store 64 int8 output values (layout matches tiled [w, 8])
