@@ -86,6 +86,7 @@ def my_conv2d_int8(
     in_channels,
     out_channels,
     scale,
+    kernel_obj="conv2dk1_i8.o",
 ):
     """ObjectFIFO design for 1x1 int8 conv2d on NPU2.
 
@@ -170,10 +171,10 @@ def my_conv2d_int8(
     weights_l3_ty = np.ndarray[(n_oc_groups * wt_chunk_size,), np.dtype[xfr_dtype]]
     output_l3_ty = np.ndarray[(total_output_size,), np.dtype[xfr_dtype]]
 
-    # Kernel declaration: conv2dk1_i8(input, weights, output, width, IC, OC, scale)
+    # Kernel declaration
     conv2dk1_i8_kernel = Kernel(
         "conv2dk1_i8",
-        "conv2dk1_i8.o",
+        kernel_obj,
         [
             input_row_ty,
             weights_ty,
@@ -186,14 +187,11 @@ def my_conv2d_int8(
     )
 
     # ObjectFIFOs with MemTile forwarding for input and output
-    # Input: L3 → MemTile → compute tile
     in_l3_fifo = ObjectFifo(input_row_ty, name="in_l3", depth=2)
     in_fifo = in_l3_fifo.cons().forward(obj_type=input_row_ty, name="in_l1")
 
-    # Weights: direct L3 → compute tile
     wt_fifo = ObjectFifo(weights_ty, name="wt_fifo", depth=1)
 
-    # Output: compute tile → MemTile → L3
     out_fifo = ObjectFifo(output_row_ty, name="out_l1", depth=2)
     out_l3_fifo = out_fifo.cons().forward(obj_type=output_row_ty, name="out_l3")
 
@@ -215,7 +213,6 @@ def my_conv2d_int8(
                 of_out.release(1)
             of_wt.release(1)
 
-    # Worker
     worker = Worker(
         core_fn,
         [
@@ -232,7 +229,9 @@ def my_conv2d_int8(
         rt.start(worker)
 
         if n_oc_groups == 1:
-            # No OC streaming — simple contiguous transfers
+            # No OC streaming — contiguous transfers.
+            # The FIFO hardware handles element-level buffering independently
+            # of the TAP structure; just transfer all data contiguously.
             in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input_size)
             rt.fill(
                 in_l3_fifo.prod(),
@@ -321,7 +320,8 @@ def my_conv2d_int8(
             )
 
             # Output: scatter OC groups to correct DDR positions
-            output_row_total = out_channels * width
+            # Each element is one row of oc_chunk channels: oc_chunk * width bytes
+            # In DDR, a full output row is out_channels * width bytes
             per_elem = output_row_size  # oc_chunk * width
             pe_d0 = min(per_elem, 1023)
             while pe_d0 % 4 != 0:
@@ -340,7 +340,7 @@ def my_conv2d_int8(
                     sizes=[n_oc_groups, height, pe_d1, pe_d0],
                     strides=[
                         oc_chunk * width,
-                        output_row_total,
+                        out_channels * width,
                         pe_d0,
                         1,
                     ],

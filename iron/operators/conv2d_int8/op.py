@@ -308,15 +308,46 @@ class AIEConv2dInt8(AIEOperatorBase):
             )
             callback_fn = "my_conv2d_int8"
             kernel_src = "conv2dk1_i8.cc"
-            # Vectorized path: width must be multiple of 32 (MMUL_M*NUM_ACC)
-            # and in_channels >= 24 (IC/8 > 2 for pipeline min iterations)
-            use_vectorized = self.width % 32 == 0 and self.in_channels >= 24
-            if use_vectorized:
-                kernel_obj_name = "conv2dk1_i8_vec.o"
-                kernel_extra_flags = ["-DINT8_ACT"]
+
+            # Compute n_rows to match design.py multi-row batching logic.
+            _L1 = 65536
+            _OH = 1040
+            oc_c = self.out_channels
+            wt_sz = oc_c * self.in_channels
+            per_row = 2 * self.in_channels * self.width + 2 * oc_c * self.width
+            avail_rows = _L1 - _OH - wt_sz
+            max_nr = avail_rows // per_row if per_row > 0 else 1
+            n_rows = 1  # TEMP: force n_rows=1 to verify baseline
+
+            # Vectorized path selection (per-row width):
+            # - NUM_ACC=4: width % 32 == 0, best ILP (4 accumulators)
+            # - NUM_ACC=1: width % 8 == 0, wider applicability
+            # - Scalar fallback otherwise
+            # All vectorized paths require IC >= 24 (IC/8 > 2 for pipelining)
+            can_vectorize = self.in_channels >= 24
+            if can_vectorize and self.width % 32 == 0:
+                # Use NUM_ACC=1 (VEC1) for all vectorized paths until
+                # NUM_ACC=4 codegen issue is resolved
+                kernel_obj_name = f"conv2dk1_i8_vec1_r{n_rows}.o"
+                kernel_extra_flags = [
+                    "-DINT8_ACT",
+                    "-DNUM_ACC_COUNT=1",
+                    f"-DN_ROWS={n_rows}",
+                ]
+            elif can_vectorize and self.width % 8 == 0:
+                kernel_obj_name = f"conv2dk1_i8_vec1_r{n_rows}.o"
+                kernel_extra_flags = [
+                    "-DINT8_ACT",
+                    "-DNUM_ACC_COUNT=1",
+                    f"-DN_ROWS={n_rows}",
+                ]
             else:
-                kernel_obj_name = "conv2dk1_i8.o"
-                kernel_extra_flags = ["-DINT8_ACT", "-DSCALAR"]
+                kernel_obj_name = f"conv2dk1_i8_r{n_rows}.o"
+                kernel_extra_flags = [
+                    "-DINT8_ACT",
+                    "-DSCALAR",
+                    f"-DN_ROWS={n_rows}",
+                ]
             callback_args = [
                 self.context.device_manager.device_type,
                 self.height,
@@ -324,6 +355,7 @@ class AIEConv2dInt8(AIEOperatorBase):
                 self.in_channels,
                 self.out_channels,
                 self.scale,
+                kernel_obj_name,
             ]
 
         mlir_artifact = PythonGeneratedMLIRArtifact.new(
