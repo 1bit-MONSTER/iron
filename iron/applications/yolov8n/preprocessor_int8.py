@@ -84,8 +84,12 @@ class Int8ModelPreprocessor:
         runner.calibrate(calibration_image, percentile_fn=percentile_fn)
         self._act_scales = dict(runner.act_scales)
 
-        # 3. Compute per-layer right-shift values
-        self._shifts = compute_all_shifts(self._int8_weights, self._act_scales)
+        # 3. Compute per-layer shift values (fused returns (shifts, eff_scales))
+        result = compute_all_shifts(self._int8_weights, self._act_scales)
+        if isinstance(result, tuple):
+            self._shifts, self._act_scales = result
+        else:
+            self._shifts = result
 
         # 4. Pre-tile all weights and pre-compute inference constants
         self._layer_data = {}

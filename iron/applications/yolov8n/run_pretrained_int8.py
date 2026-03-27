@@ -432,7 +432,10 @@ def main():
     # -- Step 2: Compute per-layer shifts -----------------------------------
 
     print("\n[2] Computing per-layer shifts...")
-    shifts = compute_all_shifts(int8_weights, act_scales)
+    shifts, effective_act_scales = compute_all_shifts(int8_weights, act_scales)
+    # Use propagated effective scales for fused pipeline (accounts for
+    # shift2 rounding error at layer boundaries)
+    act_scales = effective_act_scales
     # Display shift stats (values may be int or (shift1, shift2) tuples)
     single_shifts = [v for v in shifts.values() if isinstance(v, int)]
     fused_shifts = [v for v in shifts.values() if isinstance(v, tuple)]

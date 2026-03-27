@@ -1197,8 +1197,10 @@ def lookup_weight(int8_weights, layer_name):
 def compute_all_shifts(int8_weights, act_scales, fused=True):
     """Compute per-layer shift values from calibration data.
 
-    When fused=True, returns (shift1, shift2) tuples for layers with
-    activation (CBS). Non-activation layers (detect cv3) get single shifts.
+    When fused=True, returns (shift1, shift2) tuples for activation layers.
+    Uses scale propagation: each fused layer's effective output scale
+    (1/2^shift2) is used as the next layer's input scale, compensating
+    for shift rounding errors that compound across layers.
 
     Args:
         int8_weights: Weight dict from quantizer.
@@ -1213,21 +1215,34 @@ def compute_all_shifts(int8_weights, act_scales, fused=True):
         name for name in PRED_MAP if name.endswith(".cv3")
     }
 
+    # Effective output scales: tracks the actual int8 scale for each layer,
+    # accounting for shift rounding. Initialized from calibration.
+    effective_scales = dict(act_scales)
+
     shifts = {}
     for layer_name in PRED_MAP:
         w_int8, w_scale, _ = lookup_weight(int8_weights, layer_name)
         pred = PRED_MAP[layer_name]
-        in_act_scale = act_scales.get(pred, 1.0)
+        # Use effective (propagated) input scale from predecessor
+        in_act_scale = effective_scales.get(pred, 1.0)
         out_act_scale = act_scales.get(layer_name, 1.0)
 
         if fused and layer_name not in _no_act_layers:
-            shifts[layer_name] = compute_fused_shifts(
+            s1, s2 = compute_fused_shifts(
                 w_scale, in_act_scale, out_act_scale
             )
+            shifts[layer_name] = (s1, s2)
+            # Propagate the effective output scale: 1/2^shift2
+            effective_scales[layer_name] = 1.0 / float(1 << s2)
         else:
             shifts[layer_name] = compute_layer_shift(
                 w_scale, in_act_scale, out_act_scale
             )
+            # Non-fused layers use the calibrated output scale directly
+
+    # Return both shifts and effective scales so weight packing can use them
+    if fused:
+        return shifts, effective_scales
     return shifts
 
 
