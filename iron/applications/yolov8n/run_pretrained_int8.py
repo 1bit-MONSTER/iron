@@ -27,6 +27,7 @@ import time
 import urllib.request
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -38,6 +39,10 @@ from iron.applications.yolov8n.pipeline_int8 import (
     compute_all_shifts,
     compute_layer_shift,
     lookup_weight,
+)
+from iron.operators.conv2d_int8.op import (
+    nchw_to_tiled_int8,
+    tiled_to_nchw_int8,
 )
 from iron.applications.yolov8n.postprocess import YOLOv8nPostProcess
 from iron.applications.yolov8n.run_int8_cpu import Int8YOLOv8nCPU

@@ -423,6 +423,233 @@ class Int8ConvPipeline(AIEOperatorBase):
                 )
         self._weights_synced = True
 
+    # -- Runlist chain infrastructure -------------------------------------------
+
+    def setup_chain(self, chain_name, layer_names):
+        """Set up a runlist chain with dedicated BOs and output->input aliasing.
+
+        All layers in the chain must be in the same xclbin group (same
+        hw_context). The output BO of layer N becomes the input BO of
+        layer N+1 (zero-copy aliasing on device).
+
+        Weight BOs are pre-filled and synced to device at setup time.
+        Subsequent run_chain() calls only write/sync the first input BO,
+        execute the runlist, and read the last output BO.
+
+        Args:
+            chain_name: Identifier for this chain.
+            layer_names: Ordered list of buffer-safe layer names to chain.
+        """
+        assert self._weights_prepared, "Call prepare_weights() first"
+
+        # Verify all layers are in the same xclbin group
+        groups = set(self._pdi_map[ln]["group_idx"] for ln in layer_names)
+        assert len(groups) == 1, f"Chain layers must be in same group: {groups}"
+
+        device = self.context.device_manager.device
+        page_sz = 4096
+
+        def align(sz):
+            return (sz + page_sz - 1) // page_sz * page_sz
+
+        # Get hw_context from first layer's kernel
+        first_kname = self._pdi_map[layer_names[0]]["kernel_name"]
+        context = self.xrt_kernels[first_kname][0]
+
+        # Allocate dedicated BOs with output->input aliasing
+        chain_bos = {}
+        for i, lname in enumerate(layer_names):
+            in_sz = self.buffers[f"{lname}_input"]
+            w_sz = self.buffers[f"{lname}_weights"]
+            out_sz = self.buffers[f"{lname}_output"]
+
+            # Input BO: alias to previous layer's output BO
+            if i > 0:
+                prev_out = f"{layer_names[i - 1]}_output"
+                prev_out_sz = self.buffers[prev_out]
+                assert prev_out_sz >= in_sz, (
+                    f"Cannot alias: {prev_out} ({prev_out_sz}B) < "
+                    f"{lname}_input ({in_sz}B)"
+                )
+                chain_bos[f"{lname}_input"] = chain_bos[prev_out]
+            else:
+                chain_bos[f"{lname}_input"] = pyxrt.bo(
+                    device, align(in_sz), pyxrt.bo.host_only, 0x10000
+                )
+
+            # Weight BO: always dedicated
+            chain_bos[f"{lname}_weights"] = pyxrt.bo(
+                device, align(w_sz), pyxrt.bo.host_only, 0x10000
+            )
+
+            # Output BO: always dedicated (may be aliased by next layer's input)
+            chain_bos[f"{lname}_output"] = pyxrt.bo(
+                device, align(out_sz), pyxrt.bo.host_only, 0x10000
+            )
+
+        # Pre-fill weight BOs and sync to device
+        for lname in layer_names:
+            cache = self._layer_cache[lname]
+            w_bo = chain_bos[f"{lname}_weights"]
+            w_data = cache["tiled_weights"]
+            mv = w_bo.map()
+            dst = np.frombuffer(mv, dtype=np.uint8, count=w_bo.size())
+            src = w_data.ravel().view(np.uint8)
+            np.copyto(dst[: src.size], src, casting="no")
+            w_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+
+        # Sync all instruction BOs to device
+        for lname in layer_names:
+            kname = self._pdi_map[lname]["kernel_name"]
+            _, _, insts_bo, _ = self.xrt_kernels[kname]
+            insts_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+
+        # Build runlist
+        runlist = pyxrt.runlist(context)
+        for lname in layer_names:
+            kname = self._pdi_map[lname]["kernel_name"]
+            _, xrt_kernel, insts_bo, insts_len = self.xrt_kernels[kname]
+            run = pyxrt.run(xrt_kernel)
+            run.set_arg(0, 3)  # opcode
+            run.set_arg(1, insts_bo)
+            run.set_arg(2, insts_len)
+            run.set_arg(3, chain_bos[f"{lname}_input"])
+            run.set_arg(4, chain_bos[f"{lname}_weights"])
+            run.set_arg(5, chain_bos[f"{lname}_output"])
+            runlist.add(run)
+
+        self._chains[chain_name] = {
+            "layers": layer_names,
+            "bos": chain_bos,
+            "runlist": runlist,
+        }
+
+    def run_chain(self, chain_name, x_int8):
+        """Execute a chain via runlist: single NPU submission.
+
+        Writes tiled int8 input to first layer's input BO, executes the
+        runlist (all kernels in one NPU submission), reads tiled output
+        from last layer's output BO.
+
+        Args:
+            chain_name: Chain identifier from setup_chain().
+            x_int8: Int8 input tensor [1, C, H, W] (NCHW).
+
+        Returns:
+            Int8 output tensor [1, C_out, H_out, W_out] (NCHW).
+        """
+        chain = self._chains[chain_name]
+        layers = chain["layers"]
+        bos = chain["bos"]
+
+        # Tile input and write to first layer's input BO
+        first_lname = layers[0]
+        t0 = _time.perf_counter()
+        input_tiled = nchw_to_tiled_int8(x_int8)
+        in_bo = bos[f"{first_lname}_input"]
+        mv = in_bo.map()
+        dst = np.frombuffer(mv, dtype=np.uint8, count=in_bo.size())
+        src = input_tiled.ravel().view(np.uint8)
+        np.copyto(dst[: src.size], src, casting="no")
+        in_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+        self._prof_add("chain_tile+write", _time.perf_counter() - t0)
+
+        # Execute runlist (single NPU submission, all kernels sequentially)
+        t0 = _time.perf_counter()
+        chain["runlist"].execute()
+        chain["runlist"].wait()
+        self._prof_add("chain_kernel", _time.perf_counter() - t0)
+
+        # Read output from last layer's output BO
+        last_lname = layers[-1]
+        sub_op = self._pdi_map[last_lname]["sub_op"]
+        oh, ow = sub_op.out_height, sub_op.out_width
+        total_output = sub_op.out_channels * oh * ow
+
+        t0 = _time.perf_counter()
+        out_bo = bos[f"{last_lname}_output"]
+        out_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
+        mv = out_bo.map()
+        output_flat = np.frombuffer(mv, dtype=np.int8, count=total_output).copy()
+        out_int8 = tiled_to_nchw_int8(output_flat, sub_op.out_channels, oh, ow)
+        self._prof_add("chain_read+untile", _time.perf_counter() - t0)
+
+        return out_int8
+
+    def benchmark_chain(self, chain_name, x_int8, n_iter=20, warmup=5):
+        """Benchmark a chain: measure runlist execution time.
+
+        Args:
+            chain_name: Chain identifier from setup_chain().
+            x_int8: Int8 input tensor [1, C, H, W] (NCHW).
+            n_iter: Number of timed iterations.
+            warmup: Number of warmup iterations.
+
+        Returns:
+            Dict with timing statistics.
+        """
+        chain = self._chains[chain_name]
+        layers = chain["layers"]
+        bos = chain["bos"]
+
+        # Pre-tile input once
+        input_tiled = nchw_to_tiled_int8(x_int8)
+        in_bo = bos[f"{layers[0]}_input"]
+        mv = in_bo.map()
+        dst = np.frombuffer(mv, dtype=np.uint8, count=in_bo.size())
+        src = input_tiled.ravel().view(np.uint8)
+        np.copyto(dst[: src.size], src, casting="no")
+        in_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+
+        # Warmup
+        for _ in range(warmup):
+            chain["runlist"].execute()
+            chain["runlist"].wait()
+
+        # Timed iterations (kernel execution only, no host I/O)
+        times = []
+        for _ in range(n_iter):
+            t0 = _time.perf_counter()
+            chain["runlist"].execute()
+            chain["runlist"].wait()
+            times.append(_time.perf_counter() - t0)
+
+        times_ms = [t * 1000 for t in times]
+        avg = sum(times_ms) / len(times_ms)
+        mn = min(times_ms)
+        mx = max(times_ms)
+
+        # Also measure per-layer individual execution for comparison
+        per_layer_times = []
+        for _ in range(n_iter):
+            total = 0.0
+            for lname in layers:
+                kname = self._pdi_map[lname]["kernel_name"]
+                ctx, xrt_kernel, insts_bo, insts_len = self.xrt_kernels[kname]
+                insts_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+                in_b = bos[f"{lname}_input"]
+                w_b = bos[f"{lname}_weights"]
+                out_b = bos[f"{lname}_output"]
+                in_b.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+                t0 = _time.perf_counter()
+                r = xrt_kernel(3, insts_bo, insts_len, in_b, w_b, out_b)
+                r.wait()
+                total += _time.perf_counter() - t0
+                out_b.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
+            per_layer_times.append(total * 1000)
+
+        per_layer_avg = sum(per_layer_times) / len(per_layer_times)
+
+        return {
+            "chain": chain_name,
+            "n_layers": len(layers),
+            "runlist_avg_ms": avg,
+            "runlist_min_ms": mn,
+            "runlist_max_ms": mx,
+            "per_layer_avg_ms": per_layer_avg,
+            "speedup": per_layer_avg / avg if avg > 0 else 0,
+        }
+
     def _pack_fused_weights(self, sub_op, w_int8, w_scale, bias_float, in_act_scale):
         """Pack tiled weights + int32 bias for fused conv+bias+SiLU kernel.
 
