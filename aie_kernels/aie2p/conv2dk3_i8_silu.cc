@@ -802,15 +802,11 @@ void conv2dk3_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                       const int32_t input_width, const int32_t input_channels,
                       const int32_t output_channels, const int32_t check,
                       const int32_t shift1, const int32_t shift2) {
-    if (input_width % 8 == 0) {
-        conv2dk3_i8_silu_vectorized(line0, line1, line2, weights_and_bias,
-                                    output, input_width, input_channels,
-                                    output_channels, check, shift1, shift2);
-    } else {
-        conv2dk3_i8_silu_scalar(line0, line1, line2, weights_and_bias, output,
-                                input_width, input_channels, output_channels,
-                                check, shift1, shift2);
-    }
+    // Vectorized stride-1 SiLU produces incorrect results and timeouts
+    // at large widths (>80). Use scalar until vectorized is debugged.
+    conv2dk3_i8_silu_scalar(line0, line1, line2, weights_and_bias, output,
+                            input_width, input_channels, output_channels,
+                            check, shift1, shift2);
 }
 
 void conv2dk3s2_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,

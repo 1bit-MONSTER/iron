@@ -1194,24 +1194,40 @@ def lookup_weight(int8_weights, layer_name):
     raise KeyError(f"Unknown layer: {layer_name}")
 
 
-def compute_all_shifts(int8_weights, act_scales):
-    """Compute per-layer right-shift values from calibration data.
+def compute_all_shifts(int8_weights, act_scales, fused=True):
+    """Compute per-layer shift values from calibration data.
+
+    When fused=True, returns (shift1, shift2) tuples for layers with
+    activation (CBS). Non-activation layers (detect cv3) get single shifts.
 
     Args:
         int8_weights: Weight dict from quantizer.
         act_scales: Dict of layer_name -> float activation scale.
+        fused: If True, compute fused (shift1, shift2) for activation layers.
 
     Returns:
-        Dict of layer_name -> shift (int).
+        Dict of layer_name -> shift (int) or (shift1, shift2) tuple.
     """
+    # Detect cv3 layers (bare conv, no activation) — always use single shift
+    _no_act_layers = {
+        name for name in PRED_MAP if name.endswith(".cv3")
+    }
+
     shifts = {}
     for layer_name in PRED_MAP:
         w_int8, w_scale, _ = lookup_weight(int8_weights, layer_name)
         pred = PRED_MAP[layer_name]
         in_act_scale = act_scales.get(pred, 1.0)
         out_act_scale = act_scales.get(layer_name, 1.0)
-        shift = compute_layer_shift(w_scale, in_act_scale, out_act_scale)
-        shifts[layer_name] = shift
+
+        if fused and layer_name not in _no_act_layers:
+            shifts[layer_name] = compute_fused_shifts(
+                w_scale, in_act_scale, out_act_scale
+            )
+        else:
+            shifts[layer_name] = compute_layer_shift(
+                w_scale, in_act_scale, out_act_scale
+            )
     return shifts
 
 

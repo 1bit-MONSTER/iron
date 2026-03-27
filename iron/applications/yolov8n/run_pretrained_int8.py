@@ -274,30 +274,28 @@ class Int8YOLOv8nPipeline(Int8ConvPipeline):
             y = self._cbs(inp, f"{prefix}.bn{i}.cv1")
             y = self._cbs(y, f"{prefix}.bn{i}.cv2")
             if shortcut:
-                y = y + inp
+                if y.dtype == torch.int8:
+                    y = (y.int() + inp.int()).clamp(-128, 127).to(torch.int8)
+                else:
+                    y = y + inp
             outputs.append(y)
         x = torch.cat(outputs, dim=1)
         return self._cbs(x, f"{prefix}.cv2")
 
     def _detect_branch(self, x, branch_name):
         """Run a detect branch (2x CBS 3x3 + 1x Conv 1x1)."""
-        if self._weights_prepared:
-            for cv in ["cv1", "cv2"]:
-                x = self.int8_cbs_fast(x, _buf(f"det.{branch_name}.{cv}"))
-            return self.int8_conv_no_act_fast(x, _buf(f"det.{branch_name}.cv3"))
         for cv in ["cv1", "cv2"]:
-            name = f"det.{branch_name}.{cv}"
-            w, ws, b = lookup_weight(self.int8_weights, name)
-            pred = PRED_MAP[name]
-            in_scale = self.act_scales.get(pred, 1.0)
-            x = self.int8_cbs(x, _buf(name), w, ws, b, in_scale)
+            x = self._cbs(x, f"det.{branch_name}.{cv}")
 
         # cv3: bare conv (no activation)
+        buf_name = _buf(f"det.{branch_name}.cv3")
+        if self._weights_prepared:
+            return self.int8_conv_no_act_fast(x, buf_name)
         name = f"det.{branch_name}.cv3"
         w, ws, b = lookup_weight(self.int8_weights, name)
         pred = PRED_MAP[name]
         in_scale = self.act_scales.get(pred, 1.0)
-        x = self.int8_conv_no_act(x, _buf(name), w, ws, b, in_scale)
+        x = self.int8_conv_no_act(x, buf_name, w, ws, b, in_scale)
         return x
 
     def forward(self, x):
@@ -332,22 +330,33 @@ class Int8YOLOv8nPipeline(Int8ConvPipeline):
         x = self._c2f(x, "l8", 1)
         print(f"  L8:  {x.shape}")
 
-        # SPPF: convs on NPU, maxpool on CPU
+        # SPPF: convs on NPU, maxpool on CPU (int8-safe)
         x = self._cbs(x, "l9.cv1")
-        y1 = F.max_pool2d(x, 5, stride=1, padding=2)
-        y2 = F.max_pool2d(y1, 5, stride=1, padding=2)
-        y3 = F.max_pool2d(y2, 5, stride=1, padding=2)
+        if x.dtype == torch.int8:
+            y1 = F.max_pool2d(x.float(), 5, stride=1, padding=2).to(torch.int8)
+            y2 = F.max_pool2d(y1.float(), 5, stride=1, padding=2).to(torch.int8)
+            y3 = F.max_pool2d(y2.float(), 5, stride=1, padding=2).to(torch.int8)
+        else:
+            y1 = F.max_pool2d(x, 5, stride=1, padding=2)
+            y2 = F.max_pool2d(y1, 5, stride=1, padding=2)
+            y3 = F.max_pool2d(y2, 5, stride=1, padding=2)
         x = torch.cat([x, y1, y2, y3], dim=1)
         p5 = self._cbs(x, "l9.cv2")
         print(f"  L9:  {p5.shape}  [P5]")
 
         # ---- NECK (FPN up-path) ----
-        x = F.interpolate(p5, scale_factor=2, mode="nearest")
+        if p5.dtype == torch.int8:
+            x = p5.repeat_interleave(2, dim=2).repeat_interleave(2, dim=3)
+        else:
+            x = F.interpolate(p5, scale_factor=2, mode="nearest")
         x = torch.cat([x, p4], dim=1)
         l12_out = self._c2f(x, "l12", 1, shortcut=False)
         print(f"  L12: {l12_out.shape}")
 
-        x = F.interpolate(l12_out, scale_factor=2, mode="nearest")
+        if l12_out.dtype == torch.int8:
+            x = l12_out.repeat_interleave(2, dim=2).repeat_interleave(2, dim=3)
+        else:
+            x = F.interpolate(l12_out, scale_factor=2, mode="nearest")
         x = torch.cat([x, p3], dim=1)
         det_p3 = self._c2f(x, "l15", 1, shortcut=False)
         print(f"  L15: {det_p3.shape}  [det_p3]")
@@ -424,9 +433,15 @@ def main():
 
     print("\n[2] Computing per-layer shifts...")
     shifts = compute_all_shifts(int8_weights, act_scales)
-    shift_vals = list(shifts.values())
-    print(f"    Shift range: [{min(shift_vals)}, {max(shift_vals)}]")
-    print(f"    Shift mean: {sum(shift_vals)/len(shift_vals):.1f}")
+    # Display shift stats (values may be int or (shift1, shift2) tuples)
+    single_shifts = [v for v in shifts.values() if isinstance(v, int)]
+    fused_shifts = [v for v in shifts.values() if isinstance(v, tuple)]
+    if single_shifts:
+        print(f"    Non-fused shifts: [{min(single_shifts)}, {max(single_shifts)}]")
+    if fused_shifts:
+        s1s = [s[0] for s in fused_shifts]
+        s2s = [s[1] for s in fused_shifts]
+        print(f"    Fused shift1: [{min(s1s)}, {max(s1s)}], shift2: [{min(s2s)}, {max(s2s)}]")
 
     # -- Step 3: Build single xclbin with all 63 PDIs ----------------------
 
