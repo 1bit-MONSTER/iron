@@ -25,6 +25,8 @@ from iron.common import AIEOperatorBase
 from iron.common.aie_device_manager import pyxrt
 from iron.operators.conv2d_int8.op import (
     AIEConv2dInt8,
+    _compute_k3_fused_streaming,
+    _compute_k1_silu_streaming,
     nchw_to_tiled_int8,
     tiled_to_nchw_int8,
     weights_to_tiled_int8,
@@ -33,7 +35,9 @@ from iron.operators.conv2d_int8.op import (
 from iron.applications.yolov8n.quantize import Int8Quantizer
 
 
-def _auto_columns_int8(in_channels, out_channels, kernel_size, width, stride=1):
+def _auto_columns_int8(
+    in_channels, out_channels, kernel_size, width, stride=1, fused=False
+):
     """Choose num_aie_columns for int8 conv2d to maximize parallelism.
 
     Int8 elements are 1 byte (vs 2 for bf16). Per-core output channels
@@ -43,12 +47,15 @@ def _auto_columns_int8(in_channels, out_channels, kernel_size, width, stride=1):
 
     For k1: input depth=2 (MemTile forwarded), weight depth=1, output depth=2.
     For k3: input depth=3-4 (sliding window, phys_bufs=depth+1), OC streaming.
+
+    When fused=True, weight buffer includes 4 bytes of int32 bias per OC.
     """
     _L1 = 65536
     _OH = 1040
     _BD_WRAP_MAX = 64
     k_elems = kernel_size * kernel_size
     out_w = width // stride if stride > 1 else width
+    bias_bytes_per_oc = 4 if fused else 0
 
     # Try largest column count first for max parallelism
     for cols in [4, 2, 1]:
@@ -66,7 +73,7 @@ def _auto_columns_int8(in_channels, out_channels, kernel_size, width, stride=1):
             for try_oc in range(oc_per_col, 0, -8):
                 if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
                     continue
-                wt_bytes = try_oc * in_channels
+                wt_bytes = try_oc * in_channels + try_oc * bias_bytes_per_oc
                 out_bytes = 2 * try_oc * width
                 if wt_bytes + out_bytes <= avail:
                     n_oc = oc_per_col // try_oc
@@ -84,7 +91,10 @@ def _auto_columns_int8(in_channels, out_channels, kernel_size, width, stride=1):
                 for try_oc in range(oc_per_col, 0, -8):
                     if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
                         continue
-                    wt_bytes = try_oc * in_channels * k_elems
+                    wt_bytes = (
+                        try_oc * in_channels * k_elems
+                        + try_oc * bias_bytes_per_oc
+                    )
                     out_bytes = 2 * try_oc * out_w
                     if wt_bytes + out_bytes <= avail:
                         n_oc = oc_per_col // try_oc
@@ -112,14 +122,16 @@ class Int8ConvPipeline(AIEOperatorBase):
     # NPU driver limits PDIs per hw_context to 32.
     _MAX_PDIS_PER_XCLBIN = 32
 
-    def __init__(self, context=None):
+    def __init__(self, context=None, preprocessor=None):
         self._pdi_map = {}  # layer_name -> {sub_op, xclbin, insts, kernel_name}
         self._layer_map = {}  # layer_name -> pdi_key (same as layer_name)
         self._kernel_id_counter = 0x901
         self._group_xclbins = []  # combined xclbin per group
         self._shifts = {}  # layer_name -> shift value
         self._weights_prepared = False
+        self._weights_synced = False  # True after load_static_weights()
         self._layer_cache = {}  # buf_name -> {tiled_weights, in_act_scale, ...}
+        self._preprocessor = preprocessor
         self._prof = {}  # profiling: name -> total_seconds
         self._prof_n = {}  # profiling: name -> count
 
@@ -141,8 +153,17 @@ class Int8ConvPipeline(AIEOperatorBase):
         stride,
         shift,
         num_aie_columns=1,
+        fused=False,
+        shift1=None,
+        shift2=None,
     ):
-        """Register an int8 conv layer with its own PDI."""
+        """Register an int8 conv layer with its own PDI.
+
+        Args:
+            fused: If True, use fused conv+bias+SiLU kernel.
+            shift1: Dequant shift (acc -> float). Required if fused.
+            shift2: Requant shift (SiLU -> int8). Required if fused.
+        """
         self._layer_map[layer_name] = layer_name
         self._shifts[layer_name] = shift
         sub_op = AIEConv2dInt8(
@@ -153,6 +174,9 @@ class Int8ConvPipeline(AIEOperatorBase):
             height=h,
             width=w,
             scale=shift,
+            fused=fused,
+            shift1=shift1,
+            shift2=shift2,
             num_aie_columns=num_aie_columns,
             context=self.context,
             register=False,
@@ -222,11 +246,45 @@ class Int8ConvPipeline(AIEOperatorBase):
             entry = self._pdi_map[lname]
             sub_op = entry["sub_op"]
             in_sz = sub_op.in_channels * sub_op.height * sub_op.width
-            k_sq = sub_op.kernel_size**2
-            w_sz = sub_op.out_channels * sub_op.in_channels * k_sq
             out_sz = sub_op.out_channels * sub_op.out_height * sub_op.out_width
+
+            # Fused weight buffer includes packed int32 bias per OC chunk
+            if sub_op.fused and sub_op.kernel_size == 3:
+                n_oc_groups, oc_chunk = _compute_k3_fused_streaming(
+                    sub_op.in_channels,
+                    sub_op.out_channels,
+                    sub_op.width,
+                    sub_op.out_width,
+                    sub_op.num_aie_columns,
+                )
+                wt_chunk = oc_chunk * sub_op.in_channels * 9 + oc_chunk * 4
+                w_sz = n_oc_groups * wt_chunk * sub_op.num_aie_columns
+            elif sub_op.fused and sub_op.kernel_size == 1:
+                n_oc_groups, oc_chunk = _compute_k1_silu_streaming(
+                    sub_op.in_channels,
+                    sub_op.out_channels,
+                    sub_op.width,
+                    sub_op.num_aie_columns,
+                )
+                wt_chunk = oc_chunk * sub_op.in_channels + oc_chunk * 4
+                w_sz = n_oc_groups * wt_chunk * sub_op.num_aie_columns
+            elif sub_op.kernel_size == 3:
+                w_sz = sub_op.out_channels * sub_op.in_channels * 9
+            else:
+                w_sz = sub_op.out_channels * sub_op.in_channels
+
             self.add_buffer(f"{lname}_input", in_sz, dtype=np.int8)
-            self.add_buffer(f"{lname}_weights", w_sz, dtype=np.int8)
+            # When a preprocessor is available, register weight data as
+            # static — this gives each layer a dedicated BO that is
+            # written once during prepare_runtime() and never touched
+            # again during inference.
+            if self._preprocessor is not None:
+                static_w = self._preprocessor.get_static_weight_data(lname)
+                self.add_buffer(
+                    f"{lname}_weights", w_sz, dtype=np.int8, static_data=static_w
+                )
+            else:
+                self.add_buffer(f"{lname}_weights", w_sz, dtype=np.int8)
             self.add_buffer(f"{lname}_output", out_sz, dtype=np.int8)
             # Register in the runlist so the buffer pool allocator knows
             # which buffers are used together and must not share a BO.
@@ -267,10 +325,24 @@ class Int8ConvPipeline(AIEOperatorBase):
     def prepare_weights(self):
         """Pre-tile all weights and cache per-layer constants.
 
-        Call after prepare_runtime(). Pre-tiles weight tensors so the
-        forward pass skips weight tiling, output zero-fills, and reduces
-        BO syncs from 8 to 5 per kernel call.
+        Call after prepare_runtime(). When a preprocessor is available,
+        uses pre-computed data directly (weight tiling already done).
+        Otherwise, tiles weights inline.
+
+        For fused layers, packs int32 bias after weights in the buffer
+        so the NPU kernel handles bias+SiLU+requant entirely on-chip.
         """
+        if self._preprocessor is not None:
+            for dot_name in PRED_MAP:
+                buf_name = _buf(dot_name)
+                if buf_name not in self._pdi_map:
+                    continue
+                self._layer_cache[buf_name] = (
+                    self._preprocessor.get_layer_data(buf_name)
+                )
+            self._weights_prepared = True
+            return
+
         for dot_name in PRED_MAP:
             buf_name = _buf(dot_name)
             if buf_name not in self._pdi_map:
@@ -281,12 +353,6 @@ class Int8ConvPipeline(AIEOperatorBase):
 
             w_int8, w_scale, bias = lookup_weight(self.int8_weights, dot_name)
 
-            # Pre-tile weights once (saves ~50ms per forward)
-            if sub_op.kernel_size == 3:
-                tiled_w = weights_to_tiled_int8_k3(w_int8)
-            else:
-                tiled_w = weights_to_tiled_int8(w_int8)
-
             # Pre-compute per-layer constants
             pred = PRED_MAP[dot_name]
             in_act_scale = self.act_scales.get(pred, 1.0)
@@ -295,14 +361,98 @@ class Int8ConvPipeline(AIEOperatorBase):
             shift = self._shifts[buf_name]
             dequant_scale = float((2**shift) * w_scale * in_act_scale)
 
-            self._layer_cache[buf_name] = {
-                "tiled_weights": tiled_w,
-                "in_act_scale": in_act_scale,
-                "dequant_scale": dequant_scale,
-                "bias_view": bias.view(1, -1, 1, 1),
-            }
+            if sub_op.fused:
+                # Pack weights + int32 bias for fused conv+bias+SiLU kernel
+                tiled_w = self._pack_fused_weights(
+                    sub_op, w_int8, w_scale, bias, in_act_scale
+                )
+                self._layer_cache[buf_name] = {
+                    "tiled_weights": tiled_w,
+                    "in_act_scale": in_act_scale,
+                }
+            else:
+                # Non-fused: just tile weights
+                if sub_op.kernel_size == 3:
+                    tiled_w = weights_to_tiled_int8_k3(w_int8)
+                else:
+                    tiled_w = weights_to_tiled_int8(w_int8)
+
+                self._layer_cache[buf_name] = {
+                    "tiled_weights": tiled_w,
+                    "in_act_scale": in_act_scale,
+                    "dequant_scale": dequant_scale,
+                    "bias_view": bias.view(1, -1, 1, 1),
+                }
 
         self._weights_prepared = True
+
+    def load_static_weights(self):
+        """Sync all static weight BOs to device once.
+
+        Call after prepare_runtime(). After this, weight BOs are never
+        re-written or re-synced during inference, saving one write_buffer
+        + sync per layer per forward pass.
+        """
+        if self._preprocessor is None:
+            return
+        for lname in self._layer_map:
+            wbuf = f"{lname}_weights"
+            if wbuf in self.buffer_static_data:
+                self.buffer_bos[wbuf].sync(
+                    pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE
+                )
+        self._weights_synced = True
+
+    def _pack_fused_weights(self, sub_op, w_int8, w_scale, bias_float, in_act_scale):
+        """Pack tiled weights + int32 bias for fused conv+bias+SiLU kernel.
+
+        Bias is pre-scaled to the accumulator domain:
+            bias_int32 = round(bias_float / (in_act_scale * w_scale))
+
+        Layout per OC chunk per column:
+            [weights: oc_chunk * IC * K*K bytes] [bias: oc_chunk * 4 bytes]
+        """
+        combined_scale = float(in_act_scale * w_scale)
+        if combined_scale == 0:
+            combined_scale = 1.0
+        bias_int32 = np.round(bias_float.numpy() / combined_scale).astype(np.int32)
+
+        if sub_op.kernel_size == 3:
+            n_oc_groups, oc_chunk = _compute_k3_fused_streaming(
+                sub_op.in_channels,
+                sub_op.out_channels,
+                sub_op.width,
+                sub_op.out_width,
+                sub_op.num_aie_columns,
+            )
+            weight_tiled = weights_to_tiled_int8_k3(w_int8)
+            wt_per_chunk = oc_chunk * sub_op.in_channels * 9
+        else:
+            n_oc_groups, oc_chunk = _compute_k1_silu_streaming(
+                sub_op.in_channels,
+                sub_op.out_channels,
+                sub_op.width,
+                sub_op.num_aie_columns,
+            )
+            weight_tiled = weights_to_tiled_int8(w_int8)
+            wt_per_chunk = oc_chunk * sub_op.in_channels
+
+        oc_per_col = sub_op.out_channels // sub_op.num_aie_columns
+        chunks = []
+        for col in range(sub_op.num_aie_columns):
+            col_wt_base = col * oc_per_col * (
+                sub_op.in_channels * (9 if sub_op.kernel_size == 3 else 1)
+            )
+            col_bias_base = col * oc_per_col
+            for g in range(n_oc_groups):
+                w_start = col_wt_base + g * wt_per_chunk
+                w_chunk = weight_tiled[w_start : w_start + wt_per_chunk]
+                b_start = col_bias_base + g * oc_chunk
+                b_chunk = bias_int32[b_start : b_start + oc_chunk]
+                b_bytes = b_chunk.view(np.int8)
+                chunks.append(np.concatenate([w_chunk, b_bytes]))
+
+        return np.concatenate(chunks)
 
     # -- Optimized kernel execution --------------------------------------------
 
@@ -326,6 +476,7 @@ class Int8ConvPipeline(AIEOperatorBase):
 
         Skips: output sync TO_DEVICE (write-only), input/weights sync
         FROM_DEVICE (read-only from host perspective).
+        If static weights are loaded, also skips weight sync TO_DEVICE.
         """
         context, xrt_kernel, insts_bo, insts_len = self.xrt_kernels[kernel_name]
         insts_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
@@ -333,7 +484,8 @@ class Int8ConvPipeline(AIEOperatorBase):
         w_bo = self.buffer_bos[weights_buf]
         out_bo = self.buffer_bos[output_buf]
         in_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
-        w_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+        if not self._weights_synced:
+            w_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
         opcode = 3
         run = xrt_kernel(opcode, insts_bo, insts_len, in_bo, w_bo, out_bo)
         result = run.wait()
@@ -358,7 +510,8 @@ class Int8ConvPipeline(AIEOperatorBase):
         t0 = _time.perf_counter()
         input_tiled = nchw_to_tiled_int8(x_int8)
         self.write_buffer(f"{layer_name}_input", input_tiled)
-        self.write_buffer(f"{layer_name}_weights", cache["tiled_weights"])
+        if not self._weights_synced:
+            self.write_buffer(f"{layer_name}_weights", cache["tiled_weights"])
         self._prof_add("tile+write", _time.perf_counter() - t0)
 
         t0 = _time.perf_counter()
@@ -387,22 +540,80 @@ class Int8ConvPipeline(AIEOperatorBase):
 
         return out_float
 
-    def int8_conv_no_act_fast(self, x_float, layer_name):
+    def int8_cbs_fused_fast(self, x, layer_name):
+        """Fused CBS: input -> NPU conv+bias+SiLU -> int8 output.
+
+        The fused kernel handles bias addition, SiLU activation, and
+        requantization entirely on-chip. No Python post-processing needed.
+
+        Args:
+            x: Input tensor, int8 (skip quantize) or float (quantize first).
+            layer_name: Pipeline layer identifier.
+
+        Returns:
+            Int8 output tensor [1, C_out, H_out, W_out].
+        """
+        cache = self._layer_cache[layer_name]
+        entry = self._pdi_map[layer_name]
+        sub_op = entry["sub_op"]
+
+        t0 = _time.perf_counter()
+        if x.dtype == torch.int8:
+            x_int8 = x
+        else:
+            x_int8 = torch.clamp(
+                torch.round(x.float() / cache["in_act_scale"]), -128, 127
+            ).to(torch.int8)
+        self._prof_add("quantize", _time.perf_counter() - t0)
+
+        t0 = _time.perf_counter()
+        input_tiled = nchw_to_tiled_int8(x_int8)
+        self.write_buffer(f"{layer_name}_input", input_tiled)
+        if not self._weights_synced:
+            self.write_buffer(f"{layer_name}_weights", cache["tiled_weights"])
+        self._prof_add("tile+write", _time.perf_counter() - t0)
+
+        t0 = _time.perf_counter()
+        self._run_kernel_fast(
+            entry["kernel_name"],
+            f"{layer_name}_input",
+            f"{layer_name}_weights",
+            f"{layer_name}_output",
+        )
+        self._prof_add("kernel", _time.perf_counter() - t0)
+
+        t0 = _time.perf_counter()
+        oh, ow = sub_op.out_height, sub_op.out_width
+        total_output = sub_op.out_channels * oh * ow
+        output_flat = self.read_buffer(
+            f"{layer_name}_output", (total_output,), copy=True, dtype=np.int8
+        )
+        out_int8 = tiled_to_nchw_int8(output_flat, sub_op.out_channels, oh, ow)
+        self._prof_add("read+untile", _time.perf_counter() - t0)
+
+        # No dequant/bias/SiLU — kernel handles everything!
+        return out_int8
+
+    def int8_conv_no_act_fast(self, x, layer_name):
         """Fast conv without activation: pre-tiled weights, fewer syncs."""
         cache = self._layer_cache[layer_name]
         entry = self._pdi_map[layer_name]
         sub_op = entry["sub_op"]
 
         t0 = _time.perf_counter()
-        x_int8 = torch.clamp(
-            torch.round(x_float / cache["in_act_scale"]), -128, 127
-        ).to(torch.int8)
+        if x.dtype == torch.int8:
+            x_int8 = x
+        else:
+            x_int8 = torch.clamp(
+                torch.round(x.float() / cache["in_act_scale"]), -128, 127
+            ).to(torch.int8)
         self._prof_add("quantize", _time.perf_counter() - t0)
 
         t0 = _time.perf_counter()
         input_tiled = nchw_to_tiled_int8(x_int8)
         self.write_buffer(f"{layer_name}_input", input_tiled)
-        self.write_buffer(f"{layer_name}_weights", cache["tiled_weights"])
+        if not self._weights_synced:
+            self.write_buffer(f"{layer_name}_weights", cache["tiled_weights"])
         self._prof_add("tile+write", _time.perf_counter() - t0)
 
         t0 = _time.perf_counter()
@@ -536,6 +747,46 @@ def compute_layer_shift(w_scale, in_act_scale, out_act_scale):
     ratio = out_act_scale / combined
     shift = round(math.log2(max(ratio, 1.0)))
     return max(1, min(31, shift))
+
+
+def compute_fused_shifts(w_scale, in_act_scale, out_act_scale):
+    """Compute shift1/shift2 for fused conv+bias+SiLU kernel.
+
+    The fused kernel pipeline:
+      1. MAC: acc = sum(x_int8 * w_int8) -> int32
+      2. Add int32 bias (pre-scaled to accumulator domain)
+      3. Dequant: float_val = acc * 2^(-shift1)
+      4. SiLU(float_val)
+      5. Requant: int8 = clamp(round(silu * 2^shift2), -128, 127)
+
+    shift1 maps the accumulator to actual float values:
+        shift1 = round(log2(1 / (in_act_scale * w_scale)))
+
+    shift2 maps the SiLU output to int8 at the output activation scale:
+        shift2 = round(log2(1 / out_act_scale))
+
+    Args:
+        w_scale: Per-tensor weight scale.
+        in_act_scale: Input activation scale.
+        out_act_scale: Output activation scale (post-SiLU, from calibration).
+
+    Returns:
+        (shift1, shift2) tuple, each clamped to [1, 31].
+    """
+    combined = w_scale * in_act_scale
+    if combined == 0:
+        shift1 = 10
+    else:
+        shift1 = round(math.log2(max(1.0 / combined, 1.0)))
+    shift1 = max(1, min(31, shift1))
+
+    if out_act_scale == 0:
+        shift2 = 10
+    else:
+        shift2 = round(math.log2(max(1.0 / out_act_scale, 1.0)))
+    shift2 = max(1, min(31, shift2))
+
+    return shift1, shift2
 
 
 # -- Predecessor map for activation scale lookup ----------------------------
@@ -720,17 +971,32 @@ class Int8BackboneNeckPipeline(Int8ConvPipeline):
     dequantization, bias, and SiLU run on CPU in float.
     """
 
-    def __init__(self, shifts, act_scales, int8_weights, context=None):
+    def __init__(self, shifts, act_scales, int8_weights, context=None, preprocessor=None):
         self.shifts = shifts
         self.act_scales = act_scales
         self.int8_weights = int8_weights
-        super().__init__(context=context)
+        super().__init__(context=context, preprocessor=preprocessor)
+
+    def _fused_shifts(self, name):
+        """Compute shift1/shift2 for a fused CBS layer."""
+        _, w_scale, _ = lookup_weight(self.int8_weights, name)
+        pred = PRED_MAP[name]
+        in_act_scale = self.act_scales.get(pred, 1.0)
+        if in_act_scale == 0:
+            in_act_scale = 1.0
+        out_act_scale = self.act_scales.get(name, 1.0)
+        if out_act_scale == 0:
+            out_act_scale = 1.0
+        return compute_fused_shifts(w_scale, in_act_scale, out_act_scale)
 
     def _register_all_layers(self):
         s = self.shifts
 
-        def reg(name, ic, oc, h, w, ks, stride):
-            cols = _auto_columns_int8(ic, oc, ks, w, stride)
+        def reg(name, ic, oc, h, w, ks, stride, fused=False):
+            cols = _auto_columns_int8(ic, oc, ks, w, stride, fused=fused)
+            shift1, shift2 = None, None
+            if fused:
+                shift1, shift2 = self._fused_shifts(name)
             self._register_int8_conv(
                 _buf(name),
                 ic,
@@ -741,92 +1007,102 @@ class Int8BackboneNeckPipeline(Int8ConvPipeline):
                 stride,
                 s[name],
                 num_aie_columns=cols,
+                fused=fused,
+                shift1=shift1,
+                shift2=shift2,
             )
 
+        # All backbone+neck layers are CBS — use fused conv+bias+SiLU
+        _F = True
+
         # ---- BACKBONE ----
-        reg("l0", 8, 16, 640, 640, 3, 2)
-        reg("l1", 16, 32, 320, 320, 3, 2)
+        reg("l0", 8, 16, 640, 640, 3, 2, fused=_F)
+        reg("l1", 16, 32, 320, 320, 3, 2, fused=_F)
 
         # L2 C2f (32->32, 160x160, n=1)
-        reg("l2.cv1", 32, 32, 160, 160, 1, 1)
-        reg("l2.bn0.cv1", 16, 16, 160, 160, 3, 1)
-        reg("l2.bn0.cv2", 16, 16, 160, 160, 3, 1)
-        reg("l2.cv2", 48, 32, 160, 160, 1, 1)
+        reg("l2.cv1", 32, 32, 160, 160, 1, 1, fused=_F)
+        reg("l2.bn0.cv1", 16, 16, 160, 160, 3, 1, fused=_F)
+        reg("l2.bn0.cv2", 16, 16, 160, 160, 3, 1, fused=_F)
+        reg("l2.cv2", 48, 32, 160, 160, 1, 1, fused=_F)
 
-        reg("l3", 32, 64, 160, 160, 3, 2)
+        reg("l3", 32, 64, 160, 160, 3, 2, fused=_F)
 
         # L4 C2f (64->64, 80x80, n=2)
-        reg("l4.cv1", 64, 64, 80, 80, 1, 1)
-        reg("l4.bn0.cv1", 32, 32, 80, 80, 3, 1)
-        reg("l4.bn0.cv2", 32, 32, 80, 80, 3, 1)
-        reg("l4.bn1.cv1", 32, 32, 80, 80, 3, 1)
-        reg("l4.bn1.cv2", 32, 32, 80, 80, 3, 1)
-        reg("l4.cv2", 128, 64, 80, 80, 1, 1)
+        reg("l4.cv1", 64, 64, 80, 80, 1, 1, fused=_F)
+        reg("l4.bn0.cv1", 32, 32, 80, 80, 3, 1, fused=_F)
+        reg("l4.bn0.cv2", 32, 32, 80, 80, 3, 1, fused=_F)
+        reg("l4.bn1.cv1", 32, 32, 80, 80, 3, 1, fused=_F)
+        reg("l4.bn1.cv2", 32, 32, 80, 80, 3, 1, fused=_F)
+        reg("l4.cv2", 128, 64, 80, 80, 1, 1, fused=_F)
 
-        reg("l5", 64, 128, 80, 80, 3, 2)
+        reg("l5", 64, 128, 80, 80, 3, 2, fused=_F)
 
         # L6 C2f (128->128, 40x40, n=2)
-        reg("l6.cv1", 128, 128, 40, 40, 1, 1)
-        reg("l6.bn0.cv1", 64, 64, 40, 40, 3, 1)
-        reg("l6.bn0.cv2", 64, 64, 40, 40, 3, 1)
-        reg("l6.bn1.cv1", 64, 64, 40, 40, 3, 1)
-        reg("l6.bn1.cv2", 64, 64, 40, 40, 3, 1)
-        reg("l6.cv2", 256, 128, 40, 40, 1, 1)
+        reg("l6.cv1", 128, 128, 40, 40, 1, 1, fused=_F)
+        reg("l6.bn0.cv1", 64, 64, 40, 40, 3, 1, fused=_F)
+        reg("l6.bn0.cv2", 64, 64, 40, 40, 3, 1, fused=_F)
+        reg("l6.bn1.cv1", 64, 64, 40, 40, 3, 1, fused=_F)
+        reg("l6.bn1.cv2", 64, 64, 40, 40, 3, 1, fused=_F)
+        reg("l6.cv2", 256, 128, 40, 40, 1, 1, fused=_F)
 
-        reg("l7", 128, 256, 40, 40, 3, 2)
+        reg("l7", 128, 256, 40, 40, 3, 2, fused=_F)
 
         # L8 C2f (256->256, 20x20, n=1)
-        reg("l8.cv1", 256, 256, 20, 20, 1, 1)
-        reg("l8.bn0.cv1", 128, 128, 20, 20, 3, 1)
-        reg("l8.bn0.cv2", 128, 128, 20, 20, 3, 1)
-        reg("l8.cv2", 384, 256, 20, 20, 1, 1)
+        reg("l8.cv1", 256, 256, 20, 20, 1, 1, fused=_F)
+        reg("l8.bn0.cv1", 128, 128, 20, 20, 3, 1, fused=_F)
+        reg("l8.bn0.cv2", 128, 128, 20, 20, 3, 1, fused=_F)
+        reg("l8.cv2", 384, 256, 20, 20, 1, 1, fused=_F)
 
         # L9 SPPF (convs only; maxpool on CPU)
-        reg("l9.cv1", 256, 128, 20, 20, 1, 1)
-        reg("l9.cv2", 512, 256, 20, 20, 1, 1)
+        reg("l9.cv1", 256, 128, 20, 20, 1, 1, fused=_F)
+        reg("l9.cv2", 512, 256, 20, 20, 1, 1, fused=_F)
 
         # ---- NECK ----
         # L12 C2f (384->128, 40x40, n=1)
-        reg("l12.cv1", 384, 128, 40, 40, 1, 1)
-        reg("l12.bn0.cv1", 64, 64, 40, 40, 3, 1)
-        reg("l12.bn0.cv2", 64, 64, 40, 40, 3, 1)
-        reg("l12.cv2", 192, 128, 40, 40, 1, 1)
+        reg("l12.cv1", 384, 128, 40, 40, 1, 1, fused=_F)
+        reg("l12.bn0.cv1", 64, 64, 40, 40, 3, 1, fused=_F)
+        reg("l12.bn0.cv2", 64, 64, 40, 40, 3, 1, fused=_F)
+        reg("l12.cv2", 192, 128, 40, 40, 1, 1, fused=_F)
 
         # L15 C2f (192->64, 80x80, n=1)
-        reg("l15.cv1", 192, 64, 80, 80, 1, 1)
-        reg("l15.bn0.cv1", 32, 32, 80, 80, 3, 1)
-        reg("l15.bn0.cv2", 32, 32, 80, 80, 3, 1)
-        reg("l15.cv2", 96, 64, 80, 80, 1, 1)
+        reg("l15.cv1", 192, 64, 80, 80, 1, 1, fused=_F)
+        reg("l15.bn0.cv1", 32, 32, 80, 80, 3, 1, fused=_F)
+        reg("l15.bn0.cv2", 32, 32, 80, 80, 3, 1, fused=_F)
+        reg("l15.cv2", 96, 64, 80, 80, 1, 1, fused=_F)
 
         # L16 CBS (64->64, 80->40, k3s2)
-        reg("l16", 64, 64, 80, 80, 3, 2)
+        reg("l16", 64, 64, 80, 80, 3, 2, fused=_F)
 
         # L18 C2f (192->128, 40x40, n=1)
-        reg("l18.cv1", 192, 128, 40, 40, 1, 1)
-        reg("l18.bn0.cv1", 64, 64, 40, 40, 3, 1)
-        reg("l18.bn0.cv2", 64, 64, 40, 40, 3, 1)
-        reg("l18.cv2", 192, 128, 40, 40, 1, 1)
+        reg("l18.cv1", 192, 128, 40, 40, 1, 1, fused=_F)
+        reg("l18.bn0.cv1", 64, 64, 40, 40, 3, 1, fused=_F)
+        reg("l18.bn0.cv2", 64, 64, 40, 40, 3, 1, fused=_F)
+        reg("l18.cv2", 192, 128, 40, 40, 1, 1, fused=_F)
 
         # L19 CBS (128->128, 40->20, k3s2)
-        reg("l19", 128, 128, 40, 40, 3, 2)
+        reg("l19", 128, 128, 40, 40, 3, 2, fused=_F)
 
         # L21 C2f (384->256, 20x20, n=1)
-        reg("l21.cv1", 384, 256, 20, 20, 1, 1)
-        reg("l21.bn0.cv1", 128, 128, 20, 20, 3, 1)
-        reg("l21.bn0.cv2", 128, 128, 20, 20, 3, 1)
-        reg("l21.cv2", 384, 256, 20, 20, 1, 1)
+        reg("l21.cv1", 384, 256, 20, 20, 1, 1, fused=_F)
+        reg("l21.bn0.cv1", 128, 128, 20, 20, 3, 1, fused=_F)
+        reg("l21.bn0.cv2", 128, 128, 20, 20, 3, 1, fused=_F)
+        reg("l21.cv2", 384, 256, 20, 20, 1, 1, fused=_F)
 
     def _cbs(self, x, name):
-        """CBS: quantize -> int8 conv NPU -> dequant -> bias -> SiLU."""
+        """CBS: fused conv+bias+SiLU on NPU (int8 in, int8 out)."""
+        buf = _buf(name)
         if self._weights_prepared:
-            return self.int8_cbs_fast(x, _buf(name))
+            entry = self._pdi_map[buf]
+            if entry["sub_op"].fused:
+                return self.int8_cbs_fused_fast(x, buf)
+            return self.int8_cbs_fast(x, buf)
         w, ws, b = lookup_weight(self.int8_weights, name)
         pred = PRED_MAP[name]
         in_scale = self.act_scales.get(pred, 1.0)
-        return self.int8_cbs(x, _buf(name), w, ws, b, in_scale)
+        return self.int8_cbs(x, buf, w, ws, b, in_scale)
 
     def _c2f(self, x, prefix, n_bn, shortcut=True):
-        """Run a C2f block."""
+        """Run a C2f block. Operates in int8 when fused CBS is active."""
         x = self._cbs(x, f"{prefix}.cv1")
         chunks = x.chunk(2, dim=1)
         outputs = [chunks[0], chunks[1]]
@@ -835,7 +1111,10 @@ class Int8BackboneNeckPipeline(Int8ConvPipeline):
             y = self._cbs(inp, f"{prefix}.bn{i}.cv1")
             y = self._cbs(y, f"{prefix}.bn{i}.cv2")
             if shortcut:
-                y = y + inp
+                if y.dtype == torch.int8:
+                    y = (y.int() + inp.int()).clamp(-128, 127).to(torch.int8)
+                else:
+                    y = y + inp
             outputs.append(y)
         x = torch.cat(outputs, dim=1)
         return self._cbs(x, f"{prefix}.cv2")
@@ -843,18 +1122,23 @@ class Int8BackboneNeckPipeline(Int8ConvPipeline):
     def forward(self, x):
         """Run backbone + neck.
 
+        With fused CBS kernels, data flows as int8 between layers.
+        Non-CBS ops (concat, upsample, maxpool, residual add) operate
+        directly on int8 tensors — no Python dequant/SiLU needed.
+
         Args:
             x: Input [1, 3, 640, 640] float tensor.
 
         Returns:
-            (det_p3, det_p4, det_p5) float feature maps.
+            (det_p3, det_p4, det_p5) int8 feature maps (or float if
+            fused is not active).
         """
         x = x.float()
         x = F.pad(x, (0, 0, 0, 0, 0, 5))  # 3ch -> 8ch
 
         # ---- BACKBONE ----
         x = self._cbs(x, "l0")
-        print(f"  L0:  {x.shape}")
+        print(f"  L0:  {x.shape} {x.dtype}")
         x = self._cbs(x, "l1")
         print(f"  L1:  {x.shape}")
         x = self._c2f(x, "l2", 1)
@@ -872,22 +1156,35 @@ class Int8BackboneNeckPipeline(Int8ConvPipeline):
         x = self._c2f(x, "l8", 1)
         print(f"  L8:  {x.shape}")
 
-        # SPPF: convs on NPU, maxpool on CPU
+        # SPPF: convs on NPU, maxpool on CPU (int8-safe)
         x = self._cbs(x, "l9.cv1")
-        y1 = F.max_pool2d(x, 5, stride=1, padding=2)
-        y2 = F.max_pool2d(y1, 5, stride=1, padding=2)
-        y3 = F.max_pool2d(y2, 5, stride=1, padding=2)
+        if x.dtype == torch.int8:
+            # MaxPool on int8: cast to float (lossless), pool, cast back
+            y1 = F.max_pool2d(x.float(), 5, stride=1, padding=2).to(torch.int8)
+            y2 = F.max_pool2d(y1.float(), 5, stride=1, padding=2).to(torch.int8)
+            y3 = F.max_pool2d(y2.float(), 5, stride=1, padding=2).to(torch.int8)
+        else:
+            y1 = F.max_pool2d(x, 5, stride=1, padding=2)
+            y2 = F.max_pool2d(y1, 5, stride=1, padding=2)
+            y3 = F.max_pool2d(y2, 5, stride=1, padding=2)
         x = torch.cat([x, y1, y2, y3], dim=1)
         p5 = self._cbs(x, "l9.cv2")
         print(f"  L9:  {p5.shape}  [P5]")
 
         # ---- NECK (FPN up-path) ----
-        x = F.interpolate(p5, scale_factor=2, mode="nearest")
+        if p5.dtype == torch.int8:
+            # Nearest 2x upsample on int8: just duplicate pixels
+            x = p5.repeat_interleave(2, dim=2).repeat_interleave(2, dim=3)
+        else:
+            x = F.interpolate(p5, scale_factor=2, mode="nearest")
         x = torch.cat([x, p4], dim=1)
         l12_out = self._c2f(x, "l12", 1, shortcut=False)
         print(f"  L12: {l12_out.shape}")
 
-        x = F.interpolate(l12_out, scale_factor=2, mode="nearest")
+        if l12_out.dtype == torch.int8:
+            x = l12_out.repeat_interleave(2, dim=2).repeat_interleave(2, dim=3)
+        else:
+            x = F.interpolate(l12_out, scale_factor=2, mode="nearest")
         x = torch.cat([x, p3], dim=1)
         det_p3 = self._c2f(x, "l15", 1, shortcut=False)
         print(f"  L15: {det_p3.shape}  [det_p3]")
@@ -916,17 +1213,32 @@ class Int8DetectHeadPipeline(Int8ConvPipeline):
     Bare conv layers (cv3) use int8 conv + dequant + bias (no activation).
     """
 
-    def __init__(self, shifts, act_scales, int8_weights, context=None):
+    def __init__(self, shifts, act_scales, int8_weights, context=None, preprocessor=None):
         self.shifts = shifts
         self.act_scales = act_scales
         self.int8_weights = int8_weights
-        super().__init__(context=context)
+        super().__init__(context=context, preprocessor=preprocessor)
+
+    def _fused_shifts(self, name):
+        """Compute shift1/shift2 for a fused CBS layer."""
+        _, w_scale, _ = lookup_weight(self.int8_weights, name)
+        pred = PRED_MAP[name]
+        in_act_scale = self.act_scales.get(pred, 1.0)
+        if in_act_scale == 0:
+            in_act_scale = 1.0
+        out_act_scale = self.act_scales.get(name, 1.0)
+        if out_act_scale == 0:
+            out_act_scale = 1.0
+        return compute_fused_shifts(w_scale, in_act_scale, out_act_scale)
 
     def _register_all_layers(self):
         s = self.shifts
 
-        def reg(name, ic, oc, h, w, ks, stride):
-            cols = _auto_columns_int8(ic, oc, ks, w, stride)
+        def reg(name, ic, oc, h, w, ks, stride, fused=False):
+            cols = _auto_columns_int8(ic, oc, ks, w, stride, fused=fused)
+            shift1, shift2 = None, None
+            if fused:
+                shift1, shift2 = self._fused_shifts(name)
             self._register_int8_conv(
                 _buf(name),
                 ic,
@@ -937,34 +1249,47 @@ class Int8DetectHeadPipeline(Int8ConvPipeline):
                 stride,
                 s[name],
                 num_aie_columns=cols,
+                fused=fused,
+                shift1=shift1,
+                shift2=shift2,
             )
 
+        # cv1/cv2 are CBS (fused SiLU), cv3 is bare conv (no activation)
         for branch in ["reg_p3", "cls_p3"]:
             c_mid = 64 if branch.startswith("reg") else 80
             c_out = 64 if branch.startswith("reg") else 80
-            reg(f"det.{branch}.cv1", 64, c_mid, 80, 80, 3, 1)
-            reg(f"det.{branch}.cv2", c_mid, c_mid, 80, 80, 3, 1)
+            reg(f"det.{branch}.cv1", 64, c_mid, 80, 80, 3, 1, fused=True)
+            reg(f"det.{branch}.cv2", c_mid, c_mid, 80, 80, 3, 1, fused=True)
             reg(f"det.{branch}.cv3", c_mid, c_out, 80, 80, 1, 1)
 
         for branch in ["reg_p4", "cls_p4"]:
             c_mid = 64 if branch.startswith("reg") else 80
             c_out = 64 if branch.startswith("reg") else 80
-            reg(f"det.{branch}.cv1", 128, c_mid, 40, 40, 3, 1)
-            reg(f"det.{branch}.cv2", c_mid, c_mid, 40, 40, 3, 1)
+            reg(f"det.{branch}.cv1", 128, c_mid, 40, 40, 3, 1, fused=True)
+            reg(f"det.{branch}.cv2", c_mid, c_mid, 40, 40, 3, 1, fused=True)
             reg(f"det.{branch}.cv3", c_mid, c_out, 40, 40, 1, 1)
 
         for branch in ["reg_p5", "cls_p5"]:
             c_mid = 64 if branch.startswith("reg") else 80
             c_out = 64 if branch.startswith("reg") else 80
-            reg(f"det.{branch}.cv1", 256, c_mid, 20, 20, 3, 1)
-            reg(f"det.{branch}.cv2", c_mid, c_mid, 20, 20, 3, 1)
+            reg(f"det.{branch}.cv1", 256, c_mid, 20, 20, 3, 1, fused=True)
+            reg(f"det.{branch}.cv2", c_mid, c_mid, 20, 20, 3, 1, fused=True)
             reg(f"det.{branch}.cv3", c_mid, c_out, 20, 20, 1, 1)
 
     def _detect_branch(self, x, branch_name):
-        """Run a detect branch (2x CBS 3x3 + 1x Conv 1x1)."""
+        """Run a detect branch (2x CBS 3x3 + 1x Conv 1x1).
+
+        cv1/cv2 use fused conv+bias+SiLU (int8 in/out).
+        cv3 is bare conv (no activation) → returns float.
+        """
         if self._weights_prepared:
             for cv in ["cv1", "cv2"]:
-                x = self.int8_cbs_fast(x, _buf(f"det.{branch_name}.{cv}"))
+                buf = _buf(f"det.{branch_name}.{cv}")
+                entry = self._pdi_map[buf]
+                if entry["sub_op"].fused:
+                    x = self.int8_cbs_fused_fast(x, buf)
+                else:
+                    x = self.int8_cbs_fast(x, buf)
             return self.int8_conv_no_act_fast(x, _buf(f"det.{branch_name}.cv3"))
         for cv in ["cv1", "cv2"]:
             name = f"det.{branch_name}.{cv}"
