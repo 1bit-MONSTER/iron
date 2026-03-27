@@ -290,7 +290,8 @@ class AIEConv2dInt8(AIEOperatorBase):
             )
             callback_fn = "my_conv2d_int8_silu"
             # Vectorize when IC >= 24 and width is a multiple of 8
-            can_vec_silu = self.in_channels >= 24 and self.width % 8 == 0
+            # TEMP: Force scalar until vectorized SiLU is debugged
+            can_vec_silu = False  # self.in_channels >= 24 and self.width % 8 == 0
             if can_vec_silu:
                 kernel_obj_name = "conv2dk1_i8_silu_vec.o"
                 kernel_extra_flags = ["-DINT8_ACT"]
