@@ -15,6 +15,7 @@ computed from calibration data. Between NPU conv calls, the CPU handles:
 """
 
 import math
+import time as _time
 
 import numpy as np
 import torch
@@ -30,6 +31,71 @@ from iron.operators.conv2d_int8.op import (
     weights_to_tiled_int8_k3,
 )
 from iron.applications.yolov8n.quantize import Int8Quantizer
+
+
+def _auto_columns_int8(in_channels, out_channels, kernel_size, width, stride=1):
+    """Choose num_aie_columns for int8 conv2d to maximize parallelism.
+
+    Int8 elements are 1 byte (vs 2 for bf16). Per-core output channels
+    must be a multiple of 8. Tries largest column count first [4, 2, 1]
+    to maximize core utilization, falling back to fewer columns when
+    constraints aren't met.
+
+    For k1: input depth=2 (MemTile forwarded), weight depth=1, output depth=2.
+    For k3: input depth=3-4 (sliding window, phys_bufs=depth+1), OC streaming.
+    """
+    _L1 = 65536
+    _OH = 1040
+    _BD_WRAP_MAX = 64
+    k_elems = kernel_size * kernel_size
+    out_w = width // stride if stride > 1 else width
+
+    # Try largest column count first for max parallelism
+    for cols in [4, 2, 1]:
+        oc_per_col = out_channels // cols if out_channels % cols == 0 else -1
+        if oc_per_col < 8 or oc_per_col % 8 != 0:
+            continue
+
+        if kernel_size == 1:
+            # k1: input depth=2, weight=1, output depth=2 (all 1 byte)
+            input_bytes = 2 * in_channels * width
+            avail = _L1 - _OH - input_bytes
+            if avail <= 0:
+                continue
+            # Try full oc_per_col first, then OC streaming
+            for try_oc in range(oc_per_col, 0, -8):
+                if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
+                    continue
+                wt_bytes = try_oc * in_channels
+                out_bytes = 2 * try_oc * width
+                if wt_bytes + out_bytes <= avail:
+                    n_oc = oc_per_col // try_oc
+                    if n_oc <= _BD_WRAP_MAX:
+                        return cols
+                    break
+        else:
+            # k3: sliding window input, OC streaming
+            for try_depth in [4, 3]:
+                phys_bufs = try_depth + 1
+                input_bytes = phys_bufs * in_channels * width
+                avail = _L1 - _OH - input_bytes
+                if avail <= 0:
+                    continue
+                for try_oc in range(oc_per_col, 0, -8):
+                    if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
+                        continue
+                    wt_bytes = try_oc * in_channels * k_elems
+                    out_bytes = 2 * try_oc * out_w
+                    if wt_bytes + out_bytes <= avail:
+                        n_oc = oc_per_col // try_oc
+                        if n_oc <= _BD_WRAP_MAX:
+                            return cols
+                        break
+
+    raise ValueError(
+        f"No feasible int8 NPU mapping: IC={in_channels}, "
+        f"OC={out_channels}, K={kernel_size}, W={width}, S={stride}"
+    )
 
 
 class Int8ConvPipeline(AIEOperatorBase):
@@ -52,6 +118,10 @@ class Int8ConvPipeline(AIEOperatorBase):
         self._kernel_id_counter = 0x901
         self._group_xclbins = []  # combined xclbin per group
         self._shifts = {}  # layer_name -> shift value
+        self._weights_prepared = False
+        self._layer_cache = {}  # buf_name -> {tiled_weights, in_act_scale, ...}
+        self._prof = {}  # profiling: name -> total_seconds
+        self._prof_n = {}  # profiling: name -> count
 
         super().__init__(context=context)
 
@@ -61,7 +131,16 @@ class Int8ConvPipeline(AIEOperatorBase):
         return kid
 
     def _register_int8_conv(
-        self, layer_name, in_ch, out_ch, h, w, ks, stride, shift
+        self,
+        layer_name,
+        in_ch,
+        out_ch,
+        h,
+        w,
+        ks,
+        stride,
+        shift,
+        num_aie_columns=1,
     ):
         """Register an int8 conv layer with its own PDI."""
         self._layer_map[layer_name] = layer_name
@@ -74,6 +153,7 @@ class Int8ConvPipeline(AIEOperatorBase):
             height=h,
             width=w,
             scale=shift,
+            num_aie_columns=num_aie_columns,
             context=self.context,
             register=False,
         )
@@ -144,9 +224,7 @@ class Int8ConvPipeline(AIEOperatorBase):
             in_sz = sub_op.in_channels * sub_op.height * sub_op.width
             k_sq = sub_op.kernel_size**2
             w_sz = sub_op.out_channels * sub_op.in_channels * k_sq
-            out_sz = (
-                sub_op.out_channels * sub_op.out_height * sub_op.out_width
-            )
+            out_sz = sub_op.out_channels * sub_op.out_height * sub_op.out_width
             self.add_buffer(f"{lname}_input", in_sz, dtype=np.int8)
             self.add_buffer(f"{lname}_weights", w_sz, dtype=np.int8)
             self.add_buffer(f"{lname}_output", out_sz, dtype=np.int8)
@@ -159,11 +237,78 @@ class Int8ConvPipeline(AIEOperatorBase):
                 f"{lname}_output",
             )
 
+    # -- Profiling helpers -----------------------------------------------------
+
+    def _prof_add(self, name, elapsed):
+        self._prof[name] = self._prof.get(name, 0.0) + elapsed
+        self._prof_n[name] = self._prof_n.get(name, 0) + 1
+
+    def reset_profile(self):
+        self._prof.clear()
+        self._prof_n.clear()
+
+    def print_profile(self):
+        total = sum(self._prof.values())
+        if total == 0:
+            print("No profiling data collected.")
+            return
+        print(f"\nForward pass profile ({total*1000:.0f}ms total):")
+        for name in sorted(self._prof, key=lambda k: -self._prof[k]):
+            ms = self._prof[name] * 1000
+            n = self._prof_n[name]
+            pct = ms / (total * 1000) * 100
+            print(
+                f"  {name:25s}: {ms:8.1f}ms ({pct:4.1f}%) "
+                f"[{n:3d} calls, {ms/n:.2f}ms avg]"
+            )
+
+    # -- Weight pre-computation ------------------------------------------------
+
+    def prepare_weights(self):
+        """Pre-tile all weights and cache per-layer constants.
+
+        Call after prepare_runtime(). Pre-tiles weight tensors so the
+        forward pass skips weight tiling, output zero-fills, and reduces
+        BO syncs from 8 to 5 per kernel call.
+        """
+        for dot_name in PRED_MAP:
+            buf_name = _buf(dot_name)
+            if buf_name not in self._pdi_map:
+                continue
+
+            entry = self._pdi_map[buf_name]
+            sub_op = entry["sub_op"]
+
+            w_int8, w_scale, bias = lookup_weight(self.int8_weights, dot_name)
+
+            # Pre-tile weights once (saves ~50ms per forward)
+            if sub_op.kernel_size == 3:
+                tiled_w = weights_to_tiled_int8_k3(w_int8)
+            else:
+                tiled_w = weights_to_tiled_int8(w_int8)
+
+            # Pre-compute per-layer constants
+            pred = PRED_MAP[dot_name]
+            in_act_scale = self.act_scales.get(pred, 1.0)
+            if in_act_scale == 0:
+                in_act_scale = 1.0
+            shift = self._shifts[buf_name]
+            dequant_scale = float((2**shift) * w_scale * in_act_scale)
+
+            self._layer_cache[buf_name] = {
+                "tiled_weights": tiled_w,
+                "in_act_scale": in_act_scale,
+                "dequant_scale": dequant_scale,
+                "bias_view": bias.view(1, -1, 1, 1),
+            }
+
+        self._weights_prepared = True
+
+    # -- Optimized kernel execution --------------------------------------------
+
     def _run_single_kernel(self, kernel_name, *buffer_names):
         """Execute a single kernel invocation."""
-        context, xrt_kernel, insts_bo, insts_len = self.xrt_kernels[
-            kernel_name
-        ]
+        context, xrt_kernel, insts_bo, insts_len = self.xrt_kernels[kernel_name]
         insts_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
         bos = [self.buffer_bos[bn] for bn in buffer_names]
         for bo in bos:
@@ -175,6 +320,115 @@ class Int8ConvPipeline(AIEOperatorBase):
             raise RuntimeError(f"Kernel {kernel_name} failed: {result}")
         for bo in bos:
             bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
+
+    def _run_kernel_fast(self, kernel_name, input_buf, weights_buf, output_buf):
+        """Execute kernel with minimal BO syncs.
+
+        Skips: output sync TO_DEVICE (write-only), input/weights sync
+        FROM_DEVICE (read-only from host perspective).
+        """
+        context, xrt_kernel, insts_bo, insts_len = self.xrt_kernels[kernel_name]
+        insts_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+        in_bo = self.buffer_bos[input_buf]
+        w_bo = self.buffer_bos[weights_buf]
+        out_bo = self.buffer_bos[output_buf]
+        in_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+        w_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+        opcode = 3
+        run = xrt_kernel(opcode, insts_bo, insts_len, in_bo, w_bo, out_bo)
+        result = run.wait()
+        if result != pyxrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
+            raise RuntimeError(f"Kernel {kernel_name} failed: {result}")
+        out_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
+
+    # -- Fast-path CBS / conv methods ------------------------------------------
+
+    def int8_cbs_fast(self, x_float, layer_name):
+        """Fast CBS: pre-tiled weights, no output zero-fill, fewer syncs."""
+        cache = self._layer_cache[layer_name]
+        entry = self._pdi_map[layer_name]
+        sub_op = entry["sub_op"]
+
+        t0 = _time.perf_counter()
+        x_int8 = torch.clamp(
+            torch.round(x_float / cache["in_act_scale"]), -128, 127
+        ).to(torch.int8)
+        self._prof_add("quantize", _time.perf_counter() - t0)
+
+        t0 = _time.perf_counter()
+        input_tiled = nchw_to_tiled_int8(x_int8)
+        self.write_buffer(f"{layer_name}_input", input_tiled)
+        self.write_buffer(f"{layer_name}_weights", cache["tiled_weights"])
+        self._prof_add("tile+write", _time.perf_counter() - t0)
+
+        t0 = _time.perf_counter()
+        self._run_kernel_fast(
+            entry["kernel_name"],
+            f"{layer_name}_input",
+            f"{layer_name}_weights",
+            f"{layer_name}_output",
+        )
+        self._prof_add("kernel", _time.perf_counter() - t0)
+
+        t0 = _time.perf_counter()
+        oh, ow = sub_op.out_height, sub_op.out_width
+        total_output = sub_op.out_channels * oh * ow
+        output_flat = self.read_buffer(
+            f"{layer_name}_output", (total_output,), copy=True, dtype=np.int8
+        )
+        out_int8 = tiled_to_nchw_int8(output_flat, sub_op.out_channels, oh, ow)
+        self._prof_add("read+untile", _time.perf_counter() - t0)
+
+        t0 = _time.perf_counter()
+        out_float = out_int8.float() * cache["dequant_scale"]
+        out_float = out_float + cache["bias_view"]
+        out_float = F.silu(out_float)
+        self._prof_add("dequant+bias+silu", _time.perf_counter() - t0)
+
+        return out_float
+
+    def int8_conv_no_act_fast(self, x_float, layer_name):
+        """Fast conv without activation: pre-tiled weights, fewer syncs."""
+        cache = self._layer_cache[layer_name]
+        entry = self._pdi_map[layer_name]
+        sub_op = entry["sub_op"]
+
+        t0 = _time.perf_counter()
+        x_int8 = torch.clamp(
+            torch.round(x_float / cache["in_act_scale"]), -128, 127
+        ).to(torch.int8)
+        self._prof_add("quantize", _time.perf_counter() - t0)
+
+        t0 = _time.perf_counter()
+        input_tiled = nchw_to_tiled_int8(x_int8)
+        self.write_buffer(f"{layer_name}_input", input_tiled)
+        self.write_buffer(f"{layer_name}_weights", cache["tiled_weights"])
+        self._prof_add("tile+write", _time.perf_counter() - t0)
+
+        t0 = _time.perf_counter()
+        self._run_kernel_fast(
+            entry["kernel_name"],
+            f"{layer_name}_input",
+            f"{layer_name}_weights",
+            f"{layer_name}_output",
+        )
+        self._prof_add("kernel", _time.perf_counter() - t0)
+
+        t0 = _time.perf_counter()
+        oh, ow = sub_op.out_height, sub_op.out_width
+        total_output = sub_op.out_channels * oh * ow
+        output_flat = self.read_buffer(
+            f"{layer_name}_output", (total_output,), copy=True, dtype=np.int8
+        )
+        out_int8 = tiled_to_nchw_int8(output_flat, sub_op.out_channels, oh, ow)
+        self._prof_add("read+untile", _time.perf_counter() - t0)
+
+        t0 = _time.perf_counter()
+        out_float = out_int8.float() * cache["dequant_scale"]
+        out_float = out_float + cache["bias_view"]
+        self._prof_add("dequant+bias", _time.perf_counter() - t0)
+
+        return out_float
 
     def run_int8_conv(self, layer_name, x_int8, weight_int8):
         """Run int8 conv on NPU, return int8 output tensor."""
@@ -192,9 +446,7 @@ class Int8ConvPipeline(AIEOperatorBase):
 
         oh, ow = sub_op.out_height, sub_op.out_width
         total_output = sub_op.out_channels * oh * ow
-        self.write_buffer(
-            f"{layer_name}_output", np.zeros(total_output, dtype=np.int8)
-        )
+        self.write_buffer(f"{layer_name}_output", np.zeros(total_output, dtype=np.int8))
 
         self._run_single_kernel(
             entry["kernel_name"],
@@ -224,9 +476,9 @@ class Int8ConvPipeline(AIEOperatorBase):
         """
         if in_act_scale == 0:
             in_act_scale = 1.0
-        x_int8 = torch.clamp(
-            torch.round(x_float / in_act_scale), -128, 127
-        ).to(torch.int8)
+        x_int8 = torch.clamp(torch.round(x_float / in_act_scale), -128, 127).to(
+            torch.int8
+        )
 
         out_int8 = self.run_int8_conv(layer_name, x_int8, w_int8)
 
@@ -246,9 +498,9 @@ class Int8ConvPipeline(AIEOperatorBase):
         """
         if in_act_scale == 0:
             in_act_scale = 1.0
-        x_int8 = torch.clamp(
-            torch.round(x_float / in_act_scale), -128, 127
-        ).to(torch.int8)
+        x_int8 = torch.clamp(torch.round(x_float / in_act_scale), -128, 127).to(
+            torch.int8
+        )
 
         out_int8 = self.run_int8_conv(layer_name, x_int8, w_int8)
 
@@ -424,9 +676,7 @@ def lookup_weight(int8_weights, layer_name):
                 return w2, s2, b2
 
     # Detect head
-    for branch in [
-        "reg_p3", "reg_p4", "reg_p5", "cls_p3", "cls_p4", "cls_p5"
-    ]:
+    for branch in ["reg_p3", "reg_p4", "reg_p5", "cls_p3", "cls_p4", "cls_p5"]:
         d = wts["detect"][branch]
         if layer_name == f"det.{branch}.cv1":
             return d["cv1_weight"], d["cv1_scale"], d["cv1_bias"]
@@ -480,8 +730,17 @@ class Int8BackboneNeckPipeline(Int8ConvPipeline):
         s = self.shifts
 
         def reg(name, ic, oc, h, w, ks, stride):
+            cols = _auto_columns_int8(ic, oc, ks, w, stride)
             self._register_int8_conv(
-                _buf(name), ic, oc, h, w, ks, stride, s[name]
+                _buf(name),
+                ic,
+                oc,
+                h,
+                w,
+                ks,
+                stride,
+                s[name],
+                num_aie_columns=cols,
             )
 
         # ---- BACKBONE ----
@@ -559,6 +818,8 @@ class Int8BackboneNeckPipeline(Int8ConvPipeline):
 
     def _cbs(self, x, name):
         """CBS: quantize -> int8 conv NPU -> dequant -> bias -> SiLU."""
+        if self._weights_prepared:
+            return self.int8_cbs_fast(x, _buf(name))
         w, ws, b = lookup_weight(self.int8_weights, name)
         pred = PRED_MAP[name]
         in_scale = self.act_scales.get(pred, 1.0)
@@ -665,8 +926,17 @@ class Int8DetectHeadPipeline(Int8ConvPipeline):
         s = self.shifts
 
         def reg(name, ic, oc, h, w, ks, stride):
+            cols = _auto_columns_int8(ic, oc, ks, w, stride)
             self._register_int8_conv(
-                _buf(name), ic, oc, h, w, ks, stride, s[name]
+                _buf(name),
+                ic,
+                oc,
+                h,
+                w,
+                ks,
+                stride,
+                s[name],
+                num_aie_columns=cols,
             )
 
         for branch in ["reg_p3", "cls_p3"]:
@@ -692,6 +962,10 @@ class Int8DetectHeadPipeline(Int8ConvPipeline):
 
     def _detect_branch(self, x, branch_name):
         """Run a detect branch (2x CBS 3x3 + 1x Conv 1x1)."""
+        if self._weights_prepared:
+            for cv in ["cv1", "cv2"]:
+                x = self.int8_cbs_fast(x, _buf(f"det.{branch_name}.{cv}"))
+            return self.int8_conv_no_act_fast(x, _buf(f"det.{branch_name}.cv3"))
         for cv in ["cv1", "cv2"]:
             name = f"det.{branch_name}.{cv}"
             w, ws, b = lookup_weight(self.int8_weights, name)

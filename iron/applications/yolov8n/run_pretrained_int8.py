@@ -46,7 +46,6 @@ from iron.applications.yolov8n.run_pretrained import (
     preprocess_image,
 )
 
-
 # -- Per-stage calibration percentile ----------------------------------------
 
 # Per-stage percentile map.  Controls how aggressively outlier activations
@@ -102,9 +101,7 @@ class Int8YOLOv8nPipeline(Int8ConvPipeline):
         s = self.shifts
 
         def reg(name, ic, oc, h, w, ks, stride):
-            self._register_int8_conv(
-                _buf(name), ic, oc, h, w, ks, stride, s[name]
-            )
+            self._register_int8_conv(_buf(name), ic, oc, h, w, ks, stride, s[name])
 
         # ---- BACKBONE ----
         reg("l0", 8, 16, 640, 640, 3, 2)
@@ -203,6 +200,8 @@ class Int8YOLOv8nPipeline(Int8ConvPipeline):
 
     def _cbs(self, x, name):
         """Run CBS layer: int8 conv NPU -> dequant -> bias -> SiLU."""
+        if self._weights_prepared:
+            return self.int8_cbs_fast(x, _buf(name))
         w, ws, b = lookup_weight(self.int8_weights, name)
         pred = PRED_MAP[name]
         in_scale = self.act_scales.get(pred, 1.0)
@@ -225,6 +224,10 @@ class Int8YOLOv8nPipeline(Int8ConvPipeline):
 
     def _detect_branch(self, x, branch_name):
         """Run a detect branch (2x CBS 3x3 + 1x Conv 1x1)."""
+        if self._weights_prepared:
+            for cv in ["cv1", "cv2"]:
+                x = self.int8_cbs_fast(x, _buf(f"det.{branch_name}.{cv}"))
+            return self.int8_conv_no_act_fast(x, _buf(f"det.{branch_name}.cv3"))
         for cv in ["cv1", "cv2"]:
             name = f"det.{branch_name}.{cv}"
             w, ws, b = lookup_weight(self.int8_weights, name)
@@ -331,15 +334,9 @@ class Int8YOLOv8nPipeline(Int8ConvPipeline):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Run YOLOv8n with int8 convs on NPU"
-    )
-    parser.add_argument(
-        "--image", default="test_bus.jpg", help="Path to test image"
-    )
-    parser.add_argument(
-        "--model", default="yolov8n.pt", help="Path to YOLOv8n weights"
-    )
+    parser = argparse.ArgumentParser(description="Run YOLOv8n with int8 convs on NPU")
+    parser.add_argument("--image", default="test_bus.jpg", help="Path to test image")
+    parser.add_argument("--model", default="yolov8n.pt", help="Path to YOLOv8n weights")
     args = parser.parse_args()
 
     image_path = Path(args.image)
@@ -382,11 +379,10 @@ def main():
 
     t0 = time.time()
     ctx = AIEContext(use_runlist=False)
-    pipeline = Int8YOLOv8nPipeline(
-        shifts, act_scales, int8_weights, context=ctx
-    )
+    pipeline = Int8YOLOv8nPipeline(shifts, act_scales, int8_weights, context=ctx)
     ctx.compile_all()
     ctx.prepare_runtime()
+    pipeline.prepare_weights()
     prep_t = time.time() - t0
     n_pdis = len(pipeline._pdi_map)
     print(f"Ready: {n_pdis} PDIs, compiled+prepared in {prep_t:.1f}s")
@@ -401,6 +397,7 @@ def main():
     result = pipeline.forward(img_tensor)
     fwd_t = time.time() - t0_fwd
     print(f"Forward: {fwd_t:.3f}s")
+    pipeline.print_profile()
 
     # -- Step 5: Post-process -----------------------------------------------
 
@@ -418,11 +415,7 @@ def main():
             box = detections["boxes"][i].tolist()
             score = detections["scores"][i].item()
             label = detections["labels"][i].item()
-            name = (
-                COCO_NAMES[label]
-                if label < len(COCO_NAMES)
-                else f"class_{label}"
-            )
+            name = COCO_NAMES[label] if label < len(COCO_NAMES) else f"class_{label}"
             print(
                 f"    {name}: {score:.3f} at "
                 f"[{box[0]:.0f},{box[1]:.0f},{box[2]:.0f},{box[3]:.0f}]"
@@ -449,11 +442,7 @@ def main():
             box = cpu_detections["boxes"][i].tolist()
             score = cpu_detections["scores"][i].item()
             label = cpu_detections["labels"][i].item()
-            name = (
-                COCO_NAMES[label]
-                if label < len(COCO_NAMES)
-                else f"class_{label}"
-            )
+            name = COCO_NAMES[label] if label < len(COCO_NAMES) else f"class_{label}"
             print(
                 f"    {name}: {score:.3f} at "
                 f"[{box[0]:.0f},{box[1]:.0f},{box[2]:.0f},{box[3]:.0f}]"
@@ -462,27 +451,35 @@ def main():
     # Feature map comparison
     print(f"\n  NPU vs CPU int8 feature map comparison:")
     for scale_name, npu_reg, npu_cls, cpu_reg, cpu_cls in [
-        ("P3", result["reg"][0], result["cls"][0],
-         cpu_result["reg"][0], cpu_result["cls"][0]),
-        ("P4", result["reg"][1], result["cls"][1],
-         cpu_result["reg"][1], cpu_result["cls"][1]),
-        ("P5", result["reg"][2], result["cls"][2],
-         cpu_result["reg"][2], cpu_result["cls"][2]),
+        (
+            "P3",
+            result["reg"][0],
+            result["cls"][0],
+            cpu_result["reg"][0],
+            cpu_result["cls"][0],
+        ),
+        (
+            "P4",
+            result["reg"][1],
+            result["cls"][1],
+            cpu_result["reg"][1],
+            cpu_result["cls"][1],
+        ),
+        (
+            "P5",
+            result["reg"][2],
+            result["cls"][2],
+            cpu_result["reg"][2],
+            cpu_result["cls"][2],
+        ),
     ]:
         reg_corr = torch.corrcoef(
-            torch.stack([
-                npu_reg.float().flatten(), cpu_reg.float().flatten()
-            ])
+            torch.stack([npu_reg.float().flatten(), cpu_reg.float().flatten()])
         )[0, 1].item()
         cls_corr = torch.corrcoef(
-            torch.stack([
-                npu_cls.float().flatten(), cpu_cls.float().flatten()
-            ])
+            torch.stack([npu_cls.float().flatten(), cpu_cls.float().flatten()])
         )[0, 1].item()
-        print(
-            f"    {scale_name}: reg_corr={reg_corr:.4f}  "
-            f"cls_corr={cls_corr:.4f}"
-        )
+        print(f"    {scale_name}: reg_corr={reg_corr:.4f}  " f"cls_corr={cls_corr:.4f}")
 
     # -- Summary ------------------------------------------------------------
 
