@@ -819,15 +819,11 @@ void conv2dk3s2_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                         const int32_t output_channels, const int32_t check,
                         const int32_t shift1, const int32_t shift2) {
     int output_width = input_width / 2;
-    if (input_width % 8 == 0 && output_width % 8 == 0) {
-        conv2dk3s2_i8_silu_vectorized(line0, line1, line2, weights_and_bias,
-                                      output, input_width, input_channels,
-                                      output_channels, check, shift1, shift2);
-    } else {
-        conv2dk3s2_i8_silu_scalar(line0, line1, line2, weights_and_bias, output,
-                                  input_width, input_channels, output_channels,
-                                  check, shift1, shift2);
-    }
+    // Vectorized stride-2 SiLU has alignment bug at large widths (>80).
+    // Use scalar until fixed.
+    conv2dk3s2_i8_silu_scalar(line0, line1, line2, weights_and_bias, output,
+                              input_width, input_channels, output_channels,
+                              check, shift1, shift2);
 }
 
 } // extern "C"
