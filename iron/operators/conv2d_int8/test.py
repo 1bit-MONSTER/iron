@@ -14,7 +14,7 @@ from iron.operators.conv2d_int8.op import (
 )
 from iron.operators.conv2d_int8.reference import (
     conv2d_int8_reference,
-    conv2d_int8_fused_reference,
+    conv2d_int8_pade_silu_reference,
 )
 
 # Test parameters: (in_channels, out_channels, height, width)
@@ -152,8 +152,8 @@ def test_conv2d_int8_fused(
     """Test fused int8 conv + bias + SiLU operator against CPU reference.
 
     Uses the packed-bias kernel (bias appended to weight buffer).
-    Verifies the full integer SiLU pipeline: conv -> bias -> shift ->
-    LUT lookup -> multiply -> shift -> int8 output.
+    Verifies the Padé tanh SiLU pipeline: conv -> bias -> float ->
+    SiLU via Padé tanh -> requantize -> int8 output.
     """
     torch.manual_seed(42)
 
@@ -162,7 +162,7 @@ def test_conv2d_int8_fused(
     bias_int32 = torch.randint(-500, 501, (out_channels,), dtype=torch.int32)
 
     # CPU reference
-    ref_output = conv2d_int8_fused_reference(
+    ref_output = conv2d_int8_pade_silu_reference(
         x_int8, w_int8, bias_int32, shift1, shift2, stride=stride
     )
 

@@ -870,8 +870,8 @@ def my_conv2d_int8_k3_fused(
     # Kernel declaration (packed bias: 5 buffer args + 6 scalar args)
     if stride == 1:
         kernel = Kernel(
-            "conv2dk3_i8_fused_packed",
-            "conv2dk3_i8_fused_packed.o",
+            "conv2dk3_i8_silu",
+            "conv2dk3_i8_silu.o",
             [
                 input_row_ty,
                 input_row_ty,
@@ -888,8 +888,8 @@ def my_conv2d_int8_k3_fused(
         )
     else:
         kernel = Kernel(
-            "conv2dk3s2_i8_fused_packed",
-            "conv2dk3_i8_fused_packed.o",
+            "conv2dk3s2_i8_silu",
+            "conv2dk3_i8_silu.o",
             [
                 input_row_ty,
                 input_row_ty,
@@ -1306,6 +1306,192 @@ def my_conv2d_int8_fused(
                 sizes=[n_oc_groups, height, pe_d1, pe_d0],
                 strides=[oc_chunk*width, output_row_total, pe_d0, 1]),
                 wait=True, task_group=tg)
+            rt.finish_task_group(tg)
+
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())
+
+
+def my_conv2d_int8_silu(
+    dev, height, width, in_channels, out_channels, shift1, shift2,
+    kernel_obj="conv2dk1_i8_silu.o",
+):
+    """Fused 1x1 int8 conv+bias+SiLU using tanh (no LUT).
+
+    Same structure as my_conv2d_int8_fused but uses the conv2dk1_i8_silu
+    kernel which computes SiLU via Padé tanh (scalar) or hardware
+    aie::tanh<bfloat16> (vector) instead of a sigmoid LUT.
+
+    Bias packed at end of weight buffer. Supports OC streaming when
+    weights+bias don't fit in L1 (same as non-fused k1).
+    """
+    xfr_dtype = np.int8
+    _BD_WRAP_MAX = 64
+    assert in_channels % 8 == 0 and out_channels % 8 == 0
+
+    input_row_size = in_channels * width
+    total_input = in_channels * height * width
+    total_output = out_channels * height * width
+
+    # L1 budget: find oc_chunk that fits (including bias bytes)
+    n_oc_groups = 1
+    oc_chunk = out_channels
+    input_bufs = 2 * input_row_size  # depth=2
+    avail = 65536 - 1040 - input_bufs
+
+    if avail <= 0:
+        raise ValueError(f"k1 silu int8 infeasible: IC={in_channels}, W={width}")
+
+    wt_bytes = out_channels * in_channels + out_channels * 4  # weights + bias
+    out_bytes = 2 * out_channels * width  # depth=2 output
+    if wt_bytes + out_bytes > avail:
+        found = False
+        for try_oc in range(out_channels, 0, -8):
+            if out_channels % try_oc != 0 or try_oc % 8 != 0:
+                continue
+            wt_b = try_oc * in_channels + try_oc * 4
+            out_b = 2 * try_oc * width
+            if wt_b + out_b > avail:
+                continue
+            n_oc = out_channels // try_oc
+            if n_oc > _BD_WRAP_MAX:
+                continue
+            oc_chunk = try_oc
+            n_oc_groups = n_oc
+            found = True
+            break
+        if not found:
+            raise ValueError(
+                f"k1 silu int8 infeasible: "
+                f"IC={in_channels}, OC={out_channels}, W={width}"
+            )
+
+    wt_chunk_size = oc_chunk * in_channels + oc_chunk * 4
+    output_row_size = oc_chunk * width
+    total_wt = wt_chunk_size * n_oc_groups
+
+    dev_ty = NPU2()
+    in_ty = np.ndarray[(input_row_size,), np.dtype[xfr_dtype]]
+    wt_ty = np.ndarray[(wt_chunk_size,), np.dtype[xfr_dtype]]
+    out_ty = np.ndarray[(output_row_size,), np.dtype[xfr_dtype]]
+    in_l3_ty = np.ndarray[(total_input,), np.dtype[xfr_dtype]]
+    wt_l3_ty = np.ndarray[(total_wt,), np.dtype[xfr_dtype]]
+    out_l3_ty = np.ndarray[(total_output,), np.dtype[xfr_dtype]]
+
+    kernel = Kernel(
+        "conv2dk1_i8_silu", kernel_obj,
+        [in_ty, wt_ty, out_ty, np.int32, np.int32, np.int32, np.int32, np.int32],
+    )
+
+    from aie.iron.device import AnyMemTile
+
+    in_l3_fifo = ObjectFifo(in_ty, name="in_l3", depth=2)
+    in_fifo = in_l3_fifo.cons().forward(obj_type=in_ty, name="in_l1")
+    wt_fifo = ObjectFifo(wt_ty, name="wt", depth=1)
+    out_fifo = ObjectFifo(out_ty, name="out_l1", depth=2)
+    out_l3_fifo = out_fifo.cons().forward(obj_type=out_ty, name="out_l3")
+
+    def core_fn(oi, ow, oo, k):
+        s1, s2 = shift1, shift2
+        co = oc_chunk
+        for _ in range_(n_oc_groups):
+            wt = ow.acquire(1)
+            for _ in range_(height):
+                ei = oi.acquire(1)
+                eo = oo.acquire(1)
+                k(ei, wt, eo, width, in_channels, co, s1, s2)
+                oi.release(1)
+                oo.release(1)
+            ow.release(1)
+
+    worker = Worker(
+        core_fn, [in_fifo.cons(), wt_fifo.cons(), out_fifo.prod(), kernel]
+    )
+
+    rt = Runtime()
+    with rt.sequence(in_l3_ty, wt_l3_ty, out_l3_ty) as (I, W, O):
+        rt.start(worker)
+
+        if n_oc_groups == 1:
+            in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input)
+            rt.fill(
+                in_l3_fifo.prod(), I,
+                TensorAccessPattern(
+                    (1, total_input), offset=0,
+                    sizes=[in_d3, in_d2, in_d1, in_d0],
+                    strides=[
+                        in_d2 * in_d1 * in_d0, in_d1 * in_d0, in_d0, 1
+                    ],
+                ),
+            )
+            wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt)
+            rt.fill(
+                wt_fifo.prod(), W,
+                TensorAccessPattern(
+                    (1, total_wt), offset=0,
+                    sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+                    strides=[
+                        wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1
+                    ],
+                ),
+            )
+            out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output)
+            rt.drain(
+                out_l3_fifo.cons(), O,
+                TensorAccessPattern(
+                    (1, total_output), offset=0,
+                    sizes=[out_d3, out_d2, out_d1, out_d0],
+                    strides=[
+                        out_d2 * out_d1 * out_d0, out_d1 * out_d0, out_d0, 1
+                    ],
+                ),
+                wait=True,
+            )
+        else:
+            tg = rt.task_group()
+            in_d2, in_d1, in_d0 = _factorize_3d(total_input)
+            rt.fill(
+                in_l3_fifo.prod(), I,
+                TensorAccessPattern(
+                    (1, total_input), offset=0,
+                    sizes=[n_oc_groups, in_d2, in_d1, in_d0],
+                    strides=[0, in_d1 * in_d0, in_d0, 1],
+                ),
+                task_group=tg,
+            )
+            wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt)
+            rt.fill(
+                wt_fifo.prod(), W,
+                TensorAccessPattern(
+                    (1, total_wt), offset=0,
+                    sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+                    strides=[
+                        wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1
+                    ],
+                ),
+                task_group=tg,
+            )
+            output_row_total = out_channels * width
+            per_elem = output_row_size
+            pe_d0 = min(per_elem, 1023)
+            while pe_d0 % 4 != 0:
+                pe_d0 -= 1
+            while pe_d0 >= 4:
+                if per_elem % pe_d0 == 0:
+                    break
+                pe_d0 -= 4
+            pe_d1 = per_elem // pe_d0
+            rt.drain(
+                out_l3_fifo.cons(), O,
+                TensorAccessPattern(
+                    (1, total_output), offset=0,
+                    sizes=[n_oc_groups, height, pe_d1, pe_d0],
+                    strides=[
+                        oc_chunk * width, output_row_total, pe_d0, 1
+                    ],
+                ),
+                wait=True,
+                task_group=tg,
+            )
             rt.finish_task_group(tg)
 
     return Program(dev_ty, rt).resolve_program(SequentialPlacer())

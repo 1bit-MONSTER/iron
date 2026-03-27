@@ -103,3 +103,107 @@ def conv2d_int8_fused_reference(
     out_i8 = _srs_i8(silu, shift2)
 
     return out_i8.to(torch.int8)
+
+
+def conv2d_int8_fused_silu_reference(
+    x_int8, weight_int8, bias_int32, shift1, shift2, stride=1, padding=0
+):
+    """CPU reference for fused int8 conv + bias + SiLU using float tanh.
+
+    Uses continuous SiLU via tanh instead of LUT-based sigmoid:
+      1. int8 x int8 -> int32 convolution
+      2. Add pre-scaled int32 bias
+      3. Dequantize: float_val = acc * 2^(-shift1)
+      4. SiLU(x) = x * 0.5 * (1 + tanh(x/2))
+      5. Requantize: int8 out = clamp(round(silu * 2^shift2), -128, 127)
+
+    Args:
+        x_int8: Input [N, C_in, H, W] int8.
+        weight_int8: Weights [C_out, C_in, K, K] int8.
+        bias_int32: Bias [C_out] int32, pre-scaled.
+        shift1: Dequantization shift (acc -> float scale = 2^(-shift1)).
+        shift2: Requantization shift (float -> int8 scale = 2^shift2).
+        stride: Convolution stride (default 1).
+        padding: Convolution padding (default 0).
+
+    Returns:
+        Output [N, C_out, H_out, W_out] int8.
+    """
+    # 1. int8 conv -> int32
+    out_int32 = F.conv2d(
+        x_int8.int(), weight_int8.int(), stride=stride, padding=padding
+    )
+
+    # 2. Add bias
+    out_int32 = out_int32 + bias_int32.view(1, -1, 1, 1).int()
+
+    # 3. Dequantize to float
+    scale_in = 1.0 / (1 << shift1)
+    out_float = out_int32.float() * scale_in
+
+    # 4. SiLU via tanh: silu(x) = x * 0.5 * (1 + tanh(x/2))
+    silu_out = out_float * 0.5 * (1.0 + torch.tanh(out_float * 0.5))
+
+    # 5. Requantize to int8
+    scale_out = float(1 << shift2)
+    out_i8 = torch.clamp(torch.round(silu_out * scale_out), -128, 127)
+
+    return out_i8.to(torch.int8)
+
+
+def _pade_tanh(z):
+    """Padé [3/2] approximation to tanh, matching the AIE kernel.
+
+    tanh(z) ≈ z * (27 + z²) / (27 + 9*z²)   for |z²| ≤ 20
+    tanh(z) = sign(z)                          for |z²| > 20
+    """
+    z2 = z * z
+    result = z * (27.0 + z2) / (27.0 + 9.0 * z2)
+    # Saturate where |z| is large
+    result = torch.where(z2 > 20.0, torch.sign(z), result)
+    return result
+
+
+def conv2d_int8_pade_silu_reference(
+    x_int8, weight_int8, bias_int32, shift1, shift2, stride=1, padding=1
+):
+    """CPU reference for fused int8 conv + bias + SiLU using Padé tanh.
+
+    Matches the exact pipeline of conv2dk3_i8_silu:
+      1. int8 x int8 -> int32 convolution (padding=1)
+      2. Add pre-scaled int32 bias
+      3. Dequantize: float_val = acc / 2^shift1
+      4. SiLU(x) = x * 0.5 * (1 + tanh_pade(x/2))
+      5. Requantize: clamp(round(silu * 2^shift2), -128, 127)
+
+    Args:
+        x_int8: Input [N, C_in, H, W] int8.
+        weight_int8: Weights [C_out, C_in, 3, 3] int8.
+        bias_int32: Bias [C_out] int32, pre-scaled.
+        shift1: Dequantization shift (acc / 2^shift1).
+        shift2: Requantization shift (silu * 2^shift2).
+        stride: Convolution stride (1 or 2).
+        padding: Convolution padding (default 1).
+
+    Returns:
+        Output [N, C_out, H_out, W_out] int8.
+    """
+    # 1. int8 conv -> int32
+    out_int32 = F.conv2d(
+        x_int8.int(), weight_int8.int(), stride=stride, padding=padding
+    )
+
+    # 2. Add bias
+    out_int32 = out_int32 + bias_int32.view(1, -1, 1, 1).int()
+
+    # 3. Dequantize to float
+    out_float = out_int32.float() / float(1 << shift1)
+
+    # 4. SiLU via Padé tanh: silu(x) = x * 0.5 * (1 + tanh_pade(x/2))
+    silu_out = out_float * 0.5 * (1.0 + _pade_tanh(out_float * 0.5))
+
+    # 5. Requantize to int8
+    scale_out = float(1 << shift2)
+    out_i8 = torch.clamp(torch.round(silu_out * scale_out), -128, 127)
+
+    return out_i8.to(torch.int8)

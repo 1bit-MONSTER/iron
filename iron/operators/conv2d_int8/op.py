@@ -260,8 +260,8 @@ class AIEConv2dInt8(AIEOperatorBase):
                 self.shift2,
                 self.stride,
             ]
-            kernel_obj_name = "conv2dk3_i8_fused_packed.o"
-            kernel_src = "conv2dk3_i8_fused_packed.cc"
+            kernel_obj_name = "conv2dk3_i8_silu.o"
+            kernel_src = "conv2dk3_i8_silu.cc"
             kernel_extra_flags = ["-DINT8_ACT"]
         elif self.kernel_size == 3:
             file_name_base = (
@@ -286,9 +286,18 @@ class AIEConv2dInt8(AIEOperatorBase):
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
                 f"{self.height}h_{self.width}w_k1"
-                f"_fused_sh{self.shift1}_{self.shift2}"
+                f"_silu_sh{self.shift1}_{self.shift2}"
             )
-            callback_fn = "my_conv2d_int8_fused"
+            callback_fn = "my_conv2d_int8_silu"
+            # Vectorize when IC >= 24 and width is a multiple of 8
+            can_vec_silu = self.in_channels >= 24 and self.width % 8 == 0
+            if can_vec_silu:
+                kernel_obj_name = "conv2dk1_i8_silu_vec.o"
+                kernel_extra_flags = ["-DINT8_ACT"]
+            else:
+                kernel_obj_name = "conv2dk1_i8_silu_scalar.o"
+                kernel_extra_flags = ["-DINT8_ACT", "-DSCALAR"]
+            kernel_src = "conv2dk1_i8_silu.cc"
             callback_args = [
                 self.context.device_manager.device_type,
                 self.height,
@@ -297,10 +306,8 @@ class AIEConv2dInt8(AIEOperatorBase):
                 self.out_channels,
                 self.shift1,
                 self.shift2,
+                kernel_obj_name,
             ]
-            kernel_obj_name = "conv2dk1_i8_fused.o"
-            kernel_src = "conv2dk1_i8_fused.cc"
-            kernel_extra_flags = ["-DINT8_ACT"]
         else:
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
@@ -407,6 +414,11 @@ class AIEConv2dInt8(AIEOperatorBase):
             total_weights = n_oc_groups * wt_chunk_elems
         elif self.kernel_size == 3:
             total_weights = self.out_channels * self.in_channels * 9
+        elif self.fused and self.kernel_size == 1:
+            # Packed weight buffer: weights + bias (int32 = 4 bytes per OC)
+            total_weights = (
+                self.out_channels * self.in_channels + self.out_channels * 4
+            )
         else:
             total_weights = self.out_channels * self.in_channels
 
