@@ -313,17 +313,76 @@ Profile and reduce the ~3-4s of Python overhead in the forward pass:
 - Batch DMA sync operations
 **Expected savings: ~2-3s Python overhead → <1s**
 
-### Projected Performance with All Optimizations
+### Target: 60+ FPS (16.7ms per frame)
 
-| Optimization | Current | Savings | Projected |
-|-------------|---------|---------|-----------|
-| Baseline (all vectorized + Padé tanh) | 14.7s | — | 14.7s |
-| + Vectorized SiLU in kernel | | -4s | ~10.7s |
-| + Multi-core (4-8 columns) | | -2s | ~8.7s |
-| + Minimize Python overhead | | -2s | ~6.7s |
-| + Dataflow chaining | | -1s | ~5.7s |
-| + Static weight preloading | | -1s | ~4.7s |
-| **All combined** | | | **~4-5s** |
+Current: 14.7s (0.068 FPS). Target: 16.7ms (60 FPS). Gap: **880×**.
+
+### Path to 60 FPS
+
+**Phase 1: Software optimizations (14.7s → ~3s)**
+
+| Optimization | Savings | Projected |
+|-------------|---------|-----------|
+| Baseline (vectorized + Padé tanh) | — | 14.7s |
+| + Vectorized SiLU in kernel | -4s | ~10.7s |
+| + Multi-core (8 columns, 32 tiles) | -5s | ~5.7s |
+| + Minimize Python overhead | -2s | ~3.7s |
+| + Dataflow chaining (bottlenecks) | -0.7s | ~3s |
+
+**Phase 2: Eliminate Python from data path (~3s → ~200ms)**
+
+| Optimization | Savings | Projected |
+|-------------|---------|-----------|
+| xrt::runlist execution (all layers in 1 shot) | -2s | ~1s |
+| Static weight preload (0 weight DMA per frame) | -0.3s | ~700ms |
+| Pre-tiled activation buffers (skip host tiling) | -0.2s | ~500ms |
+| Buffer pooling (reuse same BOs across layers) | -0.1s | ~400ms |
+| Eliminate host sync between layers | -0.2s | ~200ms |
+
+**Phase 3: Hardware-level pipeline (~200ms → ~17ms)**
+
+| Optimization | Savings | Projected |
+|-------------|---------|-----------|
+| Full dataflow: entire model as 1 MLIR design | -100ms | ~100ms |
+| Double-buffered DMA pipeline (overlap I/O + compute) | -50ms | ~50ms |
+| All 32 compute tiles active simultaneously | -30ms | ~20ms |
+| Optimized DMA scheduling (minimize stalls) | -3ms | **~17ms = 60 FPS** |
+
+### Phase 3 Architecture (Full Dataflow)
+
+The ultimate design: the ENTIRE YOLOv8n model as a **single MLIR program** where
+activations flow core-to-core through ObjectFIFOs, never touching DDR between layers.
+
+```
+Image (DDR) → Shim DMA
+  → MemTile (L2 buffer)
+    → Core(0,2): L0 conv3x3s2 8→16   ──ObjectFIFO──→
+    → Core(0,3): L1 conv3x3s2 16→32  ──ObjectFIFO──→
+    → Core(0,4): L2 C2f cv1+bn       ──ObjectFIFO──→
+    → Core(1,2): L3 conv3x3s2 32→64  ──ObjectFIFO──→
+    → ... (chain continues through all layers)
+    → Core(7,4): Detect cv3           ──ObjectFIFO──→
+  ← MemTile
+← Shim DMA → Detect output (DDR)
+```
+
+Each core processes one layer continuously, receiving input from the previous
+core's ObjectFIFO and producing output to the next core's ObjectFIFO. All
+32 compute tiles active simultaneously in a **spatial pipeline**.
+
+**Key requirements for 60 FPS:**
+- All weights pre-loaded in L1/MemTile (no weight DMA per frame)
+- Activations stay on-chip between all layers (no DDR)
+- Double-buffered ObjectFIFOs for pipeline overlap
+- xrt::runlist executes the entire model in one NPU invocation
+- Host only touches input image and output detections
+
+**Compute budget at 60 FPS:**
+- 16.7ms total, ~68 conv layers
+- 245μs per layer average
+- With vectorized int8 MMUL: L0 (largest) takes ~6ms, smaller layers <1ms
+- Spatial pipeline: layers execute in PARALLEL, total = max(layer_time) ≈ 6ms
+- With 8-column parallelism: 6ms / 8 = 0.75ms → plenty of margin
 
 ## Hardware Constraints
 
