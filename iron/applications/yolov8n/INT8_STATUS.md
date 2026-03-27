@@ -266,6 +266,65 @@ Subsequent forward() calls skip weight DMA entirely.
 | + Static weights | -0.5s | **~2s** |
 | + Shared PDI (1 xclbin) | -0.3s | **~1.7s** |
 
+## Active Optimization Work
+
+### Task 1: Vectorized SiLU with `aie::tanh<bfloat16>()` (agent: vec-silu)
+Move the float Padé tanh SiLU computation INSIDE the vectorized kernel using the
+AIE2p hardware tanh intrinsic. Currently SiLU is scalar float after MMUL — vectorizing
+it with `aie::tanh<bfloat16>()` processes 8 elements per cycle.
+
+Pattern from existing `aie_kernels/aie2p/silu.cc`:
+```c
+auto half_x = aie::mul(acc, (bfloat16)0.5f);
+auto tanh_half_x = aie::tanh<bfloat16>(half_x.to_vector<float>());
+auto silu = aie::mul(acc, aie::add(tanh_half_x, (bfloat16)1.0f));
+```
+After int32 MMUL: convert accumulator to bf16, apply vectorized SiLU, convert to int8.
+**Expected savings: ~4s (scalar float SiLU overhead eliminated)**
+
+### Task 2: Multi-Core Scaling (agent: multi-core)
+Scale operators from 1 compute core to use all available cores (8 cols × 4 rows = 32 tiles).
+The bf16 model already uses `_auto_columns()` for multi-column output channel parallelism.
+
+For int8: add `num_columns` parameter to all int8 designs. Each column processes
+`oc_per_col = oc / num_columns` output channels on the same input (broadcast).
+- L0 (8→16 k3s2 640×640) with 4 columns: 6.2ms → ~1.5ms
+- Full model: ~2-3s compute → ~0.5-1s compute
+**Expected savings: ~2-3s (4× parallel compute)**
+
+### Task 3: Dataflow Chaining — Core-to-Core (agent: dataflow-chain)
+Chain adjacent conv layers within a single MLIR design using inter-core ObjectFIFOs.
+Keeps activations on-chip between layers instead of round-tripping through DDR.
+
+Target: Bottleneck block (two k3 convs):
+```
+Input (DDR) → Core0: conv3x3+SiLU → ObjectFIFO → Core1: conv3x3+SiLU → Output (DDR)
+```
+Eliminates 1 DDR write + 1 DDR read per bottleneck (~10 bottlenecks in YOLOv8n).
+Reference: `mlir-aie/programming_examples/ml/bottleneck/bottleneck.py`
+**Expected savings: ~1-2s (DDR round-trips eliminated)**
+
+### Task 4: Minimize Python Overhead (agent: minimize-python)
+Profile and reduce the ~3-4s of Python overhead in the forward pass:
+- Pre-tile weights at setup time (not every forward call)
+- Reuse XRT buffer objects across layers (avoid BO allocation)
+- Eliminate unnecessary output zero-fills before kernel calls
+- Minimize torch↔numpy conversions
+- Batch DMA sync operations
+**Expected savings: ~2-3s Python overhead → <1s**
+
+### Projected Performance with All Optimizations
+
+| Optimization | Current | Savings | Projected |
+|-------------|---------|---------|-----------|
+| Baseline (all vectorized + Padé tanh) | 14.7s | — | 14.7s |
+| + Vectorized SiLU in kernel | | -4s | ~10.7s |
+| + Multi-core (4-8 columns) | | -2s | ~8.7s |
+| + Minimize Python overhead | | -2s | ~6.7s |
+| + Dataflow chaining | | -1s | ~5.7s |
+| + Static weight preloading | | -1s | ~4.7s |
+| **All combined** | | | **~4-5s** |
+
 ## Hardware Constraints
 
 | Constraint | Limit | Impact |
