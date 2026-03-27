@@ -426,15 +426,17 @@ class Int8ConvPipeline(AIEOperatorBase):
     # -- Runlist chain infrastructure -------------------------------------------
 
     def setup_chain(self, chain_name, layer_names):
-        """Set up a runlist chain with dedicated BOs and output->input aliasing.
+        """Set up a runlist chain with ping-pong activation BOs.
 
-        All layers in the chain must be in the same xclbin group (same
-        hw_context). The output BO of layer N becomes the input BO of
-        layer N+1 (zero-copy aliasing on device).
+        Uses minimal BOs following production inference patterns:
+        - 2 activation BOs (ping-pong: layer N reads A/writes B,
+          layer N+1 reads B/writes A)
+        - 1 weight BO per layer (pre-filled at setup time)
 
-        Weight BOs are pre-filled and synced to device at setup time.
-        Subsequent run_chain() calls only write/sync the first input BO,
-        execute the runlist, and read the last output BO.
+        All layers must be in the same xclbin group (same hw_context).
+        The runlist executes all kernels in one NPU submission. Between
+        kernels, activations flow through shared BOs on-device with no
+        host involvement.
 
         Args:
             chain_name: Identifier for this chain.
@@ -456,80 +458,80 @@ class Int8ConvPipeline(AIEOperatorBase):
         first_kname = self._pdi_map[layer_names[0]]["kernel_name"]
         context = self.xrt_kernels[first_kname][0]
 
-        # Allocate dedicated BOs with output->input aliasing
-        chain_bos = {}
-        for i, lname in enumerate(layer_names):
-            in_sz = self.buffers[f"{lname}_input"]
-            w_sz = self.buffers[f"{lname}_weights"]
-            out_sz = self.buffers[f"{lname}_output"]
-
-            # Input BO: alias to previous layer's output BO
-            if i > 0:
-                prev_out = f"{layer_names[i - 1]}_output"
-                prev_out_sz = self.buffers[prev_out]
-                assert prev_out_sz >= in_sz, (
-                    f"Cannot alias: {prev_out} ({prev_out_sz}B) < "
-                    f"{lname}_input ({in_sz}B)"
-                )
-                chain_bos[f"{lname}_input"] = chain_bos[prev_out]
-            else:
-                chain_bos[f"{lname}_input"] = pyxrt.bo(
-                    device, align(in_sz), pyxrt.bo.host_only, 0x10000
-                )
-
-            # Weight BO: always dedicated
-            chain_bos[f"{lname}_weights"] = pyxrt.bo(
-                device, align(w_sz), pyxrt.bo.host_only, 0x10000
-            )
-
-            # Output BO: always dedicated (may be aliased by next layer's input)
-            chain_bos[f"{lname}_output"] = pyxrt.bo(
-                device, align(out_sz), pyxrt.bo.host_only, 0x10000
-            )
-
-        # Pre-fill weight BOs and sync to device
+        # Compute max activation size for ping-pong BOs
+        max_act_sz = 0
         for lname in layer_names:
+            max_act_sz = max(
+                max_act_sz,
+                self.buffers[f"{lname}_input"],
+                self.buffers[f"{lname}_output"],
+            )
+
+        # Allocate 2 ping-pong activation BOs (sized to max activation)
+        act_bo_a = pyxrt.bo(device, align(max_act_sz), pyxrt.bo.host_only, 0x10000)
+        act_bo_b = pyxrt.bo(device, align(max_act_sz), pyxrt.bo.host_only, 0x10000)
+
+        # Allocate per-layer weight BOs, pre-fill and sync
+        weight_bos = {}
+        for lname in layer_names:
+            w_sz = self.buffers[f"{lname}_weights"]
+            w_bo = pyxrt.bo(device, align(w_sz), pyxrt.bo.host_only, 0x10000)
             cache = self._layer_cache[lname]
-            w_bo = chain_bos[f"{lname}_weights"]
             w_data = cache["tiled_weights"]
             mv = w_bo.map()
             dst = np.frombuffer(mv, dtype=np.uint8, count=w_bo.size())
             src = w_data.ravel().view(np.uint8)
             np.copyto(dst[: src.size], src, casting="no")
             w_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+            weight_bos[lname] = w_bo
 
-        # Sync all instruction BOs to device
+        # Pre-sync instruction BOs
         for lname in layer_names:
             kname = self._pdi_map[lname]["kernel_name"]
             _, _, insts_bo, _ = self.xrt_kernels[kname]
             insts_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
 
-        # Build runlist
+        # Build runlist with ping-pong activation pattern
         runlist = pyxrt.runlist(context)
-        for lname in layer_names:
+        for i, lname in enumerate(layer_names):
             kname = self._pdi_map[lname]["kernel_name"]
             _, xrt_kernel, insts_bo, insts_len = self.xrt_kernels[kname]
+
+            # Ping-pong: even layers read A/write B, odd layers read B/write A
+            if i % 2 == 0:
+                in_bo, out_bo = act_bo_a, act_bo_b
+            else:
+                in_bo, out_bo = act_bo_b, act_bo_a
+
             run = pyxrt.run(xrt_kernel)
             run.set_arg(0, 3)  # opcode
             run.set_arg(1, insts_bo)
             run.set_arg(2, insts_len)
-            run.set_arg(3, chain_bos[f"{lname}_input"])
-            run.set_arg(4, chain_bos[f"{lname}_weights"])
-            run.set_arg(5, chain_bos[f"{lname}_output"])
+            run.set_arg(3, in_bo)
+            run.set_arg(4, weight_bos[lname])
+            run.set_arg(5, out_bo)
             runlist.add(run)
+
+        # Determine which BO holds first input and last output
+        n = len(layer_names)
+        last_output_bo = act_bo_b if (n - 1) % 2 == 0 else act_bo_a
 
         self._chains[chain_name] = {
             "layers": layer_names,
-            "bos": chain_bos,
+            "act_bo_a": act_bo_a,
+            "act_bo_b": act_bo_b,
+            "weight_bos": weight_bos,
             "runlist": runlist,
+            "first_input_bo": act_bo_a,  # always starts with A
+            "last_output_bo": last_output_bo,
         }
 
     def run_chain(self, chain_name, x_int8):
         """Execute a chain via runlist: single NPU submission.
 
-        Writes tiled int8 input to first layer's input BO, executes the
-        runlist (all kernels in one NPU submission), reads tiled output
-        from last layer's output BO.
+        Writes tiled int8 input to BO_A, executes the runlist (all kernels
+        in one NPU submission with ping-pong activation flow), reads tiled
+        output from the last layer's output BO.
 
         Args:
             chain_name: Chain identifier from setup_chain().
@@ -540,13 +542,11 @@ class Int8ConvPipeline(AIEOperatorBase):
         """
         chain = self._chains[chain_name]
         layers = chain["layers"]
-        bos = chain["bos"]
 
-        # Tile input and write to first layer's input BO
-        first_lname = layers[0]
+        # Tile input and write to BO_A (first layer always reads from A)
         t0 = _time.perf_counter()
         input_tiled = nchw_to_tiled_int8(x_int8)
-        in_bo = bos[f"{first_lname}_input"]
+        in_bo = chain["first_input_bo"]
         mv = in_bo.map()
         dst = np.frombuffer(mv, dtype=np.uint8, count=in_bo.size())
         src = input_tiled.ravel().view(np.uint8)
@@ -567,7 +567,7 @@ class Int8ConvPipeline(AIEOperatorBase):
         total_output = sub_op.out_channels * oh * ow
 
         t0 = _time.perf_counter()
-        out_bo = bos[f"{last_lname}_output"]
+        out_bo = chain["last_output_bo"]
         out_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
         mv = out_bo.map()
         output_flat = np.frombuffer(mv, dtype=np.int8, count=total_output).copy()
@@ -577,7 +577,7 @@ class Int8ConvPipeline(AIEOperatorBase):
         return out_int8
 
     def benchmark_chain(self, chain_name, x_int8, n_iter=20, warmup=5):
-        """Benchmark a chain: measure runlist execution time.
+        """Benchmark a chain: measure runlist vs per-layer execution time.
 
         Args:
             chain_name: Chain identifier from setup_chain().
@@ -590,11 +590,10 @@ class Int8ConvPipeline(AIEOperatorBase):
         """
         chain = self._chains[chain_name]
         layers = chain["layers"]
-        bos = chain["bos"]
 
-        # Pre-tile input once
+        # Pre-tile input once and write to BO_A
         input_tiled = nchw_to_tiled_int8(x_int8)
-        in_bo = bos[f"{layers[0]}_input"]
+        in_bo = chain["first_input_bo"]
         mv = in_bo.map()
         dst = np.frombuffer(mv, dtype=np.uint8, count=in_bo.size())
         src = input_tiled.ravel().view(np.uint8)
@@ -619,17 +618,24 @@ class Int8ConvPipeline(AIEOperatorBase):
         mn = min(times_ms)
         mx = max(times_ms)
 
-        # Also measure per-layer individual execution for comparison
+        # Per-layer individual execution for comparison (same BOs, same data)
         per_layer_times = []
         for _ in range(n_iter):
+            # Re-write input for fair comparison
+            in_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
             total = 0.0
-            for lname in layers:
+            for i, lname in enumerate(layers):
                 kname = self._pdi_map[lname]["kernel_name"]
-                ctx, xrt_kernel, insts_bo, insts_len = self.xrt_kernels[kname]
+                _, xrt_kernel, insts_bo, insts_len = self.xrt_kernels[kname]
+
+                # Use same ping-pong pattern as the runlist
+                if i % 2 == 0:
+                    in_b, out_b = chain["act_bo_a"], chain["act_bo_b"]
+                else:
+                    in_b, out_b = chain["act_bo_b"], chain["act_bo_a"]
+                w_b = chain["weight_bos"][lname]
+
                 insts_bo.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
-                in_b = bos[f"{lname}_input"]
-                w_b = bos[f"{lname}_weights"]
-                out_b = bos[f"{lname}_output"]
                 in_b.sync(pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
                 t0 = _time.perf_counter()
                 r = xrt_kernel(3, insts_bo, insts_len, in_b, w_b, out_b)

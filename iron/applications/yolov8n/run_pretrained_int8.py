@@ -125,12 +125,34 @@ class Int8YOLOv8nPipeline(Int8ConvPipeline):
             shift = s[name]
             if fused and isinstance(shift, tuple):
                 s1, s2 = shift
-                self._register_int8_conv(_buf(name), ic, oc, h, w, ks, stride, s1,
-                                          fused=True, shift1=s1, shift2=s2)
+                self._register_int8_conv(
+                    _buf(name),
+                    ic,
+                    oc,
+                    h,
+                    w,
+                    ks,
+                    stride,
+                    s1,
+                    fused=True,
+                    shift1=s1,
+                    shift2=s2,
+                )
             elif fused:
                 # Compute fused shifts from calibration
-                self._register_int8_conv(_buf(name), ic, oc, h, w, ks, stride, shift,
-                                          fused=True, shift1=shift, shift2=8)
+                self._register_int8_conv(
+                    _buf(name),
+                    ic,
+                    oc,
+                    h,
+                    w,
+                    ks,
+                    stride,
+                    shift,
+                    fused=True,
+                    shift1=shift,
+                    shift2=8,
+                )
             else:
                 self._register_int8_conv(_buf(name), ic, oc, h, w, ks, stride, shift)
 
@@ -232,8 +254,8 @@ class Int8YOLOv8nPipeline(Int8ConvPipeline):
     def _cbs(self, x, name):
         """Run CBS layer: fused int8 conv+bias+SiLU on NPU (no Python SiLU)."""
         buf_name = _buf(name)
-        entry = self._get_layer_entry(buf_name)
-        if hasattr(entry.get('sub_op', None), 'fused') and entry['sub_op'].fused:
+        entry = self._pdi_map[buf_name]
+        if getattr(entry.get("sub_op"), "fused", False):
             return self.int8_cbs_fused_fast(x, buf_name)
         if self._weights_prepared:
             return self.int8_cbs_fast(x, buf_name)
@@ -516,6 +538,118 @@ def main():
         )[0, 1].item()
         print(f"    {scale_name}: reg_corr={reg_corr:.4f}  " f"cls_corr={cls_corr:.4f}")
 
+    # -- Step 7: Runlist chain benchmark --------------------------------------
+
+    print(f"\n{'=' * 70}")
+    print("Runlist Chain Benchmark")
+    print(f"{'=' * 70}")
+
+    # Prepare int8 input for L0 (padded 3ch -> 8ch, quantized)
+    x_pad = F.pad(img_tensor.float(), (0, 0, 0, 0, 0, 5))  # [1,8,640,640]
+    l0_in_scale = act_scales.get("input", 1.0)
+    if l0_in_scale == 0:
+        l0_in_scale = 1.0
+    x_int8 = torch.clamp(torch.round(x_pad / l0_in_scale), -128, 127).to(torch.int8)
+
+    # --- Single-layer chain (L0 only) - verify correctness ---
+    print("\n  [Chain: L0 only (1 layer)]")
+    pipeline.setup_chain("l0_only", [_buf("l0")])
+
+    # Run L0 via chain
+    chain_out = pipeline.run_chain("l0_only", x_int8)
+
+    # Run L0 individually for comparison
+    input_tiled = nchw_to_tiled_int8(x_int8)
+    pipeline.write_buffer(f"{_buf('l0')}_input", input_tiled)
+    pipeline._run_single_kernel(
+        pipeline._pdi_map[_buf("l0")]["kernel_name"],
+        f"{_buf('l0')}_input",
+        f"{_buf('l0')}_weights",
+        f"{_buf('l0')}_output",
+    )
+    sub_op = pipeline._pdi_map[_buf("l0")]["sub_op"]
+    total_out = sub_op.out_channels * sub_op.out_height * sub_op.out_width
+    ref_flat = pipeline.read_buffer(
+        f"{_buf('l0')}_output", (total_out,), copy=True, dtype=np.int8
+    )
+    ref_out = tiled_to_nchw_int8(
+        ref_flat, sub_op.out_channels, sub_op.out_height, sub_op.out_width
+    )
+
+    # Compare
+    match = torch.equal(chain_out, ref_out)
+    print(f"    Chain vs individual: {'MATCH' if match else 'MISMATCH'}")
+    if not match:
+        diff = (chain_out.int() - ref_out.int()).abs()
+        print(
+            f"    Max diff: {diff.max().item()}, Mean diff: {diff.float().mean().item():.2f}"
+        )
+
+    # Benchmark single-layer chain
+    stats_l0 = pipeline.benchmark_chain("l0_only", x_int8, n_iter=20, warmup=5)
+    print(
+        f"    Runlist:    {stats_l0['runlist_avg_ms']:.2f}ms avg "
+        f"(min={stats_l0['runlist_min_ms']:.2f}, max={stats_l0['runlist_max_ms']:.2f})"
+    )
+    print(f"    Per-layer:  {stats_l0['per_layer_avg_ms']:.2f}ms avg")
+    print(f"    Speedup:    {stats_l0['speedup']:.2f}x")
+
+    # --- Two-layer chain (L0 -> L1) - verify & benchmark ---
+    print(f"\n  [Chain: L0 -> L1 (2 layers)]")
+    pipeline.setup_chain("l0_l1", [_buf("l0"), _buf("l1")])
+
+    # Run L0->L1 via chain
+    chain_out_2 = pipeline.run_chain("l0_l1", x_int8)
+
+    # Run L0->L1 individually for comparison (raw int8 output->input, no SiLU)
+    # Step 1: Run L0
+    pipeline.write_buffer(f"{_buf('l0')}_input", input_tiled)
+    pipeline._run_single_kernel(
+        pipeline._pdi_map[_buf("l0")]["kernel_name"],
+        f"{_buf('l0')}_input",
+        f"{_buf('l0')}_weights",
+        f"{_buf('l0')}_output",
+    )
+    # Step 2: Copy L0 raw tiled output directly to L1 input (same as chain aliasing)
+    l0_sub = pipeline._pdi_map[_buf("l0")]["sub_op"]
+    l0_out_sz = l0_sub.out_channels * l0_sub.out_height * l0_sub.out_width
+    l0_raw = pipeline.read_buffer(
+        f"{_buf('l0')}_output", (l0_out_sz,), copy=True, dtype=np.int8
+    )
+    pipeline.write_buffer(f"{_buf('l1')}_input", l0_raw)
+    pipeline._run_single_kernel(
+        pipeline._pdi_map[_buf("l1")]["kernel_name"],
+        f"{_buf('l1')}_input",
+        f"{_buf('l1')}_weights",
+        f"{_buf('l1')}_output",
+    )
+    l1_sub = pipeline._pdi_map[_buf("l1")]["sub_op"]
+    l1_out_sz = l1_sub.out_channels * l1_sub.out_height * l1_sub.out_width
+    ref_flat_2 = pipeline.read_buffer(
+        f"{_buf('l1')}_output", (l1_out_sz,), copy=True, dtype=np.int8
+    )
+    ref_out_2 = tiled_to_nchw_int8(
+        ref_flat_2, l1_sub.out_channels, l1_sub.out_height, l1_sub.out_width
+    )
+
+    # Compare
+    match_2 = torch.equal(chain_out_2, ref_out_2)
+    print(f"    Chain vs individual: {'MATCH' if match_2 else 'MISMATCH'}")
+    if not match_2:
+        diff_2 = (chain_out_2.int() - ref_out_2.int()).abs()
+        print(
+            f"    Max diff: {diff_2.max().item()}, Mean diff: {diff_2.float().mean().item():.2f}"
+        )
+
+    # Benchmark two-layer chain
+    stats_l01 = pipeline.benchmark_chain("l0_l1", x_int8, n_iter=20, warmup=5)
+    print(
+        f"    Runlist:    {stats_l01['runlist_avg_ms']:.2f}ms avg "
+        f"(min={stats_l01['runlist_min_ms']:.2f}, max={stats_l01['runlist_max_ms']:.2f})"
+    )
+    print(f"    Per-layer:  {stats_l01['per_layer_avg_ms']:.2f}ms avg")
+    print(f"    Speedup:    {stats_l01['speedup']:.2f}x")
+
     # -- Summary ------------------------------------------------------------
 
     print(f"\n{'=' * 70}")
@@ -526,6 +660,14 @@ def main():
     print(f"Forward:   {fwd_t:.3f}s")
     print(f"NPU int8:  {n_boxes} detections (conf>0.25)")
     print(f"CPU int8:  {n_cpu} detections (conf>0.25)")
+    print(
+        f"Runlist L0:    {stats_l0['speedup']:.2f}x speedup "
+        f"({stats_l0['per_layer_avg_ms']:.2f} -> {stats_l0['runlist_avg_ms']:.2f}ms)"
+    )
+    print(
+        f"Runlist L0+L1: {stats_l01['speedup']:.2f}x speedup "
+        f"({stats_l01['per_layer_avg_ms']:.2f} -> {stats_l01['runlist_avg_ms']:.2f}ms)"
+    )
     print()
 
     if n_boxes >= 2:
