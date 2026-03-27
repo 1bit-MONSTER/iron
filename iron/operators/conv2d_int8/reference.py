@@ -144,8 +144,8 @@ def conv2d_int8_fused_silu_reference(
     # 4. SiLU via tanh: silu(x) = x * 0.5 * (1 + tanh(x/2))
     silu_out = out_float * 0.5 * (1.0 + torch.tanh(out_float * 0.5))
 
-    # 5. Requantize to int8
-    scale_out = float(1 << shift2)
+    # 5. Requantize to int8 (shift2 is fixed-point 8.8: scale = shift2/256)
+    scale_out = float(shift2) / 256.0
     out_i8 = torch.clamp(torch.round(silu_out * scale_out), -128, 127)
 
     return out_i8.to(torch.int8)
@@ -202,8 +202,8 @@ def conv2d_int8_pade_silu_reference(
     # 4. SiLU via Padé tanh: silu(x) = x * 0.5 * (1 + tanh_pade(x/2))
     silu_out = out_float * 0.5 * (1.0 + _pade_tanh(out_float * 0.5))
 
-    # 5. Requantize to int8
-    scale_out = float(1 << shift2)
+    # 5. Requantize to int8 (shift2 is fixed-point 8.8: scale = shift2/256)
+    scale_out = float(shift2) / 256.0
     out_i8 = torch.clamp(torch.round(silu_out * scale_out), -128, 127)
 
     return out_i8.to(torch.int8)

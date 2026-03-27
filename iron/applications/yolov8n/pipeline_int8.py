@@ -1012,13 +1012,15 @@ def compute_fused_shifts(w_scale, in_act_scale, out_act_scale):
       2. Add int32 bias (pre-scaled to accumulator domain)
       3. Dequant: float_val = acc * 2^(-shift1)
       4. SiLU(float_val)
-      5. Requant: int8 = clamp(round(silu * 2^shift2), -128, 127)
+      5. Requant: int8 = clamp(round(silu * scale_out), -128, 127)
+         where scale_out = shift2 / 256.0 (fixed-point 8.8)
 
     shift1 maps the accumulator to actual float values:
         shift1 = round(log2(1 / (in_act_scale * w_scale)))
 
-    shift2 maps the SiLU output to int8 at the output activation scale:
-        shift2 = round(log2(1 / out_act_scale))
+    shift2 is a fixed-point 8.8 scale factor (NOT a bit shift):
+        shift2 = round(256.0 / out_act_scale)
+    This eliminates power-of-2 rounding error that compounds across layers.
 
     Args:
         w_scale: Per-tensor weight scale.
@@ -1026,7 +1028,8 @@ def compute_fused_shifts(w_scale, in_act_scale, out_act_scale):
         out_act_scale: Output activation scale (post-SiLU, from calibration).
 
     Returns:
-        (shift1, shift2) tuple, each clamped to [1, 31].
+        (shift1, shift2) tuple. shift1 clamped to [1, 31].
+        shift2 is fixed-point 8.8, clamped to [1, 32767].
     """
     combined = w_scale * in_act_scale
     if combined == 0:
@@ -1036,10 +1039,10 @@ def compute_fused_shifts(w_scale, in_act_scale, out_act_scale):
     shift1 = max(1, min(31, shift1))
 
     if out_act_scale == 0:
-        shift2 = 10
+        shift2 = 256 * 10  # fallback
     else:
-        shift2 = round(math.log2(max(1.0 / out_act_scale, 1.0)))
-    shift2 = max(1, min(31, shift2))
+        shift2 = round(256.0 / out_act_scale)
+    shift2 = max(1, min(32767, shift2))  # int32-safe
 
     return shift1, shift2
 
@@ -1215,8 +1218,9 @@ def compute_all_shifts(int8_weights, act_scales, fused=True):
         name for name in PRED_MAP if name.endswith(".cv3")
     }
 
-    # Effective output scales: tracks the actual int8 scale for each layer,
-    # accounting for shift rounding. Initialized from calibration.
+    # With fixed-point shift2, the effective output scale is exact:
+    # scale_out = shift2 / 256.0, so effective_out_scale = 256.0 / shift2.
+    # Propagate this to next layer's input scale for correct chaining.
     effective_scales = dict(act_scales)
 
     shifts = {}
@@ -1232,15 +1236,16 @@ def compute_all_shifts(int8_weights, act_scales, fused=True):
                 w_scale, in_act_scale, out_act_scale
             )
             shifts[layer_name] = (s1, s2)
-            # Propagate the effective output scale: 1/2^shift2
-            effective_scales[layer_name] = 1.0 / float(1 << s2)
+            # Propagate effective output scale: 256/shift2
+            if s2 > 0:
+                effective_scales[layer_name] = 256.0 / float(s2)
+            else:
+                effective_scales[layer_name] = out_act_scale
         else:
             shifts[layer_name] = compute_layer_shift(
                 w_scale, in_act_scale, out_act_scale
             )
-            # Non-fused layers use the calibrated output scale directly
 
-    # Return both shifts and effective scales so weight packing can use them
     if fused:
         return shifts, effective_scales
     return shifts

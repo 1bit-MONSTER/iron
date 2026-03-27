@@ -70,6 +70,9 @@ inline int8_t *select_line(int kh, int8_t *line0, int8_t *line1,
 // where tanh is approximated by the Padé [3/2] form:
 //   tanh(z) ≈ z * (27 + z²) / (27 + 9*z²)
 // ---------------------------------------------------------------------------
+// shift2 is a fixed-point 8.8 scale factor (upper bits: integer, lower 8: fraction).
+// scale_out = shift2 / 256.0f. This provides exact requantization without
+// power-of-2 rounding error that compounds across layers.
 inline int8_t pade_silu_i8(int32_t acc, int32_t shift1, int32_t shift2) {
     float val = (float)acc / (float)(1 << shift1);
     float z = val * 0.5f;
@@ -81,7 +84,8 @@ inline int8_t pade_silu_i8(int32_t acc, int32_t shift1, int32_t shift2) {
         tanh_z = z * (27.0f + z2) / (27.0f + 9.0f * z2);
     }
     float silu_val = val * 0.5f * (1.0f + tanh_z);
-    float scaled = silu_val * (float)(1 << shift2);
+    float scale_out = (float)shift2 / 256.0f;
+    float scaled = silu_val * scale_out;
     int32_t out_i32 = (scaled >= 0) ? (int32_t)(scaled + 0.5f)
                                     : (int32_t)(scaled - 0.5f);
     if (out_i32 > 127)

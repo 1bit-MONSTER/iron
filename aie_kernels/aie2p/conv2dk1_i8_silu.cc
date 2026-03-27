@@ -87,7 +87,7 @@ static void conv2dk1_i8_silu_scalar_row(
         (int32_t *)(weights_and_bias + output_channels * input_channels);
 
     float scale_in = 1.0f / (float)(1 << shift1);
-    float scale_out = (float)(1 << shift2);
+    float scale_out = (float)shift2 / 256.0f;
 
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
         for (int x = 0; x < input_width; x++) {
@@ -157,7 +157,7 @@ static void conv2dk1_i8_silu_vector_row(
     int8_t *kernels = weights_and_bias;
 
     float scale_in = 1.0f / (float)(1 << shift1);
-    float scale_out = (float)(1 << shift2);
+    float scale_out = (float)shift2 / 256.0f;
 
     const int iw = input_width;
     const int ic_iters = input_channels / CHANNEL_FACTOR;
