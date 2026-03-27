@@ -301,7 +301,7 @@ void conv2dk3_i8_silu_vectorized(
     ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
     float scale_in = 1.0f / (float)(1 << shift1);
-    float scale_out = (float)(1 << shift2);
+    float scale_out = (float)shift2 / 256.0f;  // fixed-point 8.8
 
     // SiLU constants
     aie::vector<bfloat16, 8> half_v =
@@ -314,6 +314,12 @@ void conv2dk3_i8_silu_vectorized(
     alignas(64) bfloat16 bf16_buf[8];
     alignas(64) int8_t out_buf[MMUL::size_C];
 
+    // Pre-evaluate check conditions outside inner loop to avoid
+    // runtime-variable control flow inside pipelined hardware ops
+    // (Chess compiler can generate incorrect code otherwise).
+    const bool do_kh0 = (check != CHECK_TOP);
+    const bool do_kh2 = (check != CHECK_BOTTOM);
+
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
         for (int vi = 0; vi < vec_iters; vi++) {
             int x_base = vi * NUM_W;
@@ -321,8 +327,8 @@ void conv2dk3_i8_silu_vectorized(
             MMUL acc;
             acc = aie::zeros<acc32, MMUL::size_C>();
 
-            // kh=0: skip if top border (check == CHECK_TOP)
-            if (check != CHECK_TOP) {
+            // kh=0: skip if top border
+            if (do_kh0) {
                 for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
                     int8_t *__restrict lp =
                         lines[0] + ic_g * (input_width * 8);
@@ -411,8 +417,8 @@ void conv2dk3_i8_silu_vectorized(
                             wp + 2 * wt_stride_kw));
             }
 
-            // kh=2: skip if bottom border (check == CHECK_BOTTOM)
-            if (check != CHECK_BOTTOM) {
+            // kh=2: skip if bottom border
+            if (do_kh2) {
                 for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
                     int8_t *__restrict lp =
                         lines[2] + ic_g * (input_width * 8);
@@ -605,7 +611,7 @@ void conv2dk3s2_i8_silu_vectorized(
     ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
     float scale_in = 1.0f / (float)(1 << shift1);
-    float scale_out = (float)(1 << shift2);
+    float scale_out = (float)shift2 / 256.0f;  // fixed-point 8.8
 
     aie::vector<bfloat16, 8> half_v =
         aie::broadcast<bfloat16, 8>((bfloat16)0.5f);
@@ -806,8 +812,8 @@ void conv2dk3_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                       const int32_t input_width, const int32_t input_channels,
                       const int32_t output_channels, const int32_t check,
                       const int32_t shift1, const int32_t shift2) {
-    // Vectorized stride-1 SiLU produces incorrect results and timeouts
-    // at large widths (>80). Use scalar until vectorized is debugged.
+    // Vectorized stride-1 SiLU still has errors and timeouts at large sizes.
+    // Use scalar Padé tanh path which is verified exact at all sizes.
     conv2dk3_i8_silu_scalar(line0, line1, line2, weights_and_bias, output,
                             input_width, input_channels, output_channels,
                             check, shift1, shift2);
