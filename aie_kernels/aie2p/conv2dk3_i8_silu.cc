@@ -767,4 +767,30 @@ void conv2dk3s2_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
     }
 }
 
+// Aliases for multi-kernel designs where different MLIR types need
+// separate func.func symbols but call the same implementation.
+void conv2dk3s2_i8_silu_l5(int8_t *line0, int8_t *line1, int8_t *line2,
+                            int8_t *weights_and_bias, int8_t *output,
+                            const int32_t input_width,
+                            const int32_t input_channels,
+                            const int32_t output_channels,
+                            const int32_t check, const int32_t shift1,
+                            const int32_t shift2) {
+    conv2dk3s2_i8_silu(line0, line1, line2, weights_and_bias, output,
+                        input_width, input_channels, output_channels, check,
+                        shift1, shift2);
+}
+
+void conv2dk3s2_i8_silu_l7(int8_t *line0, int8_t *line1, int8_t *line2,
+                            int8_t *weights_and_bias, int8_t *output,
+                            const int32_t input_width,
+                            const int32_t input_channels,
+                            const int32_t output_channels,
+                            const int32_t check, const int32_t shift1,
+                            const int32_t shift2) {
+    conv2dk3s2_i8_silu(line0, line1, line2, weights_and_bias, output,
+                        input_width, input_channels, output_channels, check,
+                        shift1, shift2);
+}
+
 } // extern "C"
