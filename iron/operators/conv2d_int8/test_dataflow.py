@@ -3570,10 +3570,12 @@ def test_dataflow_c2f_l2_simple(
 
 
 class AIEDataflowC2fL2Full(AIEOperatorBase):
-    """Full C2f L2: fused SiLU, 48ch concat [cv1_out|bn0_out].
+    """Full C2f L2: fused SiLU, 48ch concat [half1|half2|bn0_out].
 
-    Uses fused conv+SiLU kernels. cv2 takes 48ch input (32ch from cv1
-    pass-through + 16ch from bottleneck output) concatenated at MemTile.
+    Uses fused conv+SiLU kernels. cv2 takes 48ch input (16ch half1 +
+    16ch half2 + 16ch bottleneck output) concatenated at MemTile.
+    Core B forwards half2 rows to join while doing k3 conv; bn_inter
+    to Core C uses neighboring tile transfer (no DMA channels).
     """
 
     def __init__(
@@ -3605,7 +3607,7 @@ class AIEDataflowC2fL2Full(AIEOperatorBase):
 
         self.cv1_oc = 32
         self.bn_ch = 16
-        self.cv2_ic = 32
+        self.cv2_ic = 48
         self.cv2_oc = 32
 
         self.xclbin_artifact = None
@@ -3654,15 +3656,15 @@ class AIEDataflowC2fL2Full(AIEOperatorBase):
             extra_flags=["-DINT8_ACT"],
         )
 
-        # bn k3 SiLU kernel (renamed symbol for separate MLIR type)
-        k3_silu_bn_obj = KernelObjectArtifact.new(
-            "conv2dk3_i8_silu_bn.o",
+        # bn k3 SiLU kernel + passthrough_fwd (combined .o for Core B)
+        k3_silu_bn_fwd_obj = KernelObjectArtifact.new(
+            "conv2dk3_i8_silu_bn_fwd.o",
             depends=[
                 SourceArtifact.new(
                     self.context.base_dir
                     / "aie_kernels"
                     / "aie2p"
-                    / "conv2dk3_i8_silu.cc"
+                    / "conv2dk3_i8_silu_fwd.cc"
                 )
             ],
             extra_flags=[
@@ -3708,7 +3710,7 @@ class AIEDataflowC2fL2Full(AIEOperatorBase):
             depends=[
                 mlir_artifact,
                 k1_silu_obj,
-                k3_silu_bn_obj,
+                k3_silu_bn_fwd_obj,
                 passthrough_obj,
                 k1_silu_cv2_obj,
             ],
@@ -3765,6 +3767,11 @@ def _pack_k1_silu_weights(w_int8, b_int32):
         pytest.param(8, 8, 32, 10, 7, 10, 7, 10, 7, 10, 7, id="c2f_full_8x8"),
         pytest.param(16, 16, 32, 10, 7, 10, 7, 10, 7, 10, 7, id="c2f_full_16x16"),
         pytest.param(32, 32, 32, 10, 7, 10, 7, 10, 7, 10, 7, id="c2f_full_32x32"),
+        pytest.param(
+            160, 160, 32, 10, 7, 10, 7, 10, 7, 10, 7,
+            id="c2f_full_160x160",
+            marks=pytest.mark.extensive,
+        ),
     ],
 )
 def test_dataflow_c2f_l2_full(
@@ -3781,11 +3788,11 @@ def test_dataflow_c2f_l2_full(
     cv2_s2,
     aie_context,
 ):
-    """Test full C2f L2: fused SiLU, 32ch concat [half1|bn0_out] for cv2."""
+    """Test full C2f L2: fused SiLU, 48ch concat [half1|half2|bn0_out] for cv2."""
     torch.manual_seed(42)
 
     bn_ch = 16
-    cv2_ic = 32  # 16ch half1 + 16ch bn0_out
+    cv2_ic = 48  # 16ch half1 + 16ch half2 + 16ch bn0_out
     cv2_oc = 32
 
     # Test data
@@ -3816,8 +3823,8 @@ def test_dataflow_c2f_l2_full(
     bn_out = conv2d_int8_pade_silu_reference(
         bn_inter, w_bn2, b_bn2, bn2_s1, bn2_s2, stride=1, padding=1
     )
-    # Concat: [half1(16ch) | bn_out(16ch)] = 32ch
-    concat = torch.cat([half1, bn_out], dim=1)
+    # Concat: [half1(16ch) | half2(16ch) | bn_out(16ch)] = 48ch
+    concat = torch.cat([half1, half2, bn_out], dim=1)
     # cv2 fused SiLU
     ref = conv2d_int8_pade_silu_reference(
         concat, w_cv2, b_cv2, cv2_s1, cv2_s2, stride=1, padding=0

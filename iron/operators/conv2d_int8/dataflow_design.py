@@ -3476,31 +3476,35 @@ def my_dataflow_c2f_l2_simple(
 
 
 # ---------------------------------------------------------------------------
-# C2f L2 full: fused SiLU, 48ch concat [cv1_out(32) | bn0_out(16)],
+# C2f L2 full: fused SiLU, 48ch concat [half1(16)|half2(16)|bn0_out(16)],
 # optional residual add.
 #
 # Builds on the simplified C2f by:
 #   1. Replacing non-fused conv with fused conv+SiLU (bias packed in weights)
-#   2. Adding 48ch concat for cv2 (was 16ch in simple)
-#   3. Adding optional residual add (bn0.cv2 output += half2)
+#   2. Adding 48ch concat for cv2: [half1|half2|bn0_out] = 48ch
+#   3. Core B forwards half2 to join while doing k3 conv (neighboring bn_inter
+#      to Core C saves DMA channels, freeing an output DMA for half2_fwd)
 #
 # Core mapping (5 cores, 2 columns):
 #   Core A (0,2): cv1 k1 SiLU, 32->32ch
-#   Core B (0,3): bn0.cv1 k3s1 SiLU, 16->16ch
+#   Core B (0,3): bn0.cv1 k3s1 SiLU, 16->16ch + half2 fwd to join
+#                 (bn_inter to Core C is neighboring -> no DMA channel used)
 #   Core C (0,4): bn0.cv2 k3s1 SiLU, 16->16ch
-#   Core D (0,5): passthrough 32ch (cv1_fwd -> join input)
-#   Core E (1,2): cv2 k1 SiLU, 48->32ch
+#   Core D (1,2): passthrough 16ch (half1 -> join)
+#   Core E (1,3): cv2 k1 SiLU, 48->32ch
 #
 # MemTile(0,1):
 #   - wts_all split: 1 in -> 4 out (cv1, bn1, bn2, cv2)
-#   - cv1_out split: 1 in -> 2 out (half2_to_bn, cv1_to_join)
-#   Total: 2 in + 6 out = within MemTile DMA limits
 #
 # MemTile(1,1):
-#   - join: cv1_fwd(32ch) + bn_out(16ch) -> cv2_in(48ch)
+#   - cv1_out split: 1 in -> 2 out (half1_to_join, half2_to_bn)
+#   - join: half1(16ch) + half2_fwd(16ch) + bn_out(16ch) -> cv2_in(48ch)
 #
-# The concat [half1|half2|bn0_out] = [cv1_out|bn0_out] since
-# cv1_out already contains [half1|half2] in channel order.
+# DMA budget (Core B, key tile):
+#   Input DMA 1: half2_to_bn (from MemTile split)
+#   Input DMA 2: wt_bn1 (from MemTile weight split)
+#   Output DMA 1: half2_fwd (to MemTile join)
+#   Neighboring: bn_inter to Core C (no DMA channel)
 # ---------------------------------------------------------------------------
 
 
@@ -3535,7 +3539,7 @@ def my_dataflow_c2f_l2_full(
     assert in_channels == 32
     cv1_oc = 32
     bn_ch = 16
-    cv2_ic = 32  # 16ch half1 + 16ch bn0_out (joined at MemTile)
+    cv2_ic = 48  # 16ch half1 + 16ch half2 + 16ch bn0_out (joined at MemTile)
     cv2_oc = 32
 
     # Row sizes
@@ -3563,14 +3567,22 @@ def my_dataflow_c2f_l2_full(
     coreA = 1040 + 2 * input_row + wt_slot + 2 * cv1_out_row
     assert coreA <= 65536, f"Core A L1: {coreA}B"
 
-    coreB = 1040 + (bn_depth + 1) * half_row + wt_slot + 2 * half_row
+    # Core B: input(half2, depth=bn_depth) + wt + bn_inter(neighboring, depth=bn_depth)
+    #         + j_h2(depth=2) output to join
+    coreB = (
+        1040
+        + (bn_depth + 1) * half_row
+        + wt_slot
+        + bn_depth * half_row
+        + 2 * half_row
+    )
     assert coreB <= 65536, f"Core B L1: {coreB}B"
 
     coreC = 1040 + (bn_depth + 1) * half_row + wt_slot + 2 * half_row
     assert coreC <= 65536, f"Core C L1: {coreC}B"
 
-    coreD = 1040 + 2 * cv2_in_row + wt_slot + 2 * cv2_out_row
-    assert coreD <= 65536, f"Core D (cv2) L1: {coreD}B"
+    coreE = 1040 + 2 * cv2_in_row + wt_slot + 2 * cv2_out_row
+    assert coreE <= 65536, f"Core E (cv2) L1: {coreE}B"
 
     dev_ty = NPU2()
 
@@ -3605,7 +3617,7 @@ def my_dataflow_c2f_l2_full(
 
     k3_silu_bn_kernel = Kernel(
         "conv2dk3_i8_silu_bn",
-        "conv2dk3_i8_silu_bn.o",
+        "conv2dk3_i8_silu_bn_fwd.o",
         [
             half_row_ty,
             half_row_ty,
@@ -3624,6 +3636,17 @@ def my_dataflow_c2f_l2_full(
     passthrough_kernel = Kernel(
         "passthrough_i8",
         "passthrough_i8.o",
+        [
+            half_row_ty,
+            half_row_ty,
+            np.int32,
+        ],
+    )
+
+    # Passthrough for half2 forwarding — same .o as k3_silu_bn_kernel
+    passthrough_fwd_kernel = Kernel(
+        "passthrough_i8_fwd",
+        "conv2dk3_i8_silu_bn_fwd.o",
         [
             half_row_ty,
             half_row_ty,
@@ -3675,14 +3698,15 @@ def my_dataflow_c2f_l2_full(
 
     bn_inter = ObjectFifo(half_row_ty, name="bn_inter", depth=bn_depth)
 
-    # Join at MemTile(1,1): [half1(16ch) | bn0_out(16ch)] = 32ch
-    # j_h1 is fed by half1_to_join from the split
-    # j_bn is used directly as bn0.cv2's output FIFO (Core C writes to j_bn.prod())
+    # Join at MemTile(1,1): [half1(16ch) | half2(16ch) | bn0_out(16ch)] = 48ch
+    # j_h1 is fed by passthrough Core D (half1 from split)
+    # j_h2 is fed by Core B (half2 forwarded during k3 conv)
+    # j_bn is fed by Core C (bn0.cv2 output)
     cv2_in = ObjectFifo(cv2_in_row_ty, name="cv2_in", depth=2)
-    j_h1, j_bn = cv2_in.prod().join(
-        offsets=[0, half_row],
-        obj_types=[half_row_ty, half_row_ty],
-        names=["j_h1", "j_bn"],
+    j_h1, j_h2, j_bn = cv2_in.prod().join(
+        offsets=[0, half_row, 2 * half_row],
+        obj_types=[half_row_ty, half_row_ty, half_row_ty],
+        names=["j_h1", "j_h2", "j_bn"],
         placement=Tile(1, 1),
     )
 
@@ -3705,41 +3729,64 @@ def my_dataflow_c2f_l2_full(
             of_out.release(1)
         of_wt.release(1)
 
-    def core_fn_bn(of_in, of_wt, of_out, kernel_fn):
+    def core_fn_bn_with_fwd(of_in, of_wt, of_out, of_fwd, kernel_fn, fwd_fn):
+        """bn0.cv1: k3 stride-1 SiLU + forward half2 rows to join.
+
+        Interleaves half2 forwarding with k3 sliding window processing.
+        Each input row is forwarded exactly once as it first appears:
+          - Top: forward rows 0,1 (from acquire(2))
+          - Each middle iter: forward the new row (elems[2] from acquire(3))
+          - Bottom: no new rows to forward
+        Total forwarded = 2 + (h-2) = h rows.
+        """
         w = width
         ci = bn_ch
         co = bn_ch
         h = height
+        sz = half_row
+        s1 = bn_cv1_shift1
+        s2 = bn_cv1_shift2
 
-        def _run_k3s1(s1, s2):
-            elem_wt = of_wt.acquire(1)
+        elem_wt = of_wt.acquire(1)
 
-            # Top row: check=0
-            elems = of_in.acquire(2)
+        # --- Top row: check=0 ---
+        elems = of_in.acquire(2)
+        # Forward rows 0 and 1
+        fwd0 = of_fwd.acquire(1)
+        fwd_fn(elems[0], fwd0, sz)
+        of_fwd.release(1)
+        fwd1 = of_fwd.acquire(1)
+        fwd_fn(elems[1], fwd1, sz)
+        of_fwd.release(1)
+        # Conv top
+        eo = of_out.acquire(1)
+        kernel_fn(elems[0], elems[0], elems[1], elem_wt, eo, w, ci, co, 0, s1, s2)
+        of_out.release(1)
+
+        # --- Middle rows: check=1 ---
+        for _ in range_(h - 2):
+            elems = of_in.acquire(3)
+            # Forward the newly acquired row (elems[2])
+            fwd_e = of_fwd.acquire(1)
+            fwd_fn(elems[2], fwd_e, sz)
+            of_fwd.release(1)
+            # Conv middle
             eo = of_out.acquire(1)
-            kernel_fn(elems[0], elems[0], elems[1], elem_wt, eo, w, ci, co, 0, s1, s2)
+            kernel_fn(
+                elems[0], elems[1], elems[2], elem_wt, eo, w, ci, co, 1, s1, s2
+            )
+            of_in.release(1)
             of_out.release(1)
 
-            # Middle rows: check=1
-            for _ in range_(h - 2):
-                elems = of_in.acquire(3)
-                eo = of_out.acquire(1)
-                kernel_fn(
-                    elems[0], elems[1], elems[2], elem_wt, eo, w, ci, co, 1, s1, s2
-                )
-                of_in.release(1)
-                of_out.release(1)
+        # --- Bottom row: check=2 ---
+        elems = of_in.acquire(2)
+        # No new rows to forward (already forwarded in middle loop)
+        eo = of_out.acquire(1)
+        kernel_fn(elems[0], elems[1], elems[1], elem_wt, eo, w, ci, co, 2, s1, s2)
+        of_in.release(2)
+        of_out.release(1)
 
-            # Bottom row: check=2
-            elems = of_in.acquire(2)
-            eo = of_out.acquire(1)
-            kernel_fn(elems[0], elems[1], elems[1], elem_wt, eo, w, ci, co, 2, s1, s2)
-            of_in.release(2)
-            of_out.release(1)
-
-            of_wt.release(1)
-
-        _run_k3s1(bn_cv1_shift1, bn_cv1_shift2)
+        of_wt.release(1)
 
     def core_fn_bn_cv2(of_in, of_wt, of_out, kernel_fn):
         w = width
@@ -3800,13 +3847,18 @@ def my_dataflow_c2f_l2_full(
         [in_fifo.cons(), wt_cv1_f.cons(), cv1_out.prod(), k1_silu_kernel],
         placement=Tile(0, 2),
     )
+    # Core B: k3 conv + half2 forwarding. bn_inter to Core C is neighboring
+    # (same column, adjacent rows 3→4) so doesn't use DMA channels. This
+    # frees an output DMA for half2_fwd (j_h2) to the MemTile join.
     worker_bn1 = Worker(
-        core_fn_bn,
+        core_fn_bn_with_fwd,
         [
             half2_to_bn.cons(bn_depth),
             wt_bn1_f.cons(),
             bn_inter.prod(),
+            j_h2.prod(),
             k3_silu_bn_kernel,
+            passthrough_fwd_kernel,
         ],
         placement=Tile(0, 3),
     )
@@ -3825,6 +3877,7 @@ def my_dataflow_c2f_l2_full(
         [half1_to_join.cons(), j_h1.prod(), passthrough_kernel],
         placement=Tile(1, 2),
     )
+    # Core E: cv2 now takes 48ch input [half1|half2|bn0_out]
     worker_cv2 = Worker(
         core_fn_cv2,
         [cv2_in.cons(), wt_cv2_f.cons(), out_fifo.prod(), k1_silu_cv2_kernel],

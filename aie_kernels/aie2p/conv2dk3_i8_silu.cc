@@ -183,22 +183,25 @@ void conv2dk3s2_i8_silu_scalar(int8_t *line0, int8_t *line1, int8_t *line2,
 // This function is marked noinline to prevent the Peano compiler from
 // mixing MMUL register allocation with float SiLU operations.
 // ---------------------------------------------------------------------------
+// apply_silu_vec16: process 64 int8 conv values through SiLU.
+//
+// Runs with the caller's saturation/rounding modes (saturate + symmetric_inf)
+// unchanged. The bf16 .to_vector<bfloat16>() calls differ by at most 1 ULP
+// vs floor rounding, well within int8 tolerance. The final float-to-int8
+// conversion uses explicit rounding and clamping, unaffected by HW modes.
+//
+// NOT changing modes eliminates the Peano auto-pipelining codegen issue
+// where mode switches between MMUL SRS and float SiLU overlap across
+// loop iterations at vec_iters >= 10.
 __attribute__((noinline)) static void apply_silu_vec16(
     int8_t *__restrict conv_buf,
     int32_t *__restrict bias, int32_t oc_g,
     int8_t *__restrict out_buf, int32_t shift1, int32_t shift2) {
 
-    // Reset saturation/rounding modes for float SiLU computation.
-    // The caller sets saturate + symmetric_inf for MMUL SRS which can
-    // corrupt float-to-int conversions if left active.
-    ::aie::set_saturation(aie::saturation_mode::none);
-    ::aie::set_rounding(aie::rounding_mode::floor);
-
     float dequant = 1.0f / (float)(1 << shift1);
     float scale_out = (float)shift2 / 256.0f;
 
     // Pre-compute bias in bf16 for all 8 channels, replicated for vec-16
-    // bias_bf16[0..7] = bias[oc_g*8 + 0..7] * dequant, as bf16
     alignas(64) bfloat16 bias_bf16[16];
     for (int ch = 0; ch < 8; ch++) {
         bfloat16 bv = (bfloat16)((float)bias[oc_g * 8 + ch] * dequant);
@@ -216,9 +219,7 @@ __attribute__((noinline)) static void apply_silu_vec16(
     aie::vector<bfloat16, 16> bias_v = aie::load_v<16>(bias_bf16);
 
     // Process 64 elements in 4 groups of 16.
-    // Each group = 2 spatial positions x 8 channels.
     // conv_buf layout: [sp0_ch0..7, sp1_ch0..7, ..., sp7_ch0..7]
-    // bias pattern repeats every 8 elements: bias_v = [ch0..7, ch0..7]
     alignas(64) bfloat16 bf16_tmp[16];
 
     for (int g = 0; g < 4; g++) {
@@ -233,7 +234,6 @@ __attribute__((noinline)) static void apply_silu_vec16(
 
         // SiLU(x) = x * 0.5 * (1 + tanh(x/2))
         auto half_x = aie::mul(x_bf16, half_v);
-        // aie::tanh<bfloat16> takes a float vector, returns bfloat16 vector
         aie::vector<bfloat16, 16> tanh_hx =
             aie::tanh<bfloat16>(half_x.to_vector<float>());
         aie::vector<bfloat16, 16> one_plus_tanh = aie::add(tanh_hx, one_v);
@@ -254,10 +254,6 @@ __attribute__((noinline)) static void apply_silu_vec16(
             out_buf[g * 16 + i] = (int8_t)oval;
         }
     }
-
-    // Restore modes for the next MMUL iteration
-    ::aie::set_saturation(aie::saturation_mode::saturate);
-    ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 }
 
 // ---------------------------------------------------------------------------
@@ -324,6 +320,7 @@ void conv2dk3_i8_silu_vec_top(
     const int vec_iters = input_width / NUM_W;
     aie::vector<int8, MMUL::size_A> zeros_v = aie::zeros<int8, MMUL::size_A>();
 
+    // Set modes once; apply_silu_vec16 no longer changes them.
     ::aie::set_saturation(aie::saturation_mode::saturate);
     ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
@@ -354,9 +351,6 @@ void conv2dk3_i8_silu_vec_top(
                          aie::load_v<MMUL::size_C>(out_buf));
         }
     }
-
-    ::aie::set_saturation(aie::saturation_mode::none);
-    ::aie::set_rounding(aie::rounding_mode::floor);
 }
 
 // MIDDLE: process all three kh rows
@@ -382,6 +376,7 @@ void conv2dk3_i8_silu_vec_mid(
     const int vec_iters = input_width / NUM_W;
     aie::vector<int8, MMUL::size_A> zeros_v = aie::zeros<int8, MMUL::size_A>();
 
+    // Set modes once; apply_silu_vec16 no longer changes them.
     ::aie::set_saturation(aie::saturation_mode::saturate);
     ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
@@ -418,9 +413,6 @@ void conv2dk3_i8_silu_vec_mid(
                          aie::load_v<MMUL::size_C>(out_buf));
         }
     }
-
-    ::aie::set_saturation(aie::saturation_mode::none);
-    ::aie::set_rounding(aie::rounding_mode::floor);
 }
 
 // BOTTOM: process kh=0,1, skip kh=2
@@ -446,6 +438,7 @@ void conv2dk3_i8_silu_vec_bot(
     const int vec_iters = input_width / NUM_W;
     aie::vector<int8, MMUL::size_A> zeros_v = aie::zeros<int8, MMUL::size_A>();
 
+    // Set modes once; apply_silu_vec16 no longer changes them.
     ::aie::set_saturation(aie::saturation_mode::saturate);
     ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
@@ -476,9 +469,6 @@ void conv2dk3_i8_silu_vec_bot(
                          aie::load_v<MMUL::size_C>(out_buf));
         }
     }
-
-    ::aie::set_saturation(aie::saturation_mode::none);
-    ::aie::set_rounding(aie::rounding_mode::floor);
 }
 
 // ---------------------------------------------------------------------------
@@ -576,9 +566,6 @@ void conv2dk3s2_i8_silu_vec_top(
                          aie::load_v<MMUL::size_C>(out_buf));
         }
     }
-
-    ::aie::set_saturation(aie::saturation_mode::none);
-    ::aie::set_rounding(aie::rounding_mode::floor);
 }
 
 // Stride-2 MIDDLE: process all three kh rows
@@ -641,9 +628,6 @@ void conv2dk3s2_i8_silu_vec_mid(
                          aie::load_v<MMUL::size_C>(out_buf));
         }
     }
-
-    ::aie::set_saturation(aie::saturation_mode::none);
-    ::aie::set_rounding(aie::rounding_mode::floor);
 }
 
 // Stride-2 BOTTOM: process kh=0,1, skip kh=2
@@ -700,9 +684,6 @@ void conv2dk3s2_i8_silu_vec_bot(
                          aie::load_v<MMUL::size_C>(out_buf));
         }
     }
-
-    ::aie::set_saturation(aie::saturation_mode::none);
-    ::aie::set_rounding(aie::rounding_mode::floor);
 }
 
 // ---------------------------------------------------------------------------
@@ -715,7 +696,7 @@ void conv2dk3_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                       const int32_t input_width, const int32_t input_channels,
                       const int32_t output_channels, const int32_t check,
                       const int32_t shift1, const int32_t shift2) {
-    if (input_width % 8 == 0) {
+    if (input_width % 8 == 0 && input_width <= 72) {
         event0();
         if (check == CHECK_TOP) {
             conv2dk3_i8_silu_vec_top(line0, line1, line2, weights_and_bias,
