@@ -1,22 +1,20 @@
 // SPDX-FileCopyrightText: Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Fused int8 1x1 Conv + Bias + SiLU kernel using hardware/Padé tanh.
+// Fused int8 1x1 Conv + Bias + SiLU kernel using hardware tanh (AIE2+).
 //
-// Replaces the sigmoid LUT approach with continuous SiLU:
-//   SiLU(x) = x * 0.5 * (1 + tanh(x/2))
+// Vectorized path (width%8==0, IC >= 8):
+//   MMUL MAC for convolution, extract via to_vector<int8>(shift1) which
+//   uses the srs_to_v64int8 hardware intrinsic for correct accumulator
+//   depermutation, upconvert to bf16, add pre-scaled bias in bf16 domain,
+//   apply vec-16 SiLU using hardware aie::tanh<bfloat16>(), requantize.
 //
-// Computation pipeline:
-//   1. int8 x int8 -> int32 convolution accumulation (1x1 pointwise)
-//   2. Add pre-scaled int32 bias
-//   3. Dequantize: float val = (float)acc * 2^(-shift1)
-//   4. SiLU in float via Padé tanh (scalar) or aie::tanh (vector)
-//   5. Requantize: int8 out = clamp(round(silu * 2^shift2), -128, 127)
+// SiLU(x) = x * sigmoid(x) = x * 0.5 * (1 + tanh(x/2))
 //
 // Interface: 3 buffers (input, weights_and_bias, output).
 // Bias packed at end of weights: [weights: OC*IC bytes] [bias: OC*4 bytes]
 //
-// Data layouts (same as conv2dk1_i8_fused.cc):
+// Data layouts:
 //   Input:   [C_in/8, W, 8]
 //   Weights: [C_out/8, C_in/8, 8, 8]  (last two: [ic8, oc8])
 //   Bias:    [C_out]  (int32, pre-scaled, packed after weights)
@@ -24,7 +22,7 @@
 //
 // Compile flags:
 //   -DINT8_ACT       Required
-//   -DSCALAR          Scalar path (Padé tanh)
+//   -DSCALAR          Scalar path (Pade tanh)
 //   (no -DSCALAR)    Vector path (MMUL MAC + aie::tanh<bfloat16>)
 
 #define NOCPP
@@ -42,7 +40,7 @@
 #ifdef INT8_ACT
 
 // ---------------------------------------------------------------------------
-// Padé rational approximation: tanh(z) ≈ z(27+z²)/(27+9z²)
+// Pade rational approximation: tanh(z) ~ z(27+z^2)/(27+9z^2)
 // Accurate to ~1e-4 for |z| < 4.5, clamps for |z| > ~4.5.
 // ---------------------------------------------------------------------------
 inline float pade_tanh(float z) {
@@ -70,7 +68,7 @@ inline int32_t float_to_int_round(float x) {
 #ifdef SCALAR
 
 // ---------------------------------------------------------------------------
-// Scalar: fused conv1x1 + bias + SiLU (Padé tanh)
+// Scalar: fused conv1x1 + bias + SiLU (Pade tanh)
 // ---------------------------------------------------------------------------
 static void conv2dk1_i8_silu_scalar_row(
     int8_t *input, int8_t *weights_and_bias, int8_t *output,
@@ -128,11 +126,91 @@ static void conv2dk1_i8_silu_scalar_row(
 #else // Vector
 
 // ---------------------------------------------------------------------------
-// Vectorized MAC + SiLU using aie::tanh<bfloat16>
+// Vectorized SiLU post-processing using hardware aie::tanh<bfloat16>
 //
-// MAC phase uses aie::mmul<8,8,8,int8,int8> (same as non-fused k1 vector).
-// After accumulation, extracts int32 values, adds bias, dequantizes to
-// bfloat16, applies SiLU via hardware tanh, requantizes to int8.
+// Processes 64 int8 values (one MMUL tile = 8 spatial x 8 channels):
+//   1. int8 conv result (from SRS, correct depermutation) in conv_buf
+//   2. Convert groups of 16 to bf16, add pre-scaled bias, apply SiLU
+//   3. Requantize back to int8
+//
+// This function is marked noinline to prevent the Peano compiler from
+// mixing MMUL register allocation with float SiLU operations.
+// ---------------------------------------------------------------------------
+__attribute__((noinline)) static void apply_silu_vec16_k1(
+    int8_t *__restrict conv_buf,
+    int32_t *__restrict bias, int32_t oc_g,
+    int8_t *__restrict out_buf, int32_t shift1, int32_t shift2) {
+
+    // Reset saturation/rounding modes for float SiLU computation.
+    ::aie::set_saturation(aie::saturation_mode::none);
+    ::aie::set_rounding(aie::rounding_mode::floor);
+
+    float dequant = 1.0f / (float)(1 << shift1);
+    float scale_out = (float)shift2 / 256.0f;
+
+    // Pre-compute bias in bf16, replicated for vec-16
+    alignas(64) bfloat16 bias_bf16[16];
+    for (int ch = 0; ch < 8; ch++) {
+        bfloat16 bv = (bfloat16)((float)bias[oc_g * 8 + ch] * dequant);
+        bias_bf16[ch] = bv;
+        bias_bf16[8 + ch] = bv;
+    }
+
+    // SiLU constants
+    aie::vector<bfloat16, 16> half_v =
+        aie::broadcast<bfloat16, 16>((bfloat16)0.5f);
+    aie::vector<bfloat16, 16> one_v =
+        aie::broadcast<bfloat16, 16>((bfloat16)1.0f);
+    aie::vector<bfloat16, 16> scale_v =
+        aie::broadcast<bfloat16, 16>((bfloat16)scale_out);
+    aie::vector<bfloat16, 16> bias_v = aie::load_v<16>(bias_bf16);
+
+    alignas(64) bfloat16 bf16_tmp[16];
+
+    for (int g = 0; g < 4; g++) {
+        // Convert 16 int8 values to bf16
+        for (int i = 0; i < 16; i++) {
+            bf16_tmp[i] = (bfloat16)(float)conv_buf[g * 16 + i];
+        }
+
+        // Load as vec-16, add bias, apply SiLU
+        aie::vector<bfloat16, 16> x_bf16 = aie::load_v<16>(bf16_tmp);
+        x_bf16 = aie::add(x_bf16, bias_v);
+
+        // SiLU(x) = x * 0.5 * (1 + tanh(x/2))
+        auto half_x = aie::mul(x_bf16, half_v);
+        aie::vector<bfloat16, 16> tanh_hx =
+            aie::tanh<bfloat16>(half_x.to_vector<float>());
+        aie::vector<bfloat16, 16> one_plus_tanh = aie::add(tanh_hx, one_v);
+        aie::vector<bfloat16, 16> sigmoid =
+            aie::mul(one_plus_tanh, half_v).to_vector<bfloat16>();
+        aie::vector<bfloat16, 16> silu =
+            aie::mul(x_bf16, sigmoid).to_vector<bfloat16>();
+
+        // Requantize: silu * scale_out -> int8
+        aie::vector<bfloat16, 16> scaled =
+            aie::mul(silu, scale_v).to_vector<bfloat16>();
+        aie::store_v(bf16_tmp, scaled);
+
+        for (int i = 0; i < 16; i++) {
+            float sval = (float)bf16_tmp[i];
+            int32_t oval = float_to_int_round(sval);
+            oval = (oval > 127) ? 127 : (oval < -128) ? -128 : oval;
+            out_buf[g * 16 + i] = (int8_t)oval;
+        }
+    }
+
+    // Restore modes for the next MMUL iteration
+    ::aie::set_saturation(aie::saturation_mode::saturate);
+    ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
+}
+
+// ---------------------------------------------------------------------------
+// Vectorized MAC + SiLU using MMUL int8 extraction + vec-16 hardware tanh
+//
+// MAC phase uses aie::mmul<8,8,8,int8,int8>.
+// After accumulation, extracts int8 via SRS (correct depermutation),
+// converts to bf16, adds bias, applies SiLU via hardware tanh, requantizes.
 // ---------------------------------------------------------------------------
 static void conv2dk1_i8_silu_vector_row(
     int8_t *input, int8_t *weights_and_bias, int8_t *output,
@@ -156,27 +234,16 @@ static void conv2dk1_i8_silu_vector_row(
         (int32_t *)(weights_and_bias + output_channels * input_channels);
     int8_t *kernels = weights_and_bias;
 
-    float scale_in = 1.0f / (float)(1 << shift1);
-    float scale_out = (float)shift2 / 256.0f;
-
     const int iw = input_width;
     const int ic_iters = input_channels / CHANNEL_FACTOR;
     const int oc_groups = output_channels / CHANNEL_FACTOR;
     const int w_iters = iw / MMUL_M; // process 8 spatial cols at a time
 
     int8_t *input_base = input;
-    int8_t *restrict out_ptr = output;
 
     // Temporary buffers on stack for SiLU processing
-    alignas(64) int32_t acc_buf[MMUL_MN];
-    alignas(64) bfloat16 bf16_buf[MMUL_N];
+    alignas(64) int8_t conv_buf[MMUL_MN];
     alignas(64) int8_t out_buf[MMUL_MN];
-
-    // SiLU constants for vectorized hardware tanh
-    aie::vector<bfloat16, MMUL_N> half_v =
-        aie::broadcast<bfloat16, MMUL_N>((bfloat16)0.5f);
-    aie::vector<bfloat16, MMUL_N> one_v =
-        aie::broadcast<bfloat16, MMUL_N>((bfloat16)1.0f);
 
     MMUL8x8x8 acc_mmul;
 
@@ -188,7 +255,7 @@ static void conv2dk1_i8_silu_vector_row(
             int8_t *in_ptr = input_base + wi * MMUL_MK;
             int8_t *wt_ptr = kernels + oc_g * ic_iters * MMUL_KN;
 
-            // Vectorized MAC over all IC groups (same as non-fused k1)
+            // Vectorized MAC over all IC groups
             for (int ic = 0; ic < ic_iters; ic++) {
                 aie::vector<int8, MMUL_KN> in_b =
                     aie::load_v<MMUL_KN>(wt_ptr);
@@ -201,51 +268,14 @@ static void conv2dk1_i8_silu_vector_row(
                 acc_mmul.mac(in_a, in_b);
             }
 
-            // Extract raw int32 accumulators
-            aie::vector<int32, MMUL_MN> acc_i32 =
-                acc_mmul.to_vector<int32>(0);
-            aie::store_v(acc_buf, acc_i32);
+            // Extract as int8 via SRS (correct depermutation)
+            aie::store_v(conv_buf, acc_mmul.to_vector<int8>(shift1));
 
-            // Vectorized SiLU: process 8 elements at a time
-            // (one spatial position = MMUL_N output channels)
-            for (int sp = 0; sp < MMUL_M; sp++) {
-                // Phase 1: add bias + dequantize (int32 -> bfloat16)
-                for (int j = 0; j < MMUL_N; j++) {
-                    int32_t val =
-                        acc_buf[sp * MMUL_N + j] + bias[oc_g * 8 + j];
-                    bf16_buf[j] =
-                        (bfloat16)((float)val * scale_in);
-                }
+            // Apply vectorized SiLU (noinline, resets/restores modes)
+            apply_silu_vec16_k1(conv_buf, bias, oc_g, out_buf, shift1, shift2);
 
-                // Phase 2: vectorized SiLU via hardware tanh
-                aie::vector<bfloat16, MMUL_N> x_bf16 =
-                    aie::load_v<MMUL_N>(bf16_buf);
-                auto half_x = aie::mul(x_bf16, half_v);
-                auto tanh_hx =
-                    aie::tanh<bfloat16>(half_x.to_vector<float>());
-                auto one_plus = aie::add(tanh_hx, one_v);
-                aie::vector<bfloat16, MMUL_N> sigmoid =
-                    aie::mul(one_plus, half_v);
-                auto silu_acc = aie::mul(x_bf16, sigmoid);
-                aie::vector<bfloat16, MMUL_N> silu_bf16 =
-                    silu_acc.to_vector<bfloat16>();
-
-                // Phase 3: requantize (bfloat16 -> int8)
-                aie::store_v(bf16_buf, silu_bf16);
-                for (int j = 0; j < MMUL_N; j++) {
-                    float sval = (float)bf16_buf[j];
-                    int32_t oval =
-                        float_to_int_round(sval * scale_out);
-                    oval = (oval > 127)    ? 127
-                           : (oval < -128) ? -128
-                                           : oval;
-                    out_buf[sp * MMUL_N + j] = (int8_t)oval;
-                }
-            }
-
-            // Store 64 int8 output values (layout matches tiled [w, 8])
-            int8_t *dst =
-                output + oc_g * (iw * 8) + wi * MMUL_MN;
+            // Store 64 int8 output values
+            int8_t *dst = output + oc_g * (iw * 8) + wi * MMUL_MN;
             aie::store_v(dst, aie::load_v<MMUL_MN>(out_buf));
         }
     }

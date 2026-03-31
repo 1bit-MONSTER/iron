@@ -173,8 +173,17 @@ def my_dataflow_l0(
         elems = of_in.acquire(2)
         elem_out = of_out.acquire(1)
         kernel_fn(
-            elems[0], elems[0], elems[1], elem_wt, elem_out,
-            x_dim, ci, co, 0, s1, s2,
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            s1,
+            s2,
         )
         of_in.release(1)
         of_out.release(1)
@@ -184,8 +193,17 @@ def my_dataflow_l0(
             elems = of_in.acquire(3)
             elem_out = of_out.acquire(1)
             kernel_fn(
-                elems[0], elems[1], elems[2], elem_wt, elem_out,
-                x_dim, ci, co, 1, s1, s2,
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                s1,
+                s2,
             )
             of_in.release(2)
             of_out.release(1)
@@ -432,8 +450,17 @@ def my_dataflow_l0_l1(
         elems = of_in.acquire(2)
         elem_out = of_inter.acquire(1)
         kernel_fn(
-            elems[0], elems[0], elems[1], elem_wt, elem_out,
-            x_dim, ci, co, 0, s1, s2,
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            s1,
+            s2,
         )
         of_in.release(1)
         of_inter.release(1)
@@ -443,8 +470,17 @@ def my_dataflow_l0_l1(
             elems = of_in.acquire(3)
             elem_out = of_inter.acquire(1)
             kernel_fn(
-                elems[0], elems[1], elems[2], elem_wt, elem_out,
-                x_dim, ci, co, 1, s1, s2,
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                s1,
+                s2,
             )
             of_in.release(2)
             of_inter.release(1)
@@ -468,8 +504,17 @@ def my_dataflow_l0_l1(
         elems = of_inter.acquire(2)
         elem_out = of_out.acquire(1)
         kernel_fn(
-            elems[0], elems[0], elems[1], elem_wt, elem_out,
-            x_dim, ci, co, 0, s1, s2,
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            s1,
+            s2,
         )
         of_inter.release(1)
         of_out.release(1)
@@ -479,8 +524,17 @@ def my_dataflow_l0_l1(
             elems = of_inter.acquire(3)
             elem_out = of_out.acquire(1)
             kernel_fn(
-                elems[0], elems[1], elems[2], elem_wt, elem_out,
-                x_dim, ci, co, 1, s1, s2,
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                s1,
+                s2,
             )
             of_inter.release(2)
             of_out.release(1)
@@ -763,8 +817,16 @@ def my_dataflow_conv_silu(
             elems = of_in.acquire(2)
             elem_out = of_inter.acquire(1)
             kernel_fn(
-                elems[0], elems[0], elems[1], elem_wt, elem_out,
-                x_dim, ci, co, 0, sc,
+                elems[0],
+                elems[0],
+                elems[1],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                0,
+                sc,
             )
             of_inter.release(1)
 
@@ -773,8 +835,16 @@ def my_dataflow_conv_silu(
                 elems = of_in.acquire(3)
                 elem_out = of_inter.acquire(1)
                 kernel_fn(
-                    elems[0], elems[1], elems[2], elem_wt, elem_out,
-                    x_dim, ci, co, 1, sc,
+                    elems[0],
+                    elems[1],
+                    elems[2],
+                    elem_wt,
+                    elem_out,
+                    x_dim,
+                    ci,
+                    co,
+                    1,
+                    sc,
                 )
                 of_in.release(1)
                 of_inter.release(1)
@@ -783,8 +853,16 @@ def my_dataflow_conv_silu(
             elems = of_in.acquire(2)
             elem_out = of_inter.acquire(1)
             kernel_fn(
-                elems[0], elems[1], elems[1], elem_wt, elem_out,
-                x_dim, ci, co, 2, sc,
+                elems[0],
+                elems[1],
+                elems[1],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                2,
+                sc,
             )
             of_in.release(2)
             of_inter.release(1)
@@ -806,8 +884,16 @@ def my_dataflow_conv_silu(
             elems = of_in.acquire(2)
             elem_out = of_inter.acquire(1)
             kernel_fn(
-                elems[0], elems[0], elems[1], elem_wt, elem_out,
-                x_dim, ci, co, 0, sc,
+                elems[0],
+                elems[0],
+                elems[1],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                0,
+                sc,
             )
             of_in.release(1)
             of_inter.release(1)
@@ -817,8 +903,16 @@ def my_dataflow_conv_silu(
                 elems = of_in.acquire(3)
                 elem_out = of_inter.acquire(1)
                 kernel_fn(
-                    elems[0], elems[1], elems[2], elem_wt, elem_out,
-                    x_dim, ci, co, 1, sc,
+                    elems[0],
+                    elems[1],
+                    elems[2],
+                    elem_wt,
+                    elem_out,
+                    x_dim,
+                    ci,
+                    co,
+                    1,
+                    sc,
                 )
                 of_in.release(2)
                 of_inter.release(1)
@@ -939,9 +1033,7 @@ def my_dataflow_conv_silu(
 
         rt.finish_task_group(tg)
 
-    return Program(dev_ty, rt).resolve_program(
-        SequentialPlacer()
-    )  # conv_silu
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())  # conv_silu
 
 
 # ---------------------------------------------------------------------------
@@ -1021,34 +1113,20 @@ def my_dataflow_l0_l1_l2cv1(
 
     # --- L1 budget checks ---
     l0_input_depth = 4
-    l0_l1 = (
-        1040
-        + (l0_input_depth + 1) * l0_input_row
-        + wt_slot_size
-        + 2 * inter01_row
-    )
+    l0_l1 = 1040 + (l0_input_depth + 1) * l0_input_row + wt_slot_size + 2 * inter01_row
     assert l0_l1 <= 65536, f"L0 L1 budget exceeded: {l0_l1}B"
 
     l1_input_depth = 4
-    l1_l1 = (
-        1040
-        + (l1_input_depth + 1) * inter01_row
-        + wt_slot_size
-        + 2 * inter12_row
-    )
+    l1_l1 = 1040 + (l1_input_depth + 1) * inter01_row + wt_slot_size + 2 * inter12_row
     assert l1_l1 <= 65536, f"L1 L1 budget exceeded: {l1_l1}B"
 
-    l2cv1_l1 = (
-        1040 + 2 * inter12_row + wt_slot_size + 2 * l2cv1_output_row
-    )
+    l2cv1_l1 = 1040 + 2 * inter12_row + wt_slot_size + 2 * l2cv1_output_row
     assert l2cv1_l1 <= 65536, f"L2.cv1 L1 budget exceeded: {l2cv1_l1}B"
 
     dev_ty = NPU2()
 
     # --- Types ---
-    k3_row_size = max(
-        l0_input_row, inter01_row, inter12_row, l2cv1_output_row
-    )
+    k3_row_size = max(l0_input_row, inter01_row, inter12_row, l2cv1_output_row)
     k3_row_ty = np.ndarray[(k3_row_size,), np.dtype[xfr_dtype]]
 
     wt_slot_ty = np.ndarray[(wt_slot_size,), np.dtype[xfr_dtype]]
@@ -1102,9 +1180,7 @@ def my_dataflow_l0_l1_l2cv1(
         placement=Tile(0, 1),
     )
 
-    inter01_fifo = ObjectFifo(
-        k3_row_ty, name="inter_01", depth=l1_input_depth
-    )
+    inter01_fifo = ObjectFifo(k3_row_ty, name="inter_01", depth=l1_input_depth)
     inter12_fifo = ObjectFifo(k3_row_ty, name="inter_12", depth=2)
     out_fifo = ObjectFifo(k3_row_ty, name="l2cv1_out", depth=2)
 
@@ -1122,8 +1198,16 @@ def my_dataflow_l0_l1_l2cv1(
         elems = of_in.acquire(2)
         elem_out = of_inter.acquire(1)
         kernel_fn(
-            elems[0], elems[0], elems[1], elem_wt, elem_out,
-            x_dim, ci, co, 0, sc,
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            sc,
         )
         of_in.release(1)
         of_inter.release(1)
@@ -1132,8 +1216,16 @@ def my_dataflow_l0_l1_l2cv1(
             elems = of_in.acquire(3)
             elem_out = of_inter.acquire(1)
             kernel_fn(
-                elems[0], elems[1], elems[2], elem_wt, elem_out,
-                x_dim, ci, co, 1, sc,
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                sc,
             )
             of_in.release(2)
             of_inter.release(1)
@@ -1153,8 +1245,16 @@ def my_dataflow_l0_l1_l2cv1(
         elems = of_inter_in.acquire(2)
         elem_out = of_inter_out.acquire(1)
         kernel_fn(
-            elems[0], elems[0], elems[1], elem_wt, elem_out,
-            x_dim, ci, co, 0, sc,
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            sc,
         )
         of_inter_in.release(1)
         of_inter_out.release(1)
@@ -1163,8 +1263,16 @@ def my_dataflow_l0_l1_l2cv1(
             elems = of_inter_in.acquire(3)
             elem_out = of_inter_out.acquire(1)
             kernel_fn(
-                elems[0], elems[1], elems[2], elem_wt, elem_out,
-                x_dim, ci, co, 1, sc,
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                sc,
             )
             of_inter_in.release(2)
             of_inter_out.release(1)
@@ -1278,6 +1386,1577 @@ def my_dataflow_l0_l1_l2cv1(
                     out_d0,
                     1,
                 ],
+            ),
+            wait=True,
+            task_group=tg,
+        )
+
+        rt.finish_task_group(tg)
+
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())
+
+
+# ---------------------------------------------------------------------------
+# Step 4: Three-layer downsample chain -- L0 -> L1 -> L3 (non-fused, all k3s2)
+# ---------------------------------------------------------------------------
+
+
+def my_dataflow_l0_l1_l3(
+    dev,
+    # L0 params
+    l0_height,
+    l0_width,
+    l0_ic,
+    l0_oc,
+    l0_scale,
+    # L1 params
+    l1_oc,
+    l1_scale,
+    # L3 params
+    l3_oc,
+    l3_scale,
+):
+    """Three-core downsample chain: L0 -> L1 -> L3 (all k3s2, non-fused).
+
+    Skips C2f blocks (L2, L4) and chains only the stride-2 downsample layers
+    to extend the dataflow backbone through more spatial scales.
+
+    L0: k3s2, l0_ic -> l0_oc, height/2 x width/2        (640->320)
+    L1: k3s2, l0_oc -> l1_oc, height/4 x width/4        (320->160)
+    L3: k3s2, l1_oc -> l3_oc, height/8 x width/8        (160->80)
+
+    Uses NON-FUSED conv2dk3s2_i8 kernel. No SiLU, no bias.
+
+    Weight delivery: single DDR buffer, split at MemTile into wt0/wt1/wt2.
+
+    DMA channel budget per tile:
+      Core0 (0,2): 2 in (input + wt0), 1 out (inter01) -> OK
+      Core1 (0,3): 2 in (inter01 + wt1), 1 out (inter13) -> OK
+      Core2 (0,4): 2 in (inter13 + wt2), 1 out (output) -> OK
+      MemTile (0,1): 1 in (wts_all), 3 out (wt0+wt1+wt2) -> OK (6 avail)
+      ShimDMA: 2 out (input + weights), 1 in (output) -> OK
+    """
+    xfr_dtype = np.int8
+
+    # --- Dimension calculations ---
+    l0_out_h = l0_height // 2
+    l0_out_w = l0_width // 2
+
+    l1_ic = l0_oc
+    l1_height = l0_out_h
+    l1_width = l0_out_w
+    l1_out_h = l1_height // 2
+    l1_out_w = l1_width // 2
+
+    l3_ic = l1_oc
+    l3_height = l1_out_h
+    l3_width = l1_out_w
+    l3_out_h = l3_height // 2
+    l3_out_w = l3_width // 2
+
+    # --- Row sizes ---
+    l0_input_row = l0_ic * l0_width
+    inter01_row = l0_oc * l0_out_w
+    inter13_row = l1_oc * l1_out_w
+    l3_output_row = l3_oc * l3_out_w
+
+    # --- Weight sizes (non-fused: no bias) ---
+    l0_wt_size = l0_oc * l0_ic * 9
+    l1_wt_size = l1_oc * l1_ic * 9
+    l3_wt_size = l3_oc * l3_ic * 9
+
+    # Pad each weight slot to the maximum for uniform MemTile split.
+    wt_slot_size = max(l0_wt_size, l1_wt_size, l3_wt_size)
+    total_wt_size = 3 * wt_slot_size
+
+    # --- Total tensor sizes ---
+    total_input = l0_ic * l0_height * l0_width
+    total_output = l3_oc * l3_out_h * l3_out_w
+
+    # --- L1 budget checks ---
+    l0_input_depth = 4
+    l0_l1 = 1040 + (l0_input_depth + 1) * l0_input_row + wt_slot_size + 2 * inter01_row
+    assert l0_l1 <= 65536, f"L0 L1 budget exceeded: {l0_l1}B"
+
+    l1_input_depth = 4
+    l1_l1 = 1040 + (l1_input_depth + 1) * inter01_row + wt_slot_size + 2 * inter13_row
+    assert l1_l1 <= 65536, f"L1 L1 budget exceeded: {l1_l1}B"
+
+    l3_input_depth = 4
+    l3_l1 = 1040 + (l3_input_depth + 1) * inter13_row + wt_slot_size + 2 * l3_output_row
+    assert l3_l1 <= 65536, f"L3 L1 budget exceeded: {l3_l1}B"
+
+    dev_ty = NPU2()
+
+    # --- Types ---
+    # All row sizes happen to be equal for YOLOv8n dims (5120 each),
+    # but compute the max to be safe for arbitrary params.
+    max_row_size = max(l0_input_row, inter01_row, inter13_row, l3_output_row)
+    row_ty = np.ndarray[(max_row_size,), np.dtype[xfr_dtype]]
+
+    wt_slot_ty = np.ndarray[(wt_slot_size,), np.dtype[xfr_dtype]]
+    wts_all_ty = np.ndarray[(total_wt_size,), np.dtype[xfr_dtype]]
+
+    input_l3_ty = np.ndarray[(total_input,), np.dtype[xfr_dtype]]
+    wts_l3_ty = np.ndarray[(total_wt_size,), np.dtype[xfr_dtype]]
+    output_l3_ty = np.ndarray[(total_output,), np.dtype[xfr_dtype]]
+
+    # --- Kernel declaration ---
+    # Single kernel shared by all three workers (all use conv2dk3s2_i8).
+    k3s2_kernel = Kernel(
+        "conv2dk3s2_i8",
+        "conv2dk3_i8.o",
+        [
+            row_ty,
+            row_ty,
+            row_ty,
+            wt_slot_ty,
+            row_ty,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+        ],
+    )
+
+    # --- ObjectFIFOs ---
+    in_fifo = ObjectFifo(row_ty, name="l0_in", depth=l0_input_depth)
+
+    wts_all_fifo = ObjectFifo(wts_all_ty, name="wts_all", depth=1)
+    wt0_fifo, wt1_fifo, wt2_fifo = wts_all_fifo.cons().split(
+        offsets=[0, wt_slot_size, 2 * wt_slot_size],
+        obj_types=[wt_slot_ty, wt_slot_ty, wt_slot_ty],
+        names=["wt_l0", "wt_l1", "wt_l3"],
+        depths=[1, 1, 1],
+        placement=Tile(0, 1),
+    )
+
+    inter01_fifo = ObjectFifo(row_ty, name="inter_01", depth=l1_input_depth)
+    inter13_fifo = ObjectFifo(row_ty, name="inter_13", depth=l3_input_depth)
+    out_fifo = ObjectFifo(row_ty, name="l3_out", depth=2)
+
+    # --- Core functions ---
+
+    def core_fn_l0(of_in, of_wt, of_inter, kernel_fn):
+        x_dim = l0_width
+        ci = l0_ic
+        co = l0_oc
+        oh = l0_out_h
+        sc = l0_scale
+
+        elem_wt = of_wt.acquire(1)
+
+        elems = of_in.acquire(2)
+        elem_out = of_inter.acquire(1)
+        kernel_fn(
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            sc,
+        )
+        of_in.release(1)
+        of_inter.release(1)
+
+        for _ in range_(oh - 1):
+            elems = of_in.acquire(3)
+            elem_out = of_inter.acquire(1)
+            kernel_fn(
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                sc,
+            )
+            of_in.release(2)
+            of_inter.release(1)
+
+        of_in.release(1)
+        of_wt.release(1)
+
+    def core_fn_l1(of_inter_in, of_wt, of_inter_out, kernel_fn):
+        x_dim = l1_width
+        ci = l1_ic
+        co = l1_oc
+        oh = l1_out_h
+        sc = l1_scale
+
+        elem_wt = of_wt.acquire(1)
+
+        elems = of_inter_in.acquire(2)
+        elem_out = of_inter_out.acquire(1)
+        kernel_fn(
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            sc,
+        )
+        of_inter_in.release(1)
+        of_inter_out.release(1)
+
+        for _ in range_(oh - 1):
+            elems = of_inter_in.acquire(3)
+            elem_out = of_inter_out.acquire(1)
+            kernel_fn(
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                sc,
+            )
+            of_inter_in.release(2)
+            of_inter_out.release(1)
+
+        of_inter_in.release(1)
+        of_wt.release(1)
+
+    def core_fn_l3(of_inter_in, of_wt, of_out, kernel_fn):
+        x_dim = l3_width
+        ci = l3_ic
+        co = l3_oc
+        oh = l3_out_h
+        sc = l3_scale
+
+        elem_wt = of_wt.acquire(1)
+
+        elems = of_inter_in.acquire(2)
+        elem_out = of_out.acquire(1)
+        kernel_fn(
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            sc,
+        )
+        of_inter_in.release(1)
+        of_out.release(1)
+
+        for _ in range_(oh - 1):
+            elems = of_inter_in.acquire(3)
+            elem_out = of_out.acquire(1)
+            kernel_fn(
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                sc,
+            )
+            of_inter_in.release(2)
+            of_out.release(1)
+
+        of_inter_in.release(1)
+        of_wt.release(1)
+
+    # --- Workers ---
+    worker0 = Worker(
+        core_fn_l0,
+        [
+            in_fifo.cons(),
+            wt0_fifo.cons(),
+            inter01_fifo.prod(),
+            k3s2_kernel,
+        ],
+        placement=Tile(0, 2),
+    )
+    worker1 = Worker(
+        core_fn_l1,
+        [
+            inter01_fifo.cons(l1_input_depth),
+            wt1_fifo.cons(),
+            inter13_fifo.prod(),
+            k3s2_kernel,
+        ],
+        placement=Tile(0, 3),
+    )
+    worker2 = Worker(
+        core_fn_l3,
+        [
+            inter13_fifo.cons(l3_input_depth),
+            wt2_fifo.cons(),
+            out_fifo.prod(),
+            k3s2_kernel,
+        ],
+        placement=Tile(0, 4),
+    )
+
+    # --- Runtime sequence ---
+    rt = Runtime()
+    with rt.sequence(input_l3_ty, wts_l3_ty, output_l3_ty) as (
+        I,
+        W_buf,
+        O,
+    ):
+        rt.start(worker0, worker1, worker2)
+
+        tg = rt.task_group()
+
+        in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input)
+        rt.fill(
+            in_fifo.prod(),
+            I,
+            TensorAccessPattern(
+                (1, total_input),
+                offset=0,
+                sizes=[in_d3, in_d2, in_d1, in_d0],
+                strides=[
+                    in_d2 * in_d1 * in_d0,
+                    in_d1 * in_d0,
+                    in_d0,
+                    1,
+                ],
+            ),
+            task_group=tg,
+        )
+
+        wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt_size)
+        rt.fill(
+            wts_all_fifo.prod(),
+            W_buf,
+            TensorAccessPattern(
+                (1, total_wt_size),
+                offset=0,
+                sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+                strides=[
+                    wt_d2 * wt_d1 * wt_d0,
+                    wt_d1 * wt_d0,
+                    wt_d0,
+                    1,
+                ],
+            ),
+            task_group=tg,
+        )
+
+        out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output)
+        rt.drain(
+            out_fifo.cons(),
+            O,
+            TensorAccessPattern(
+                (1, total_output),
+                offset=0,
+                sizes=[out_d3, out_d2, out_d1, out_d0],
+                strides=[
+                    out_d2 * out_d1 * out_d0,
+                    out_d1 * out_d0,
+                    out_d0,
+                    1,
+                ],
+            ),
+            wait=True,
+            task_group=tg,
+        )
+
+        rt.finish_task_group(tg)
+
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())  # L0->L1->L3
+
+
+# ---------------------------------------------------------------------------
+# CBS L0: Conv+Bias+SiLU — 2 cores (conv_core + silu_core), k3 stride-2
+# ---------------------------------------------------------------------------
+
+
+def my_dataflow_cbs_l0(
+    dev,
+    height,
+    width,
+    in_channels,
+    out_channels,
+    conv_scale,
+    shift1,
+    shift2,
+):
+    """Two-core CBS (Conv+Bias+SiLU) dataflow for layer 0.
+
+    Core 0 (Tile 0,2): conv2dk3s2_i8 — k3 stride-2 conv, no fused SiLU.
+    Core 1 (Tile 0,3): bias_silu_i8 — adds bias and applies SiLU activation.
+
+    Connected via inter-core ObjectFIFO (one row of OC * out_w elements).
+    Delegates to my_dataflow_conv_silu() with stride=2.
+
+    Args:
+        dev: Device type string.
+        height: Input spatial height.
+        width: Input spatial width.
+        in_channels: Input channels (multiple of 8).
+        out_channels: Output channels (multiple of 8).
+        conv_scale: Right-shift for conv accumulator -> int8.
+        shift1: Dequantization shift for bias_silu (= conv_scale).
+        shift2: Requantization shift for bias_silu output (8.8 fixed-point).
+    """
+    return my_dataflow_conv_silu(
+        dev,
+        height,
+        width,
+        in_channels,
+        out_channels,
+        shift1,
+        shift2,
+        conv_scale,
+        stride=2,
+    )
+
+
+# ---------------------------------------------------------------------------
+# CBS L0 -> L1: 4-core pipeline (conv0 + silu0 + conv1 + silu1)
+# ---------------------------------------------------------------------------
+
+
+def my_dataflow_cbs_l0_l1(
+    dev,
+    # L0 params
+    l0_height,
+    l0_width,
+    l0_ic,
+    l0_oc,
+    l0_conv_scale,
+    l0_shift1,
+    l0_shift2,
+    # L1 params
+    l1_oc,
+    l1_conv_scale,
+    l1_shift1,
+    l1_shift2,
+):
+    """Four-core CBS dataflow chain: L0_conv -> L0_silu -> L1_conv -> L1_silu.
+
+    L0 CBS: IC->l0_oc, k3s2 (split conv + SiLU)
+    L1 CBS: l0_oc->l1_oc, k3s2 (split conv + SiLU)
+
+    Intermediate activations flow core-to-core via ObjectFIFOs — they never
+    touch DDR. Only the initial input and final output touch DDR.
+
+    4 cores in a single column, chained:
+      Core 0 (Tile 0,2): L0 conv2dk3s2_i8 (non-fused, produces int8)
+      Core 1 (Tile 0,3): L0 bias_silu_i8 (bias + SiLU -> int8)
+      Core 2 (Tile 0,4): L1 conv2dk3s2_i8 (non-fused, produces int8)
+      Core 3 (Tile 0,5): L1 bias_silu_i8 (bias + SiLU -> int8)
+
+    Weight delivery: single DDR buffer, split at MemTile into 4 sub-FIFOs
+    (conv_wt0, bias0, conv_wt1, bias1).
+
+    DMA channel budget:
+      Core 0: 2 in (input + conv_wt0), 1 out (inter01) -> OK
+      Core 1: 2 in (inter01 + bias0), 1 out (inter12) -> OK
+      Core 2: 2 in (inter12 + conv_wt1), 1 out (inter23) -> OK
+      Core 3: 2 in (inter23 + bias1), 1 out (output) -> OK
+      MemTile: 1 in (wts_all), 4 out -> OK (6 available)
+      ShimDMA: 2 out (input + weights), 1 in (output) -> OK
+    """
+    xfr_dtype = np.int8
+
+    # --- Dimension calculations ---
+    assert l0_ic % 8 == 0
+    assert l0_oc % 8 == 0
+    assert l0_height % 2 == 0
+    assert l0_width % 2 == 0
+
+    l0_out_h = l0_height // 2
+    l0_out_w = l0_width // 2
+
+    l1_ic = l0_oc
+    l1_height = l0_out_h
+    l1_width = l0_out_w
+    l1_out_h = l1_height // 2
+    l1_out_w = l1_width // 2
+
+    assert l1_oc % 8 == 0
+    assert l1_height % 2 == 0
+    assert l1_width % 2 == 0
+
+    # --- Row sizes ---
+    l0_input_row = l0_ic * l0_width
+    inter01_row = l0_oc * l0_out_w
+    inter12_row = l0_oc * l0_out_w
+    inter23_row = l1_oc * l1_out_w
+    l1_output_row = l1_oc * l1_out_w
+
+    # --- Weight sizes ---
+    l0_conv_wt_size = l0_oc * l0_ic * 9
+    l0_bias_size = l0_oc * 4
+    l1_conv_wt_size = l1_oc * l1_ic * 9
+    l1_bias_size = l1_oc * 4
+
+    # Pad each weight slot to the maximum for uniform MemTile split
+    wt_slot_size = max(l0_conv_wt_size, l0_bias_size, l1_conv_wt_size, l1_bias_size)
+    total_wt_size = 4 * wt_slot_size
+
+    # --- Total tensor sizes ---
+    total_input = l0_ic * l0_height * l0_width
+    total_output = l1_oc * l1_out_h * l1_out_w
+
+    # --- L1 budget checks ---
+    l0_input_depth = 4
+    core0_l1 = (
+        1040 + (l0_input_depth + 1) * l0_input_row + wt_slot_size + 2 * inter01_row
+    )
+    assert core0_l1 <= 65536, f"Core0 (L0 conv) L1 budget exceeded: {core0_l1}B > 64KB"
+
+    core1_l1 = 1040 + 2 * inter01_row + wt_slot_size + 2 * inter12_row
+    assert core1_l1 <= 65536, f"Core1 (L0 silu) L1 budget exceeded: {core1_l1}B > 64KB"
+
+    l1_input_depth = 4
+    core2_l1 = (
+        1040 + (l1_input_depth + 1) * inter12_row + wt_slot_size + 2 * inter23_row
+    )
+    assert core2_l1 <= 65536, f"Core2 (L1 conv) L1 budget exceeded: {core2_l1}B > 64KB"
+
+    core3_l1 = 1040 + 2 * inter23_row + wt_slot_size + 2 * l1_output_row
+    assert core3_l1 <= 65536, f"Core3 (L1 silu) L1 budget exceeded: {core3_l1}B > 64KB"
+
+    dev_ty = NPU2()
+
+    # --- Types ---
+    max_row = max(l0_input_row, inter01_row, inter12_row, inter23_row, l1_output_row)
+    max_row_ty = np.ndarray[(max_row,), np.dtype[xfr_dtype]]
+    wt_slot_ty = np.ndarray[(wt_slot_size,), np.dtype[xfr_dtype]]
+    wts_all_ty = np.ndarray[(total_wt_size,), np.dtype[xfr_dtype]]
+
+    input_l3_ty = np.ndarray[(total_input,), np.dtype[xfr_dtype]]
+    wts_l3_ty = np.ndarray[(total_wt_size,), np.dtype[xfr_dtype]]
+    output_l3_ty = np.ndarray[(total_output,), np.dtype[xfr_dtype]]
+
+    # --- Kernel declarations ---
+    conv_kernel = Kernel(
+        "conv2dk3s2_i8",
+        "conv2dk3_i8.o",
+        [
+            max_row_ty,
+            max_row_ty,
+            max_row_ty,
+            wt_slot_ty,
+            max_row_ty,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+        ],
+    )
+
+    silu_kernel = Kernel(
+        "bias_silu_i8",
+        "bias_silu_i8.o",
+        [
+            max_row_ty,
+            wt_slot_ty,
+            max_row_ty,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+        ],
+    )
+
+    # --- ObjectFIFOs ---
+    in_fifo = ObjectFifo(max_row_ty, name="l0_in", depth=l0_input_depth)
+
+    wts_all_fifo = ObjectFifo(wts_all_ty, name="wts_all", depth=1)
+    wt0_fifo, bias0_fifo, wt1_fifo, bias1_fifo = wts_all_fifo.cons().split(
+        offsets=[
+            0,
+            wt_slot_size,
+            2 * wt_slot_size,
+            3 * wt_slot_size,
+        ],
+        obj_types=[wt_slot_ty, wt_slot_ty, wt_slot_ty, wt_slot_ty],
+        names=["wt_l0_conv", "wt_l0_bias", "wt_l1_conv", "wt_l1_bias"],
+        depths=[1, 1, 1, 1],
+        placement=Tile(0, 1),
+    )
+
+    inter01_fifo = ObjectFifo(max_row_ty, name="inter_01", depth=2)
+    inter12_fifo = ObjectFifo(max_row_ty, name="inter_12", depth=l1_input_depth)
+    inter23_fifo = ObjectFifo(max_row_ty, name="inter_23", depth=2)
+    out_fifo = ObjectFifo(max_row_ty, name="l1_out", depth=2)
+
+    # --- Core functions ---
+
+    def core_fn_l0_conv(of_in, of_wt, of_inter, kernel_fn):
+        x_dim = l0_width
+        ci = l0_ic
+        co = l0_oc
+        oh = l0_out_h
+        sc = l0_conv_scale
+
+        elem_wt = of_wt.acquire(1)
+
+        elems = of_in.acquire(2)
+        elem_out = of_inter.acquire(1)
+        kernel_fn(
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            sc,
+        )
+        of_in.release(1)
+        of_inter.release(1)
+
+        for _ in range_(oh - 1):
+            elems = of_in.acquire(3)
+            elem_out = of_inter.acquire(1)
+            kernel_fn(
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                sc,
+            )
+            of_in.release(2)
+            of_inter.release(1)
+
+        of_in.release(1)
+        of_wt.release(1)
+
+    def core_fn_l0_silu(of_inter_in, of_bias, of_inter_out, kernel_fn):
+        w = l0_out_w
+        ch = l0_oc
+        s1 = l0_shift1
+        s2 = l0_shift2
+        n_rows = l0_out_h
+
+        elem_bias = of_bias.acquire(1)
+
+        for _ in range_(n_rows):
+            elem_in = of_inter_in.acquire(1)
+            elem_out = of_inter_out.acquire(1)
+            kernel_fn(elem_in, elem_bias, elem_out, w, ch, s1, s2)
+            of_inter_in.release(1)
+            of_inter_out.release(1)
+
+        of_bias.release(1)
+
+    def core_fn_l1_conv(of_inter_in, of_wt, of_inter_out, kernel_fn):
+        x_dim = l1_width
+        ci = l1_ic
+        co = l1_oc
+        oh = l1_out_h
+        sc = l1_conv_scale
+
+        elem_wt = of_wt.acquire(1)
+
+        elems = of_inter_in.acquire(2)
+        elem_out = of_inter_out.acquire(1)
+        kernel_fn(
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            sc,
+        )
+        of_inter_in.release(1)
+        of_inter_out.release(1)
+
+        for _ in range_(oh - 1):
+            elems = of_inter_in.acquire(3)
+            elem_out = of_inter_out.acquire(1)
+            kernel_fn(
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                sc,
+            )
+            of_inter_in.release(2)
+            of_inter_out.release(1)
+
+        of_inter_in.release(1)
+        of_wt.release(1)
+
+    def core_fn_l1_silu(of_inter_in, of_bias, of_out, kernel_fn):
+        w = l1_out_w
+        ch = l1_oc
+        s1 = l1_shift1
+        s2 = l1_shift2
+        n_rows = l1_out_h
+
+        elem_bias = of_bias.acquire(1)
+
+        for _ in range_(n_rows):
+            elem_in = of_inter_in.acquire(1)
+            elem_out = of_out.acquire(1)
+            kernel_fn(elem_in, elem_bias, elem_out, w, ch, s1, s2)
+            of_inter_in.release(1)
+            of_out.release(1)
+
+        of_bias.release(1)
+
+    # --- Workers ---
+    worker0 = Worker(
+        core_fn_l0_conv,
+        [in_fifo.cons(), wt0_fifo.cons(), inter01_fifo.prod(), conv_kernel],
+        placement=Tile(0, 2),
+    )
+    worker1 = Worker(
+        core_fn_l0_silu,
+        [
+            inter01_fifo.cons(),
+            bias0_fifo.cons(),
+            inter12_fifo.prod(),
+            silu_kernel,
+        ],
+        placement=Tile(0, 3),
+    )
+    worker2 = Worker(
+        core_fn_l1_conv,
+        [
+            inter12_fifo.cons(l1_input_depth),
+            wt1_fifo.cons(),
+            inter23_fifo.prod(),
+            conv_kernel,
+        ],
+        placement=Tile(0, 4),
+    )
+    worker3 = Worker(
+        core_fn_l1_silu,
+        [
+            inter23_fifo.cons(),
+            bias1_fifo.cons(),
+            out_fifo.prod(),
+            silu_kernel,
+        ],
+        placement=Tile(0, 5),
+    )
+
+    # --- Runtime sequence ---
+    rt = Runtime()
+    with rt.sequence(input_l3_ty, wts_l3_ty, output_l3_ty) as (
+        I,
+        W_buf,
+        O,
+    ):
+        rt.start(worker0, worker1, worker2, worker3)
+
+        tg = rt.task_group()
+
+        in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input)
+        rt.fill(
+            in_fifo.prod(),
+            I,
+            TensorAccessPattern(
+                (1, total_input),
+                offset=0,
+                sizes=[in_d3, in_d2, in_d1, in_d0],
+                strides=[
+                    in_d2 * in_d1 * in_d0,
+                    in_d1 * in_d0,
+                    in_d0,
+                    1,
+                ],
+            ),
+            task_group=tg,
+        )
+
+        wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt_size)
+        rt.fill(
+            wts_all_fifo.prod(),
+            W_buf,
+            TensorAccessPattern(
+                (1, total_wt_size),
+                offset=0,
+                sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+                strides=[
+                    wt_d2 * wt_d1 * wt_d0,
+                    wt_d1 * wt_d0,
+                    wt_d0,
+                    1,
+                ],
+            ),
+            task_group=tg,
+        )
+
+        out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output)
+        rt.drain(
+            out_fifo.cons(),
+            O,
+            TensorAccessPattern(
+                (1, total_output),
+                offset=0,
+                sizes=[out_d3, out_d2, out_d1, out_d0],
+                strides=[
+                    out_d2 * out_d1 * out_d0,
+                    out_d1 * out_d0,
+                    out_d0,
+                    1,
+                ],
+            ),
+            wait=True,
+            task_group=tg,
+        )
+
+        rt.finish_task_group(tg)
+
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())  # CBS L0->L1
+
+
+# ---------------------------------------------------------------------------
+# Step 5: Four-layer chain -- L0 -> L1 -> L3 -> L4.cv1 (non-fused)
+# ---------------------------------------------------------------------------
+
+
+def my_dataflow_l0_l1_l3_l4cv1(
+    dev,
+    # L0 params
+    l0_height,
+    l0_width,
+    l0_ic,
+    l0_oc,
+    l0_scale,
+    # L1 params
+    l1_oc,
+    l1_scale,
+    # L3 params
+    l3_oc,
+    l3_scale,
+    # L4.cv1 params
+    l4cv1_oc,
+    l4cv1_scale,
+):
+    """Four-core chain: L0 -> L1 -> L3 -> L4.cv1 (non-fused).
+
+    L0: k3s2, l0_ic -> l0_oc,  height/2 x width/2       (640->320)
+    L1: k3s2, l0_oc -> l1_oc,  height/4 x width/4       (320->160)
+    L3: k3s2, l1_oc -> l3_oc,  height/8 x width/8       (160->80)
+    L4.cv1: k1s1, l3_oc -> l4cv1_oc, height/8 x width/8 (80->80)
+
+    Uses 4 compute tiles in a single column: (0,2) through (0,5).
+    Weight delivery: single DDR buffer, split at MemTile into 4 slots.
+
+    DMA channel budget per tile:
+      Core0 (0,2): 2 in (input + wt0), 1 out (inter01)       -> OK
+      Core1 (0,3): 2 in (inter01 + wt1), 1 out (inter13)     -> OK
+      Core2 (0,4): 2 in (inter13 + wt2), 1 out (inter3_4cv1) -> OK
+      Core3 (0,5): 2 in (inter3_4cv1 + wt3), 1 out (output)  -> OK
+      MemTile (0,1): 1 in (wts_all), 4 out -> OK (6 avail)
+      ShimDMA: 2 out (input + weights), 1 in (output) -> OK
+    """
+    xfr_dtype = np.int8
+
+    # --- Dimension calculations ---
+    l0_out_h = l0_height // 2
+    l0_out_w = l0_width // 2
+
+    l1_ic = l0_oc
+    l1_height = l0_out_h
+    l1_width = l0_out_w
+    l1_out_h = l1_height // 2
+    l1_out_w = l1_width // 2
+
+    l3_ic = l1_oc
+    l3_height = l1_out_h
+    l3_width = l1_out_w
+    l3_out_h = l3_height // 2
+    l3_out_w = l3_width // 2
+
+    l4cv1_ic = l3_oc
+    l4cv1_height = l3_out_h
+    l4cv1_width = l3_out_w
+
+    # --- Row sizes ---
+    l0_input_row = l0_ic * l0_width
+    inter01_row = l0_oc * l0_out_w
+    inter13_row = l1_oc * l1_out_w
+    inter3_4cv1_row = l3_oc * l3_out_w
+    l4cv1_output_row = l4cv1_oc * l4cv1_width
+
+    # --- Weight sizes (non-fused: no bias) ---
+    l0_wt_size = l0_oc * l0_ic * 9
+    l1_wt_size = l1_oc * l1_ic * 9
+    l3_wt_size = l3_oc * l3_ic * 9
+    l4cv1_wt_size = l4cv1_oc * l4cv1_ic  # k1: OC * IC
+
+    # Pad each weight slot to the maximum for uniform MemTile split.
+    wt_slot_size = max(l0_wt_size, l1_wt_size, l3_wt_size, l4cv1_wt_size)
+    total_wt_size = 4 * wt_slot_size
+
+    # --- Total tensor sizes ---
+    total_input = l0_ic * l0_height * l0_width
+    total_output = l4cv1_oc * l4cv1_height * l4cv1_width
+
+    # --- L1 budget checks ---
+    l0_input_depth = 4
+    l0_l1 = 1040 + (l0_input_depth + 1) * l0_input_row + wt_slot_size + 2 * inter01_row
+    assert l0_l1 <= 65536, f"L0 L1 budget exceeded: {l0_l1}B"
+
+    l1_input_depth = 4
+    l1_l1 = 1040 + (l1_input_depth + 1) * inter01_row + wt_slot_size + 2 * inter13_row
+    assert l1_l1 <= 65536, f"L1 L1 budget exceeded: {l1_l1}B"
+
+    l3_input_depth = 4
+    l3_l1 = (
+        1040 + (l3_input_depth + 1) * inter13_row + wt_slot_size + 2 * inter3_4cv1_row
+    )
+    assert l3_l1 <= 65536, f"L3 L1 budget exceeded: {l3_l1}B"
+
+    l4cv1_l1 = (
+        1040
+        + 2 * inter3_4cv1_row  # k1: depth=2 input
+        + wt_slot_size
+        + 2 * l4cv1_output_row
+    )
+    assert l4cv1_l1 <= 65536, f"L4.cv1 L1 budget exceeded: {l4cv1_l1}B"
+
+    dev_ty = NPU2()
+
+    # --- Types ---
+    max_row_size = max(
+        l0_input_row,
+        inter01_row,
+        inter13_row,
+        inter3_4cv1_row,
+        l4cv1_output_row,
+    )
+    row_ty = np.ndarray[(max_row_size,), np.dtype[xfr_dtype]]
+
+    wt_slot_ty = np.ndarray[(wt_slot_size,), np.dtype[xfr_dtype]]
+    wts_all_ty = np.ndarray[(total_wt_size,), np.dtype[xfr_dtype]]
+
+    input_l3_ty = np.ndarray[(total_input,), np.dtype[xfr_dtype]]
+    wts_l3_ty = np.ndarray[(total_wt_size,), np.dtype[xfr_dtype]]
+    output_l3_ty = np.ndarray[(total_output,), np.dtype[xfr_dtype]]
+
+    # --- Kernel declarations ---
+    k3s2_kernel = Kernel(
+        "conv2dk3s2_i8",
+        "conv2dk3_i8.o",
+        [
+            row_ty,
+            row_ty,
+            row_ty,
+            wt_slot_ty,
+            row_ty,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+        ],
+    )
+
+    k1_kernel = Kernel(
+        "conv2dk1_i8",
+        "conv2dk1_i8.o",
+        [
+            row_ty,
+            wt_slot_ty,
+            row_ty,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+        ],
+    )
+
+    # --- ObjectFIFOs ---
+    in_fifo = ObjectFifo(row_ty, name="l0_in", depth=l0_input_depth)
+
+    wts_all_fifo = ObjectFifo(wts_all_ty, name="wts_all", depth=1)
+    wt0_fifo, wt1_fifo, wt2_fifo, wt3_fifo = wts_all_fifo.cons().split(
+        offsets=[
+            0,
+            wt_slot_size,
+            2 * wt_slot_size,
+            3 * wt_slot_size,
+        ],
+        obj_types=[wt_slot_ty, wt_slot_ty, wt_slot_ty, wt_slot_ty],
+        names=["wt_l0", "wt_l1", "wt_l3", "wt_l4cv1"],
+        depths=[1, 1, 1, 1],
+        placement=Tile(0, 1),
+    )
+
+    inter01_fifo = ObjectFifo(row_ty, name="inter_01", depth=l1_input_depth)
+    inter13_fifo = ObjectFifo(row_ty, name="inter_13", depth=l3_input_depth)
+    inter3_4cv1_fifo = ObjectFifo(row_ty, name="inter_3_4cv1", depth=2)
+    out_fifo = ObjectFifo(row_ty, name="l4cv1_out", depth=2)
+
+    # --- Core functions ---
+
+    def core_fn_l0(of_in, of_wt, of_inter, kernel_fn):
+        x_dim = l0_width
+        ci = l0_ic
+        co = l0_oc
+        oh = l0_out_h
+        sc = l0_scale
+
+        elem_wt = of_wt.acquire(1)
+        elems = of_in.acquire(2)
+        elem_out = of_inter.acquire(1)
+        kernel_fn(
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            sc,
+        )
+        of_in.release(1)
+        of_inter.release(1)
+
+        for _ in range_(oh - 1):
+            elems = of_in.acquire(3)
+            elem_out = of_inter.acquire(1)
+            kernel_fn(
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                sc,
+            )
+            of_in.release(2)
+            of_inter.release(1)
+
+        of_in.release(1)
+        of_wt.release(1)
+
+    def core_fn_l1(of_inter_in, of_wt, of_inter_out, kernel_fn):
+        x_dim = l1_width
+        ci = l1_ic
+        co = l1_oc
+        oh = l1_out_h
+        sc = l1_scale
+
+        elem_wt = of_wt.acquire(1)
+        elems = of_inter_in.acquire(2)
+        elem_out = of_inter_out.acquire(1)
+        kernel_fn(
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            sc,
+        )
+        of_inter_in.release(1)
+        of_inter_out.release(1)
+
+        for _ in range_(oh - 1):
+            elems = of_inter_in.acquire(3)
+            elem_out = of_inter_out.acquire(1)
+            kernel_fn(
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                sc,
+            )
+            of_inter_in.release(2)
+            of_inter_out.release(1)
+
+        of_inter_in.release(1)
+        of_wt.release(1)
+
+    def core_fn_l3(of_inter_in, of_wt, of_inter_out, kernel_fn):
+        x_dim = l3_width
+        ci = l3_ic
+        co = l3_oc
+        oh = l3_out_h
+        sc = l3_scale
+
+        elem_wt = of_wt.acquire(1)
+        elems = of_inter_in.acquire(2)
+        elem_out = of_inter_out.acquire(1)
+        kernel_fn(
+            elems[0],
+            elems[0],
+            elems[1],
+            elem_wt,
+            elem_out,
+            x_dim,
+            ci,
+            co,
+            0,
+            sc,
+        )
+        of_inter_in.release(1)
+        of_inter_out.release(1)
+
+        for _ in range_(oh - 1):
+            elems = of_inter_in.acquire(3)
+            elem_out = of_inter_out.acquire(1)
+            kernel_fn(
+                elems[0],
+                elems[1],
+                elems[2],
+                elem_wt,
+                elem_out,
+                x_dim,
+                ci,
+                co,
+                1,
+                sc,
+            )
+            of_inter_in.release(2)
+            of_inter_out.release(1)
+
+        of_inter_in.release(1)
+        of_wt.release(1)
+
+    def core_fn_l4cv1(of_inter_in, of_wt, of_out, kernel_fn):
+        x_dim = l4cv1_width
+        ci = l4cv1_ic
+        co = l4cv1_oc
+        h = l4cv1_height
+        sc = l4cv1_scale
+
+        elem_wt = of_wt.acquire(1)
+        for _ in range_(h):
+            elem_in = of_inter_in.acquire(1)
+            elem_out = of_out.acquire(1)
+            kernel_fn(elem_in, elem_wt, elem_out, x_dim, ci, co, sc)
+            of_inter_in.release(1)
+            of_out.release(1)
+        of_wt.release(1)
+
+    # --- Workers ---
+    worker0 = Worker(
+        core_fn_l0,
+        [in_fifo.cons(), wt0_fifo.cons(), inter01_fifo.prod(), k3s2_kernel],
+        placement=Tile(0, 2),
+    )
+    worker1 = Worker(
+        core_fn_l1,
+        [
+            inter01_fifo.cons(l1_input_depth),
+            wt1_fifo.cons(),
+            inter13_fifo.prod(),
+            k3s2_kernel,
+        ],
+        placement=Tile(0, 3),
+    )
+    worker2 = Worker(
+        core_fn_l3,
+        [
+            inter13_fifo.cons(l3_input_depth),
+            wt2_fifo.cons(),
+            inter3_4cv1_fifo.prod(),
+            k3s2_kernel,
+        ],
+        placement=Tile(0, 4),
+    )
+    worker3 = Worker(
+        core_fn_l4cv1,
+        [
+            inter3_4cv1_fifo.cons(),
+            wt3_fifo.cons(),
+            out_fifo.prod(),
+            k1_kernel,
+        ],
+        placement=Tile(0, 5),
+    )
+
+    # --- Runtime sequence ---
+    rt = Runtime()
+    with rt.sequence(input_l3_ty, wts_l3_ty, output_l3_ty) as (
+        I,
+        W_buf,
+        O,
+    ):
+        rt.start(worker0, worker1, worker2, worker3)
+
+        tg = rt.task_group()
+
+        in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input)
+        rt.fill(
+            in_fifo.prod(),
+            I,
+            TensorAccessPattern(
+                (1, total_input),
+                offset=0,
+                sizes=[in_d3, in_d2, in_d1, in_d0],
+                strides=[in_d2 * in_d1 * in_d0, in_d1 * in_d0, in_d0, 1],
+            ),
+            task_group=tg,
+        )
+
+        wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt_size)
+        rt.fill(
+            wts_all_fifo.prod(),
+            W_buf,
+            TensorAccessPattern(
+                (1, total_wt_size),
+                offset=0,
+                sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+                strides=[wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1],
+            ),
+            task_group=tg,
+        )
+
+        out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output)
+        rt.drain(
+            out_fifo.cons(),
+            O,
+            TensorAccessPattern(
+                (1, total_output),
+                offset=0,
+                sizes=[out_d3, out_d2, out_d1, out_d0],
+                strides=[
+                    out_d2 * out_d1 * out_d0,
+                    out_d1 * out_d0,
+                    out_d0,
+                    1,
+                ],
+            ),
+            wait=True,
+            task_group=tg,
+        )
+
+        rt.finish_task_group(tg)
+
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())  # L0->L1->L3->L4.cv1
+
+
+# ---------------------------------------------------------------------------
+# Step 6: Five-core fused downsample spine -- L0->L1->L3->L5->L7
+# Each core runs fused conv+SiLU with vectorized MMUL + vec-16 hardware tanh.
+# ---------------------------------------------------------------------------
+
+
+def my_dataflow_spine_fused(
+    dev,
+    # L0 params
+    l0_height,
+    l0_width,
+    l0_ic,
+    l0_oc,
+    l0_shift1,
+    l0_shift2,
+    # L1 params
+    l1_oc,
+    l1_shift1,
+    l1_shift2,
+    # L3 params
+    l3_oc,
+    l3_shift1,
+    l3_shift2,
+    # L5 params
+    l5_oc,
+    l5_shift1,
+    l5_shift2,
+):
+    """Four-core fused downsample spine: L0->L1->L3->L5.
+
+    Each core runs fused conv+SiLU (conv2dk3s2_i8_silu) with vectorized
+    MMUL + vec-16 hardware tanh. Intermediate activations flow core-to-core
+    via ObjectFIFOs -- they never touch DDR.
+
+    Uses 4 compute tiles in a single column: (0,2) through (0,5).
+    NPU2 has 4 compute tiles per column (rows 2-5), so this is the
+    maximum chain length in a single column.
+
+    Weight delivery: single DDR buffer, split at MemTile into 4 slots.
+
+    DMA channel budget per tile:
+      Core0 (0,2): 2 in (input + wt0), 1 out (inter01) -> OK
+      Core1 (0,3): 2 in (inter01 + wt1), 1 out (inter13) -> OK
+      Core2 (0,4): 2 in (inter13 + wt2), 1 out (inter35) -> OK
+      Core3 (0,5): 2 in (inter35 + wt3), 1 out (output) -> OK
+      MemTile (0,1): 1 in (wts_all), 4 out -> OK (6 avail)
+      ShimDMA: 2 out (input + weights), 1 in (output) -> OK
+    """
+    xfr_dtype = np.int8
+
+    # --- Dimension calculations ---
+    l0_out_h = l0_height // 2
+    l0_out_w = l0_width // 2
+
+    l1_ic = l0_oc
+    l1_height = l0_out_h
+    l1_width = l0_out_w
+    l1_out_h = l1_height // 2
+    l1_out_w = l1_width // 2
+
+    l3_ic = l1_oc
+    l3_height = l1_out_h
+    l3_width = l1_out_w
+    l3_out_h = l3_height // 2
+    l3_out_w = l3_width // 2
+
+    l5_ic = l3_oc
+    l5_height = l3_out_h
+    l5_width = l3_out_w
+    l5_out_h = l5_height // 2
+    l5_out_w = l5_width // 2
+
+    # --- Row sizes ---
+    l0_input_row = l0_ic * l0_width
+    inter01_row = l0_oc * l0_out_w
+    inter13_row = l1_oc * l1_out_w
+    inter35_row = l3_oc * l3_out_w
+    l5_output_row = l5_oc * l5_out_w
+
+    # --- Weight sizes (fused: weights + int32 bias) ---
+    l0_wt_size = l0_oc * l0_ic * 9 + l0_oc * 4
+    l1_wt_size = l1_oc * l1_ic * 9 + l1_oc * 4
+    l3_wt_size = l3_oc * l3_ic * 9 + l3_oc * 4
+    l5_wt_size = l5_oc * l5_ic * 9 + l5_oc * 4
+
+    # Pad all weight slots to the maximum for uniform MemTile split.
+    # MLIR-AIE requires kernel func.call argument types to match exactly.
+    wt_slot_size = max(l0_wt_size, l1_wt_size, l3_wt_size, l5_wt_size)
+    total_wt_size = 4 * wt_slot_size
+
+    # --- Total tensor sizes ---
+    total_input = l0_ic * l0_height * l0_width
+    total_output = l5_oc * l5_out_h * l5_out_w
+
+    # --- L1 budget checks (use padded wt_slot_size for worst case) ---
+    l0_input_depth = 4
+    l0_l1 = (1040 + (l0_input_depth + 1) * l0_input_row
+             + wt_slot_size + 2 * inter01_row)
+    assert l0_l1 <= 65536, f"L0 L1 budget exceeded: {l0_l1}B"
+
+    l1_input_depth = 4
+    l1_l1 = (1040 + (l1_input_depth + 1) * inter01_row
+             + wt_slot_size + 2 * inter13_row)
+    assert l1_l1 <= 65536, f"L1 L1 budget exceeded: {l1_l1}B"
+
+    l3_input_depth = 4
+    l3_l1 = (1040 + (l3_input_depth + 1) * inter13_row
+             + wt_slot_size + 2 * inter35_row)
+    assert l3_l1 <= 65536, f"L3 L1 budget exceeded: {l3_l1}B"
+
+    l5_input_depth = 4
+    l5_l1 = (1040 + (l5_input_depth + 1) * inter35_row
+             + wt_slot_size + 2 * l5_output_row)
+    assert l5_l1 <= 65536, f"L5 L1 budget exceeded: {l5_l1}B"
+
+    dev_ty = NPU2()
+
+    # --- Types ---
+    max_row_size = max(l0_input_row, inter01_row, inter13_row,
+                       inter35_row, l5_output_row)
+    row_ty = np.ndarray[(max_row_size,), np.dtype[xfr_dtype]]
+    wt_ty = np.ndarray[(wt_slot_size,), np.dtype[xfr_dtype]]
+    wts_all_ty = np.ndarray[(total_wt_size,), np.dtype[xfr_dtype]]
+
+    input_l3_ty = np.ndarray[(total_input,), np.dtype[xfr_dtype]]
+    wts_l3_ty = np.ndarray[(total_wt_size,), np.dtype[xfr_dtype]]
+    output_l3_ty = np.ndarray[(total_output,), np.dtype[xfr_dtype]]
+
+    # --- Kernel declaration (fused conv+SiLU, 11 args) ---
+    k3s2_silu_kernel = Kernel(
+        "conv2dk3s2_i8_silu",
+        "conv2dk3_i8_silu.o",
+        [
+            row_ty,   # line0
+            row_ty,   # line1
+            row_ty,   # line2
+            wt_ty,    # weights_and_bias
+            row_ty,   # output
+            np.int32, # input_width
+            np.int32, # input_channels
+            np.int32, # output_channels
+            np.int32, # check
+            np.int32, # shift1
+            np.int32, # shift2
+        ],
+    )
+
+    # --- ObjectFIFOs ---
+    in_fifo = ObjectFifo(row_ty, name="l0_in", depth=l0_input_depth)
+
+    wts_all_fifo = ObjectFifo(wts_all_ty, name="wts_all", depth=1)
+    wt0_fifo, wt1_fifo, wt2_fifo, wt3_fifo = (
+        wts_all_fifo.cons().split(
+            offsets=[0, wt_slot_size, 2 * wt_slot_size, 3 * wt_slot_size],
+            obj_types=[wt_ty, wt_ty, wt_ty, wt_ty],
+            names=["wt_l0", "wt_l1", "wt_l3", "wt_l5"],
+            depths=[1, 1, 1, 1],
+            placement=Tile(0, 1),
+        )
+    )
+
+    inter01_fifo = ObjectFifo(row_ty, name="inter_01", depth=l1_input_depth)
+    inter13_fifo = ObjectFifo(row_ty, name="inter_13", depth=l3_input_depth)
+    inter35_fifo = ObjectFifo(row_ty, name="inter_35", depth=l5_input_depth)
+    out_fifo = ObjectFifo(row_ty, name="l5_out", depth=2)
+
+    # --- Core functions (stride-2 sliding window with fused SiLU) ---
+
+    def make_k3s2_silu_core_fn(
+        in_width, in_channels, out_channels, out_h, s1, s2
+    ):
+        """Create a stride-2 fused conv+SiLU core function."""
+        def core_fn(of_in, of_wt, of_out, kernel_fn):
+            x_dim = in_width
+            ci = in_channels
+            co = out_channels
+            oh_val = out_h
+            shift1_val = s1
+            shift2_val = s2
+
+            elem_wt = of_wt.acquire(1)
+
+            # Top row: check=0
+            elems = of_in.acquire(2)
+            elem_out = of_out.acquire(1)
+            kernel_fn(elems[0], elems[0], elems[1], elem_wt, elem_out,
+                      x_dim, ci, co, 0, shift1_val, shift2_val)
+            of_in.release(1)
+            of_out.release(1)
+
+            # Middle rows: check=1
+            for _ in range_(oh_val - 1):
+                elems = of_in.acquire(3)
+                elem_out = of_out.acquire(1)
+                kernel_fn(elems[0], elems[1], elems[2], elem_wt, elem_out,
+                          x_dim, ci, co, 1, shift1_val, shift2_val)
+                of_in.release(2)
+                of_out.release(1)
+
+            # Release last held row
+            of_in.release(1)
+            of_wt.release(1)
+
+        return core_fn
+
+    core_fn_l0 = make_k3s2_silu_core_fn(
+        l0_width, l0_ic, l0_oc, l0_out_h, l0_shift1, l0_shift2)
+    core_fn_l1 = make_k3s2_silu_core_fn(
+        l1_width, l1_ic, l1_oc, l1_out_h, l1_shift1, l1_shift2)
+    core_fn_l3 = make_k3s2_silu_core_fn(
+        l3_width, l3_ic, l3_oc, l3_out_h, l3_shift1, l3_shift2)
+    core_fn_l5 = make_k3s2_silu_core_fn(
+        l5_width, l5_ic, l5_oc, l5_out_h, l5_shift1, l5_shift2)
+
+    # --- Workers ---
+    worker0 = Worker(
+        core_fn_l0,
+        [in_fifo.cons(), wt0_fifo.cons(),
+         inter01_fifo.prod(), k3s2_silu_kernel],
+        placement=Tile(0, 2),
+    )
+    worker1 = Worker(
+        core_fn_l1,
+        [inter01_fifo.cons(l1_input_depth), wt1_fifo.cons(),
+         inter13_fifo.prod(), k3s2_silu_kernel],
+        placement=Tile(0, 3),
+    )
+    worker2 = Worker(
+        core_fn_l3,
+        [inter13_fifo.cons(l3_input_depth), wt2_fifo.cons(),
+         inter35_fifo.prod(), k3s2_silu_kernel],
+        placement=Tile(0, 4),
+    )
+    worker3 = Worker(
+        core_fn_l5,
+        [inter35_fifo.cons(l5_input_depth), wt3_fifo.cons(),
+         out_fifo.prod(), k3s2_silu_kernel],
+        placement=Tile(0, 5),
+    )
+
+    # --- Runtime sequence ---
+    rt = Runtime()
+    with rt.sequence(input_l3_ty, wts_l3_ty, output_l3_ty) as (
+        I, W_buf, O
+    ):
+        rt.start(worker0, worker1, worker2, worker3)
+
+        tg = rt.task_group()
+
+        # Fill input
+        in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input)
+        rt.fill(
+            in_fifo.prod(), I,
+            TensorAccessPattern(
+                (1, total_input), offset=0,
+                sizes=[in_d3, in_d2, in_d1, in_d0],
+                strides=[in_d2 * in_d1 * in_d0, in_d1 * in_d0, in_d0, 1],
+            ),
+            task_group=tg,
+        )
+
+        # Fill weights (MemTile splits into 5 slots)
+        wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt_size)
+        rt.fill(
+            wts_all_fifo.prod(), W_buf,
+            TensorAccessPattern(
+                (1, total_wt_size), offset=0,
+                sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+                strides=[wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1],
+            ),
+            task_group=tg,
+        )
+
+        # Drain output
+        out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output)
+        rt.drain(
+            out_fifo.cons(), O,
+            TensorAccessPattern(
+                (1, total_output), offset=0,
+                sizes=[out_d3, out_d2, out_d1, out_d0],
+                strides=[out_d2 * out_d1 * out_d0, out_d1 * out_d0,
+                         out_d0, 1],
             ),
             wait=True,
             task_group=tg,
