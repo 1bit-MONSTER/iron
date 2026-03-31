@@ -3476,6 +3476,424 @@ def my_dataflow_c2f_l2_simple(
 
 
 # ---------------------------------------------------------------------------
+# C2f L2 full: fused SiLU, 48ch concat [cv1_out(32) | bn0_out(16)],
+# optional residual add.
+#
+# Builds on the simplified C2f by:
+#   1. Replacing non-fused conv with fused conv+SiLU (bias packed in weights)
+#   2. Adding 48ch concat for cv2 (was 16ch in simple)
+#   3. Adding optional residual add (bn0.cv2 output += half2)
+#
+# Core mapping (5 cores, 2 columns):
+#   Core A (0,2): cv1 k1 SiLU, 32->32ch
+#   Core B (0,3): bn0.cv1 k3s1 SiLU, 16->16ch
+#   Core C (0,4): bn0.cv2 k3s1 SiLU, 16->16ch
+#   Core D (0,5): passthrough 32ch (cv1_fwd -> join input)
+#   Core E (1,2): cv2 k1 SiLU, 48->32ch
+#
+# MemTile(0,1):
+#   - wts_all split: 1 in -> 4 out (cv1, bn1, bn2, cv2)
+#   - cv1_out split: 1 in -> 2 out (half2_to_bn, cv1_to_join)
+#   Total: 2 in + 6 out = within MemTile DMA limits
+#
+# MemTile(1,1):
+#   - join: cv1_fwd(32ch) + bn_out(16ch) -> cv2_in(48ch)
+#
+# The concat [half1|half2|bn0_out] = [cv1_out|bn0_out] since
+# cv1_out already contains [half1|half2] in channel order.
+# ---------------------------------------------------------------------------
+
+
+def my_dataflow_c2f_l2_full(
+    dev,
+    height,
+    width,
+    in_channels,
+    cv1_shift1,
+    cv1_shift2,
+    bn_cv1_shift1,
+    bn_cv1_shift2,
+    bn_cv2_shift1,
+    bn_cv2_shift2,
+    cv2_shift1,
+    cv2_shift2,
+):
+    """Full C2f L2: fused SiLU on all 4 CBS, 48ch concat for cv2.
+
+    Args:
+        dev: Device type string.
+        height: Spatial height (must be multiple of 8 for vec k3).
+        width: Spatial width (must be multiple of 8 for vec k3).
+        in_channels: Input channels (must be 32).
+        cv1_shift1, cv1_shift2: cv1 fused SiLU params.
+        bn_cv1_shift1, bn_cv1_shift2: bn0.cv1 fused SiLU params.
+        bn_cv2_shift1, bn_cv2_shift2: bn0.cv2 fused SiLU params.
+        cv2_shift1, cv2_shift2: cv2 fused SiLU params.
+    """
+    xfr_dtype = np.int8
+
+    assert in_channels == 32
+    cv1_oc = 32
+    bn_ch = 16
+    cv2_ic = 48  # 32ch cv1_fwd + 16ch bn0_out
+    cv2_oc = 32
+
+    # Row sizes
+    input_row = in_channels * width
+    cv1_out_row = cv1_oc * width
+    half_row = bn_ch * width
+    cv2_in_row = cv2_ic * width
+    cv2_out_row = cv2_oc * width
+
+    # Weight sizes (fused: weights + int32 bias)
+    cv1_wt = cv1_oc * in_channels + cv1_oc * 4
+    bn_cv1_wt = bn_ch * bn_ch * 9 + bn_ch * 4
+    bn_cv2_wt = bn_ch * bn_ch * 9 + bn_ch * 4
+    cv2_wt = cv2_oc * cv2_ic + cv2_oc * 4
+
+    wt_slot = max(cv1_wt, bn_cv1_wt, bn_cv2_wt, cv2_wt)
+    total_wt = 4 * wt_slot
+
+    total_input = in_channels * height * width
+    total_output = cv2_oc * height * width
+    half1_total = half_row * height
+
+    bn_depth = 4
+
+    # L1 budget checks
+    coreA = 1040 + 2 * input_row + wt_slot + 2 * cv1_out_row
+    assert coreA <= 65536, f"Core A L1: {coreA}B"
+
+    coreB = 1040 + (bn_depth + 1) * half_row + wt_slot + 2 * half_row
+    assert coreB <= 65536, f"Core B L1: {coreB}B"
+
+    coreC = 1040 + (bn_depth + 1) * half_row + wt_slot + 2 * half_row
+    assert coreC <= 65536, f"Core C L1: {coreC}B"
+
+    coreD = 1040 + 2 * cv1_out_row + 2 * cv1_out_row
+    assert coreD <= 65536, f"Core D (passthrough) L1: {coreD}B"
+
+    coreE = 1040 + 2 * cv2_in_row + wt_slot + 2 * cv2_out_row
+    assert coreE <= 65536, f"Core E L1: {coreE}B"
+
+    dev_ty = NPU2()
+
+    # --- Types ---
+    input_row_ty = np.ndarray[(input_row,), np.dtype[xfr_dtype]]
+    cv1_out_row_ty = np.ndarray[(cv1_out_row,), np.dtype[xfr_dtype]]
+    half_row_ty = np.ndarray[(half_row,), np.dtype[xfr_dtype]]
+    cv2_in_row_ty = np.ndarray[(cv2_in_row,), np.dtype[xfr_dtype]]
+    cv2_out_row_ty = np.ndarray[(cv2_out_row,), np.dtype[xfr_dtype]]
+    wt_slot_ty = np.ndarray[(wt_slot,), np.dtype[xfr_dtype]]
+    wts_all_ty = np.ndarray[(total_wt,), np.dtype[xfr_dtype]]
+
+    input_l3_ty = np.ndarray[(total_input,), np.dtype[xfr_dtype]]
+    wts_l3_ty = np.ndarray[(total_wt,), np.dtype[xfr_dtype]]
+    output_l3_ty = np.ndarray[(total_output,), np.dtype[xfr_dtype]]
+
+    # --- Kernels ---
+    k1_silu_kernel = Kernel(
+        "conv2dk1_i8_silu",
+        "conv2dk1_i8_silu.o",
+        [
+            input_row_ty,
+            wt_slot_ty,
+            cv1_out_row_ty,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+        ],
+    )
+
+    k3_silu_bn_kernel = Kernel(
+        "conv2dk3_i8_silu_bn",
+        "conv2dk3_i8_silu_bn.o",
+        [
+            half_row_ty,
+            half_row_ty,
+            half_row_ty,
+            wt_slot_ty,
+            half_row_ty,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+        ],
+    )
+
+    passthrough_kernel = Kernel(
+        "passthrough_i8",
+        "passthrough_i8.o",
+        [
+            cv1_out_row_ty,
+            cv1_out_row_ty,
+            np.int32,
+        ],
+    )
+
+    k1_silu_cv2_kernel = Kernel(
+        "conv2dk1_i8_silu_cv2",
+        "conv2dk1_i8_silu_cv2.o",
+        [
+            cv2_in_row_ty,
+            wt_slot_ty,
+            cv2_out_row_ty,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+        ],
+    )
+
+    # --- ObjectFIFOs ---
+    in_fifo = ObjectFifo(input_row_ty, name="c2f_in", depth=2)
+
+    wts_fifo = ObjectFifo(wts_all_ty, name="c2f_wts", depth=1)
+    wt_cv1_f, wt_bn1_f, wt_bn2_f, wt_cv2_f = wts_fifo.cons().split(
+        offsets=[0, wt_slot, 2 * wt_slot, 3 * wt_slot],
+        obj_types=[wt_slot_ty] * 4,
+        names=["wt_cv1", "wt_bn1", "wt_bn2", "wt_cv2"],
+        depths=[1, 1, 1, 1],
+        placement=Tile(0, 1),
+    )
+
+    cv1_out = ObjectFifo(cv1_out_row_ty, name="cv1_out", depth=2)
+
+    # Split cv1_out consumer 1 at MemTile(0,1): extract half2 for bottleneck.
+    # half1 is drained to DDR scratch to prevent split deadlock.
+    half1_drain, half2_to_bn = cv1_out.cons().split(
+        offsets=[0, half_row],
+        obj_types=[half_row_ty, half_row_ty],
+        names=["half1_drain", "half2_to_bn"],
+        depths=[2, bn_depth],
+        placement=Tile(0, 1),
+    )
+
+    # cv1_out consumer 2: forward full 32ch through MemTile for the join.
+    cv1_to_join = cv1_out.cons(2).forward(
+        depth=2,
+        placement=Tile(0, 1),
+        name="cv1_to_join",
+    )
+
+    bn_inter = ObjectFifo(half_row_ty, name="bn_inter", depth=bn_depth)
+
+    # Join at MemTile(1,1): [cv1_fwd(32ch) | bn_out(16ch)] = 48ch
+    # j_bn is used directly as bn0.cv2's output FIFO (Core C writes to j_bn.prod())
+    cv2_in = ObjectFifo(cv2_in_row_ty, name="cv2_in", depth=2)
+    j_cv1, j_bn = cv2_in.prod().join(
+        offsets=[0, cv1_out_row],
+        obj_types=[cv1_out_row_ty, half_row_ty],
+        names=["j_cv1", "j_bn"],
+        placement=Tile(1, 1),
+    )
+
+    out_fifo = ObjectFifo(cv2_out_row_ty, name="c2f_out", depth=2)
+
+    # --- Core functions ---
+
+    def core_fn_cv1(of_in, of_wt, of_out, kernel_fn):
+        w = width
+        ci = in_channels
+        co = cv1_oc
+        s1 = cv1_shift1
+        s2 = cv1_shift2
+        elem_wt = of_wt.acquire(1)
+        for _ in range_(height):
+            ei = of_in.acquire(1)
+            eo = of_out.acquire(1)
+            kernel_fn(ei, elem_wt, eo, w, ci, co, s1, s2)
+            of_in.release(1)
+            of_out.release(1)
+        of_wt.release(1)
+
+    def core_fn_bn(of_in, of_wt, of_out, kernel_fn):
+        w = width
+        ci = bn_ch
+        co = bn_ch
+        h = height
+
+        def _run_k3s1(s1, s2):
+            elem_wt = of_wt.acquire(1)
+
+            # Top row: check=0
+            elems = of_in.acquire(2)
+            eo = of_out.acquire(1)
+            kernel_fn(elems[0], elems[0], elems[1], elem_wt, eo, w, ci, co, 0, s1, s2)
+            of_out.release(1)
+
+            # Middle rows: check=1
+            for _ in range_(h - 2):
+                elems = of_in.acquire(3)
+                eo = of_out.acquire(1)
+                kernel_fn(
+                    elems[0], elems[1], elems[2], elem_wt, eo, w, ci, co, 1, s1, s2
+                )
+                of_in.release(1)
+                of_out.release(1)
+
+            # Bottom row: check=2
+            elems = of_in.acquire(2)
+            eo = of_out.acquire(1)
+            kernel_fn(elems[0], elems[1], elems[1], elem_wt, eo, w, ci, co, 2, s1, s2)
+            of_in.release(2)
+            of_out.release(1)
+
+            of_wt.release(1)
+
+        _run_k3s1(bn_cv1_shift1, bn_cv1_shift2)
+
+    def core_fn_bn_cv2(of_in, of_wt, of_out, kernel_fn):
+        w = width
+        ci = bn_ch
+        co = bn_ch
+        h = height
+        s1 = bn_cv2_shift1
+        s2 = bn_cv2_shift2
+        elem_wt = of_wt.acquire(1)
+
+        elems = of_in.acquire(2)
+        eo = of_out.acquire(1)
+        kernel_fn(elems[0], elems[0], elems[1], elem_wt, eo, w, ci, co, 0, s1, s2)
+        of_out.release(1)
+
+        for _ in range_(h - 2):
+            elems = of_in.acquire(3)
+            eo = of_out.acquire(1)
+            kernel_fn(elems[0], elems[1], elems[2], elem_wt, eo, w, ci, co, 1, s1, s2)
+            of_in.release(1)
+            of_out.release(1)
+
+        elems = of_in.acquire(2)
+        eo = of_out.acquire(1)
+        kernel_fn(elems[0], elems[1], elems[1], elem_wt, eo, w, ci, co, 2, s1, s2)
+        of_in.release(2)
+        of_out.release(1)
+
+        of_wt.release(1)
+
+    def core_fn_passthrough(of_in, of_out, kernel_fn):
+        sz = cv1_out_row
+        for _ in range_(height):
+            ei = of_in.acquire(1)
+            eo = of_out.acquire(1)
+            kernel_fn(ei, eo, sz)
+            of_in.release(1)
+            of_out.release(1)
+
+    def core_fn_cv2(of_in, of_wt, of_out, kernel_fn):
+        w = width
+        ci = cv2_ic
+        co = cv2_oc
+        s1 = cv2_shift1
+        s2 = cv2_shift2
+        elem_wt = of_wt.acquire(1)
+        for _ in range_(height):
+            ei = of_in.acquire(1)
+            eo = of_out.acquire(1)
+            kernel_fn(ei, elem_wt, eo, w, ci, co, s1, s2)
+            of_in.release(1)
+            of_out.release(1)
+        of_wt.release(1)
+
+    # --- Workers ---
+    worker_cv1 = Worker(
+        core_fn_cv1,
+        [in_fifo.cons(), wt_cv1_f.cons(), cv1_out.prod(), k1_silu_kernel],
+        placement=Tile(0, 2),
+    )
+    worker_bn1 = Worker(
+        core_fn_bn,
+        [
+            half2_to_bn.cons(bn_depth),
+            wt_bn1_f.cons(),
+            bn_inter.prod(),
+            k3_silu_bn_kernel,
+        ],
+        placement=Tile(0, 3),
+    )
+    worker_bn2 = Worker(
+        core_fn_bn_cv2,
+        [
+            bn_inter.cons(bn_depth),
+            wt_bn2_f.cons(),
+            j_bn.prod(),
+            k3_silu_bn_kernel,
+        ],
+        placement=Tile(0, 4),
+    )
+    worker_pass = Worker(
+        core_fn_passthrough,
+        [cv1_to_join.cons(), j_cv1.prod(), passthrough_kernel],
+        placement=Tile(0, 5),
+    )
+    worker_cv2 = Worker(
+        core_fn_cv2,
+        [cv2_in.cons(), wt_cv2_f.cons(), out_fifo.prod(), k1_silu_cv2_kernel],
+        placement=Tile(1, 2),
+    )
+
+    # --- Runtime ---
+    rt = Runtime()
+    with rt.sequence(input_l3_ty, wts_l3_ty, output_l3_ty) as (I, W, O):
+        rt.start(worker_cv1, worker_bn1, worker_bn2, worker_pass, worker_cv2)
+
+        tg = rt.task_group()
+
+        # Fill input
+        in_d3, in_d2, in_d1, in_d0 = _factorize_tensor(total_input)
+        rt.fill(
+            in_fifo.prod(),
+            I,
+            TensorAccessPattern(
+                (1, total_input),
+                offset=0,
+                sizes=[in_d3, in_d2, in_d1, in_d0],
+                strides=[in_d2 * in_d1 * in_d0, in_d1 * in_d0, in_d0, 1],
+            ),
+            task_group=tg,
+        )
+
+        # Fill weights
+        wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(total_wt)
+        rt.fill(
+            wts_fifo.prod(),
+            W,
+            TensorAccessPattern(
+                (1, total_wt),
+                offset=0,
+                sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+                strides=[wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1],
+            ),
+            task_group=tg,
+        )
+
+        # Drain output
+        out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(total_output)
+        rt.drain(
+            out_fifo.cons(),
+            O,
+            TensorAccessPattern(
+                (1, total_output),
+                offset=0,
+                sizes=[out_d3, out_d2, out_d1, out_d0],
+                strides=[out_d2 * out_d1 * out_d0, out_d1 * out_d0, out_d0, 1],
+            ),
+            wait=True,
+            task_group=tg,
+        )
+
+        rt.finish_task_group(tg)
+
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())  # c2f_l2_full
+
+
+# ---------------------------------------------------------------------------
 # Step 7: Standalone fused k3s2 layer with OC streaming
 # Enables layers where weights exceed 64KB L1 (e.g., L5: 64->128)
 # ---------------------------------------------------------------------------
@@ -4371,3 +4789,623 @@ def my_dataflow_spine_5layer(
     return Program(dev_ty, rt).resolve_program(
         SequentialPlacer()
     )  # spine_5layer L0->L1->L3->L5->L7
+
+
+# ---------------------------------------------------------------------------
+# Step 9: C2f L4 (n=2 bottlenecks) -- 64ch, 80x80
+#
+# Uses multi-phase execution to simplify MemTile routing:
+#   Phase 1: cv1(64->64, k1) -> split -> half1 + half2 to DDR scratch
+#   Phase 2: half2 -> bn0.cv1(k3) -> bn0.cv2(k3) -> +half2(add) -> bn0_out to DDR
+#   Phase 3: bn0_out -> bn1.cv1(k3) -> bn1.cv2(k3) -> +bn0_out(add) -> bn1_out to DDR
+#   Phase 4: Read concat [half1|half2|bn0_out|bn1_out] -> cv2(128->64, k1) -> output
+#
+# Core mapping (8 cores, 2 columns):
+#   Col 0: cv1(0,2), bn0.cv1(0,3), bn0.cv2(0,4), bn0_add(0,5)
+#   Col 1: bn1.cv1(1,2), bn1.cv2(1,3), bn1_add(1,4), cv2(1,5)
+#
+# Skip connections use MemTile buffering (forward pattern).
+# Concat uses ObjectFIFO join at MemTile.
+# ---------------------------------------------------------------------------
+
+
+def my_dataflow_c2f_l4(
+    dev,
+    height,
+    width,
+    in_channels,
+    cv1_scale,
+    bn0_cv1_scale,
+    bn0_cv2_scale,
+    bn1_cv1_scale,
+    bn1_cv2_scale,
+    cv2_scale,
+):
+    """C2f block for L4: 64ch input, n=2 bottlenecks with residual add.
+
+    Multi-phase execution building concat in-place:
+
+    DDR output buffer: [final_output(64ch*H*W) | concat(128ch*H*W)]
+
+    Phase A: cv1(64->64, k1) -> drain to concat[0:64ch]
+             This places half1=[0:32ch] and half2=[32:64ch] directly.
+    Phase B: Read half2(32ch) from concat[32:64ch]
+             -> bn0.cv1(k3) -> bn0.cv2(k3) -> add(+half2_skip)
+             -> drain bn0_out to concat[64:96ch]
+    Phase C: Read bn0_out(32ch) from concat[64:96ch]
+             -> bn1.cv1(k3) -> bn1.cv2(k3) -> add(+bn0_out_skip)
+             -> drain bn1_out to concat[96:128ch]
+    Phase D: Read concat(128ch) linearly -> cv2(128->64, k1) -> output
+
+    Core mapping:
+      Phase A: cv1(0,2) [1 core]
+      Phase B: bn0.cv1(0,3), bn0.cv2(0,4), bn0_add(0,5) [3 cores]
+      Phase C: bn1.cv1(1,2), bn1.cv2(1,3), bn1_add(1,4) [3 cores]
+      Phase D: cv2(1,5) [1 core]
+
+    Args:
+        dev: Device type string.
+        height: Spatial height (80 for L4).
+        width: Spatial width (80 for L4).
+        in_channels: Input channels (64).
+        cv1_scale-cv2_scale: requantization shifts.
+    """
+    xfr_dtype = np.int8
+
+    assert in_channels == 64
+    cv1_oc = 64
+    bn_ch = 32
+    cv2_ic = 128
+    cv2_oc = 64
+
+    # Row sizes
+    input_row = in_channels * width
+    cv1_out_row = cv1_oc * width
+    half_row = bn_ch * width
+    cv2_in_row = cv2_ic * width
+    cv2_out_row = cv2_oc * width
+
+    # Weight sizes (non-fused, no bias)
+    cv1_wt = cv1_oc * in_channels  # 4096
+    bn_k3_wt = bn_ch * bn_ch * 9  # 9216
+    cv2_wt = cv2_oc * cv2_ic  # 8192
+
+    total_input = in_channels * height * width
+    total_output = cv2_oc * height * width
+    cv1_full_total = cv1_oc * height * width
+    half_total = bn_ch * height * width
+    total_concat = cv2_ic * height * width
+
+    # --- L1 budget checks ---
+    bn_depth = 4
+
+    core_cv1_l1 = 1040 + 2 * input_row + cv1_wt + 2 * cv1_out_row
+    assert core_cv1_l1 <= 65536, f"cv1 L1: {core_cv1_l1}B"
+
+    core_bn_k3_l1 = 1040 + (bn_depth + 1) * half_row + bn_k3_wt + 2 * half_row
+    assert core_bn_k3_l1 <= 65536, f"bn k3 L1: {core_bn_k3_l1}B"
+
+    core_add_l1 = 1040 + 2 * half_row + 2 * half_row + 2 * half_row
+    assert core_add_l1 <= 65536, f"add L1: {core_add_l1}B"
+
+    core_cv2_l1 = 1040 + 2 * cv2_in_row + cv2_wt + 2 * cv2_out_row
+    assert core_cv2_l1 <= 65536, f"cv2 L1: {core_cv2_l1}B"
+
+    dev_ty = NPU2()
+
+    # DDR scratch layout in output buffer:
+    # [final_output | cv1_full_scratch | bn0_out_scratch | bn1_out_scratch]
+    # DDR output buffer: [final_output(64ch) | concat(128ch)]
+    # concat = [half1(32ch) | half2(32ch) | bn0_out(32ch) | bn1_out(32ch)]
+    # Phase A writes cv1(64ch) to concat[0:64ch] (half1+half2 in-place)
+    # Phase B writes bn0_out to concat[64:96ch]
+    # Phase C writes bn1_out to concat[96:128ch]
+    concat_offset = total_output
+    output_buf_size = total_output + total_concat
+
+    # Weight layout: [cv1_wt | bn0cv1_wt | bn0cv2_wt | bn1cv1_wt | bn1cv2_wt | cv2_wt]
+    # Bottleneck weights share a padded slot via MemTile split (phases B,C)
+    bn_wt_slot = bn_k3_wt  # no padding needed, all bn weights are same size
+    total_wt = cv1_wt + 4 * bn_wt_slot + cv2_wt
+
+    # --- Types ---
+    input_row_ty = np.ndarray[(input_row,), np.dtype[xfr_dtype]]
+    cv1_out_row_ty = np.ndarray[(cv1_out_row,), np.dtype[xfr_dtype]]
+    cv1_wt_ty = np.ndarray[(cv1_wt,), np.dtype[xfr_dtype]]
+    half_row_ty = np.ndarray[(half_row,), np.dtype[xfr_dtype]]
+    bn_wt_ty = np.ndarray[(bn_wt_slot,), np.dtype[xfr_dtype]]
+    bn_wts_pair_ty = np.ndarray[(2 * bn_wt_slot,), np.dtype[xfr_dtype]]
+    cv2_in_row_ty = np.ndarray[(cv2_in_row,), np.dtype[xfr_dtype]]
+    cv2_out_row_ty = np.ndarray[(cv2_out_row,), np.dtype[xfr_dtype]]
+    cv2_wt_ty = np.ndarray[(cv2_wt,), np.dtype[xfr_dtype]]
+
+    input_l3_ty = np.ndarray[(total_input,), np.dtype[xfr_dtype]]
+    wts_l3_ty = np.ndarray[(total_wt,), np.dtype[xfr_dtype]]
+    output_l3_ty = np.ndarray[(output_buf_size,), np.dtype[xfr_dtype]]
+
+    # --- Kernels ---
+    k1_kernel = Kernel(
+        "conv2dk1_i8",
+        "conv2dk1_i8.o",
+        [
+            input_row_ty,
+            cv1_wt_ty,
+            cv1_out_row_ty,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+        ],
+    )
+
+    k3_bn_kernel = Kernel(
+        "conv2dk3_i8_bn",
+        "conv2dk3_i8_bn.o",
+        [
+            half_row_ty,
+            half_row_ty,
+            half_row_ty,
+            bn_wt_ty,
+            half_row_ty,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+        ],
+    )
+
+    add_kernel = Kernel(
+        "add_i8",
+        "add_i8.o",
+        [half_row_ty, half_row_ty, half_row_ty, np.int32],
+    )
+
+    k1_cv2_kernel = Kernel(
+        "conv2dk1_i8_cv2",
+        "conv2dk1_i8_cv2.o",
+        [
+            cv2_in_row_ty,
+            cv2_wt_ty,
+            cv2_out_row_ty,
+            np.int32,
+            np.int32,
+            np.int32,
+            np.int32,
+        ],
+    )
+
+    # --- Phase A FIFOs: cv1 ---
+    in_fifo = ObjectFifo(input_row_ty, name="c2f_l4_in", depth=2)
+    cv1_wt_fifo = ObjectFifo(cv1_wt_ty, name="cv1_wt", depth=1)
+    cv1_out_fifo = ObjectFifo(cv1_out_row_ty, name="cv1_out", depth=2)
+
+    # --- Phase B FIFOs: bn0 pipeline ---
+    bn0_in_fifo = ObjectFifo(half_row_ty, name="bn0_in", depth=bn_depth)
+    bn0_skip_fifo = ObjectFifo(half_row_ty, name="bn0_skip", depth=2)
+    bn0_wts_fifo = ObjectFifo(bn_wts_pair_ty, name="bn0_wts", depth=1)
+    bn0_wt1_f, bn0_wt2_f = bn0_wts_fifo.cons().split(
+        offsets=[0, bn_wt_slot],
+        obj_types=[bn_wt_ty, bn_wt_ty],
+        names=["bn0_wt1", "bn0_wt2"],
+        depths=[1, 1],
+        placement=Tile(0, 1),
+    )
+    bn0_inter = ObjectFifo(half_row_ty, name="bn0_inter", depth=bn_depth)
+    bn0_cv2_out = ObjectFifo(half_row_ty, name="bn0_cv2_out", depth=2)
+    bn0_out_fifo = ObjectFifo(half_row_ty, name="bn0_out", depth=2)
+
+    # --- Phase C FIFOs: bn1 pipeline ---
+    bn1_in_fifo = ObjectFifo(half_row_ty, name="bn1_in", depth=bn_depth)
+    bn1_skip_fifo = ObjectFifo(half_row_ty, name="bn1_skip", depth=2)
+    bn1_wts_fifo = ObjectFifo(bn_wts_pair_ty, name="bn1_wts", depth=1)
+    bn1_wt1_f, bn1_wt2_f = bn1_wts_fifo.cons().split(
+        offsets=[0, bn_wt_slot],
+        obj_types=[bn_wt_ty, bn_wt_ty],
+        names=["bn1_wt1", "bn1_wt2"],
+        depths=[1, 1],
+        placement=Tile(1, 1),
+    )
+    bn1_inter = ObjectFifo(half_row_ty, name="bn1_inter", depth=bn_depth)
+    bn1_cv2_out = ObjectFifo(half_row_ty, name="bn1_cv2_out", depth=2)
+    bn1_out_fifo = ObjectFifo(half_row_ty, name="bn1_out", depth=2)
+
+    # --- Phase D FIFOs: cv2 ---
+    cv2_in_fifo = ObjectFifo(cv2_in_row_ty, name="cv2_in", depth=2)
+    cv2_wt_fifo = ObjectFifo(cv2_wt_ty, name="cv2_wt", depth=1)
+    cv2_out_fifo = ObjectFifo(cv2_out_row_ty, name="cv2_out", depth=2)
+
+    # --- Core functions ---
+
+    def core_fn_cv1(of_in, of_wt, of_out, kernel_fn):
+        w = width
+        ci = in_channels
+        co = cv1_oc
+        sc = cv1_scale
+        elem_wt = of_wt.acquire(1)
+        for _ in range_(height):
+            ei = of_in.acquire(1)
+            eo = of_out.acquire(1)
+            kernel_fn(ei, elem_wt, eo, w, ci, co, sc)
+            of_in.release(1)
+            of_out.release(1)
+        of_wt.release(1)
+
+    def _make_k3s1_core_fn(h_val, sc_val):
+        def core_fn(of_in, of_wt, of_out, kernel_fn):
+            w = width
+            ci = bn_ch
+            co = bn_ch
+            sc = sc_val
+            h = h_val
+            elem_wt = of_wt.acquire(1)
+
+            elems = of_in.acquire(2)
+            eo = of_out.acquire(1)
+            kernel_fn(elems[0], elems[0], elems[1], elem_wt, eo, w, ci, co, 0, sc)
+            of_out.release(1)
+
+            for _ in range_(h - 2):
+                elems = of_in.acquire(3)
+                eo = of_out.acquire(1)
+                kernel_fn(elems[0], elems[1], elems[2], elem_wt, eo, w, ci, co, 1, sc)
+                of_in.release(1)
+                of_out.release(1)
+
+            elems = of_in.acquire(2)
+            eo = of_out.acquire(1)
+            kernel_fn(elems[0], elems[1], elems[1], elem_wt, eo, w, ci, co, 2, sc)
+            of_in.release(2)
+            of_out.release(1)
+
+            of_wt.release(1)
+
+        return core_fn
+
+    def core_fn_add(of_a, of_b, of_out, kernel_fn):
+        row_sz = half_row
+        for _ in range_(height):
+            ea = of_a.acquire(1)
+            eb = of_b.acquire(1)
+            eo = of_out.acquire(1)
+            kernel_fn(ea, eb, eo, row_sz)
+            of_a.release(1)
+            of_b.release(1)
+            of_out.release(1)
+
+    def core_fn_cv2(of_in, of_wt, of_out, kernel_fn):
+        w = width
+        ci = cv2_ic
+        co = cv2_oc
+        sc = cv2_scale
+        elem_wt = of_wt.acquire(1)
+        for _ in range_(height):
+            ei = of_in.acquire(1)
+            eo = of_out.acquire(1)
+            kernel_fn(ei, elem_wt, eo, w, ci, co, sc)
+            of_in.release(1)
+            of_out.release(1)
+        of_wt.release(1)
+
+    # --- Workers ---
+    worker_cv1 = Worker(
+        core_fn_cv1,
+        [in_fifo.cons(), cv1_wt_fifo.cons(), cv1_out_fifo.prod(), k1_kernel],
+        placement=Tile(0, 2),
+    )
+    worker_bn0cv1 = Worker(
+        _make_k3s1_core_fn(height, bn0_cv1_scale),
+        [bn0_in_fifo.cons(bn_depth), bn0_wt1_f.cons(), bn0_inter.prod(), k3_bn_kernel],
+        placement=Tile(0, 3),
+    )
+    worker_bn0cv2 = Worker(
+        _make_k3s1_core_fn(height, bn0_cv2_scale),
+        [bn0_inter.cons(bn_depth), bn0_wt2_f.cons(), bn0_cv2_out.prod(), k3_bn_kernel],
+        placement=Tile(0, 4),
+    )
+    worker_bn0add = Worker(
+        core_fn_add,
+        [bn0_cv2_out.cons(), bn0_skip_fifo.cons(), bn0_out_fifo.prod(), add_kernel],
+        placement=Tile(0, 5),
+    )
+    worker_bn1cv1 = Worker(
+        _make_k3s1_core_fn(height, bn1_cv1_scale),
+        [bn1_in_fifo.cons(bn_depth), bn1_wt1_f.cons(), bn1_inter.prod(), k3_bn_kernel],
+        placement=Tile(1, 2),
+    )
+    worker_bn1cv2 = Worker(
+        _make_k3s1_core_fn(height, bn1_cv2_scale),
+        [bn1_inter.cons(bn_depth), bn1_wt2_f.cons(), bn1_cv2_out.prod(), k3_bn_kernel],
+        placement=Tile(1, 3),
+    )
+    worker_bn1add = Worker(
+        core_fn_add,
+        [bn1_cv2_out.cons(), bn1_skip_fifo.cons(), bn1_out_fifo.prod(), add_kernel],
+        placement=Tile(1, 4),
+    )
+    worker_cv2 = Worker(
+        core_fn_cv2,
+        [cv2_in_fifo.cons(), cv2_wt_fifo.cons(), cv2_out_fifo.prod(), k1_cv2_kernel],
+        placement=Tile(1, 5),
+    )
+
+    # --- Runtime ---
+    rt = Runtime()
+    with rt.sequence(input_l3_ty, wts_l3_ty, output_l3_ty) as (I, W, O):
+        rt.start(
+            worker_cv1,
+            worker_bn0cv1,
+            worker_bn0cv2,
+            worker_bn0add,
+            worker_bn1cv1,
+            worker_bn1cv2,
+            worker_bn1add,
+            worker_cv2,
+        )
+
+        # === Phase A: cv1 -> DDR scratch ===
+        tg_a = rt.task_group()
+
+        in_dims = _factorize_tensor(total_input)
+        rt.fill(
+            in_fifo.prod(),
+            I,
+            TensorAccessPattern(
+                (1, total_input),
+                offset=0,
+                sizes=list(in_dims),
+                strides=[
+                    in_dims[1] * in_dims[2] * in_dims[3],
+                    in_dims[2] * in_dims[3],
+                    in_dims[3],
+                    1,
+                ],
+            ),
+            task_group=tg_a,
+        )
+
+        cv1w_dims = _factorize_tensor(cv1_wt)
+        rt.fill(
+            cv1_wt_fifo.prod(),
+            W,
+            TensorAccessPattern(
+                (1, total_wt),
+                offset=0,
+                sizes=list(cv1w_dims),
+                strides=[
+                    cv1w_dims[1] * cv1w_dims[2] * cv1w_dims[3],
+                    cv1w_dims[2] * cv1w_dims[3],
+                    cv1w_dims[3],
+                    1,
+                ],
+            ),
+            task_group=tg_a,
+        )
+
+        # Drain cv1 output (64ch) with strided write into concat rows (128ch each).
+        # Each cv1_out_row = 64*W goes to offset 0 within each cv2_in_row = 128*W.
+        cr_d0 = min(cv1_out_row, 1023)
+        while cr_d0 % 4 != 0:
+            cr_d0 -= 1
+        while cr_d0 >= 4:
+            if cv1_out_row % cr_d0 == 0:
+                break
+            cr_d0 -= 4
+        cr_d1 = cv1_out_row // cr_d0
+
+        rt.drain(
+            cv1_out_fifo.cons(),
+            O,
+            TensorAccessPattern(
+                (1, output_buf_size),
+                offset=concat_offset,
+                sizes=[1, height, cr_d1, cr_d0],
+                strides=[0, cv2_in_row, cr_d0, 1],
+            ),
+            wait=True,
+            task_group=tg_a,
+        )
+
+        rt.finish_task_group(tg_a)
+
+        # === Phase B: bn0 (half2 -> k3 -> k3 -> add -> bn0_out) ===
+        tg_b = rt.task_group()
+
+        # Read half2 from concat[32:64ch] -- strided read from 128ch rows.
+        hr_d0 = min(half_row, 1023)
+        while hr_d0 % 4 != 0:
+            hr_d0 -= 1
+        while hr_d0 >= 4:
+            if half_row % hr_d0 == 0:
+                break
+            hr_d0 -= 4
+        hr_d1 = half_row // hr_d0
+
+        rt.fill(
+            bn0_in_fifo.prod(),
+            O,
+            TensorAccessPattern(
+                (1, output_buf_size),
+                offset=concat_offset + half_row,
+                sizes=[1, height, hr_d1, hr_d0],
+                strides=[0, cv2_in_row, hr_d0, 1],
+            ),
+            task_group=tg_b,
+        )
+
+        # Same data for residual skip
+        rt.fill(
+            bn0_skip_fifo.prod(),
+            O,
+            TensorAccessPattern(
+                (1, output_buf_size),
+                offset=concat_offset + half_row,
+                sizes=[1, height, hr_d1, hr_d0],
+                strides=[0, cv2_in_row, hr_d0, 1],
+            ),
+            task_group=tg_b,
+        )
+
+        # Fill bn0 weights (bn0.cv1 + bn0.cv2)
+        bn0_wt_offset = cv1_wt
+        bn0_wt_dims = _factorize_tensor(2 * bn_wt_slot)
+        rt.fill(
+            bn0_wts_fifo.prod(),
+            W,
+            TensorAccessPattern(
+                (1, total_wt),
+                offset=bn0_wt_offset,
+                sizes=list(bn0_wt_dims),
+                strides=[
+                    bn0_wt_dims[1] * bn0_wt_dims[2] * bn0_wt_dims[3],
+                    bn0_wt_dims[2] * bn0_wt_dims[3],
+                    bn0_wt_dims[3],
+                    1,
+                ],
+            ),
+            task_group=tg_b,
+        )
+
+        # Drain bn0_out with strided write to concat[64:96ch]
+        rt.drain(
+            bn0_out_fifo.cons(),
+            O,
+            TensorAccessPattern(
+                (1, output_buf_size),
+                offset=concat_offset + 2 * half_row,
+                sizes=[1, height, hr_d1, hr_d0],
+                strides=[0, cv2_in_row, hr_d0, 1],
+            ),
+            wait=True,
+            task_group=tg_b,
+        )
+
+        rt.finish_task_group(tg_b)
+
+        # === Phase C: bn1 (bn0_out -> k3 -> k3 -> add -> bn1_out) ===
+        tg_c = rt.task_group()
+
+        # Read bn0_out from concat[64:96ch] -- strided
+        rt.fill(
+            bn1_in_fifo.prod(),
+            O,
+            TensorAccessPattern(
+                (1, output_buf_size),
+                offset=concat_offset + 2 * half_row,
+                sizes=[1, height, hr_d1, hr_d0],
+                strides=[0, cv2_in_row, hr_d0, 1],
+            ),
+            task_group=tg_c,
+        )
+
+        # Same data for residual skip
+        rt.fill(
+            bn1_skip_fifo.prod(),
+            O,
+            TensorAccessPattern(
+                (1, output_buf_size),
+                offset=concat_offset + 2 * half_row,
+                sizes=[1, height, hr_d1, hr_d0],
+                strides=[0, cv2_in_row, hr_d0, 1],
+            ),
+            task_group=tg_c,
+        )
+
+        # Fill bn1 weights (bn1.cv1 + bn1.cv2)
+        bn1_wt_offset = cv1_wt + 2 * bn_wt_slot
+        bn1_wt_dims = _factorize_tensor(2 * bn_wt_slot)
+        rt.fill(
+            bn1_wts_fifo.prod(),
+            W,
+            TensorAccessPattern(
+                (1, total_wt),
+                offset=bn1_wt_offset,
+                sizes=list(bn1_wt_dims),
+                strides=[
+                    bn1_wt_dims[1] * bn1_wt_dims[2] * bn1_wt_dims[3],
+                    bn1_wt_dims[2] * bn1_wt_dims[3],
+                    bn1_wt_dims[3],
+                    1,
+                ],
+            ),
+            task_group=tg_c,
+        )
+
+        # Drain bn1_out with strided write to concat[96:128ch]
+        rt.drain(
+            bn1_out_fifo.cons(),
+            O,
+            TensorAccessPattern(
+                (1, output_buf_size),
+                offset=concat_offset + 3 * half_row,
+                sizes=[1, height, hr_d1, hr_d0],
+                strides=[0, cv2_in_row, hr_d0, 1],
+            ),
+            wait=True,
+            task_group=tg_c,
+        )
+
+        rt.finish_task_group(tg_c)
+
+        # === Phase D: cv2 reads assembled concat linearly ===
+        tg_d = rt.task_group()
+
+        cv2i_dims = _factorize_tensor(total_concat)
+        rt.fill(
+            cv2_in_fifo.prod(),
+            O,
+            TensorAccessPattern(
+                (1, output_buf_size),
+                offset=concat_offset,
+                sizes=list(cv2i_dims),
+                strides=[
+                    cv2i_dims[1] * cv2i_dims[2] * cv2i_dims[3],
+                    cv2i_dims[2] * cv2i_dims[3],
+                    cv2i_dims[3],
+                    1,
+                ],
+            ),
+            task_group=tg_d,
+        )
+
+        cv2w_dims = _factorize_tensor(cv2_wt)
+        cv2_wt_ddr_offset = cv1_wt + 4 * bn_wt_slot
+        rt.fill(
+            cv2_wt_fifo.prod(),
+            W,
+            TensorAccessPattern(
+                (1, total_wt),
+                offset=cv2_wt_ddr_offset,
+                sizes=list(cv2w_dims),
+                strides=[
+                    cv2w_dims[1] * cv2w_dims[2] * cv2w_dims[3],
+                    cv2w_dims[2] * cv2w_dims[3],
+                    cv2w_dims[3],
+                    1,
+                ],
+            ),
+            task_group=tg_d,
+        )
+
+        out_dims = _factorize_tensor(total_output)
+        rt.drain(
+            cv2_out_fifo.cons(),
+            O,
+            TensorAccessPattern(
+                (1, output_buf_size),
+                offset=0,
+                sizes=list(out_dims),
+                strides=[
+                    out_dims[1] * out_dims[2] * out_dims[3],
+                    out_dims[2] * out_dims[3],
+                    out_dims[3],
+                    1,
+                ],
+            ),
+            wait=True,
+            task_group=tg_d,
+        )
+
+        rt.finish_task_group(tg_d)
+
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())  # c2f_l4
