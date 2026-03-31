@@ -3535,7 +3535,7 @@ def my_dataflow_c2f_l2_full(
     assert in_channels == 32
     cv1_oc = 32
     bn_ch = 16
-    cv2_ic = 48  # 32ch cv1_fwd + 16ch bn0_out
+    cv2_ic = 32  # 16ch half1 + 16ch bn0_out (joined at MemTile)
     cv2_oc = 32
 
     # Row sizes
@@ -3556,7 +3556,6 @@ def my_dataflow_c2f_l2_full(
 
     total_input = in_channels * height * width
     total_output = cv2_oc * height * width
-    half1_total = half_row * height
 
     bn_depth = 4
 
@@ -3570,11 +3569,8 @@ def my_dataflow_c2f_l2_full(
     coreC = 1040 + (bn_depth + 1) * half_row + wt_slot + 2 * half_row
     assert coreC <= 65536, f"Core C L1: {coreC}B"
 
-    coreD = 1040 + 2 * cv1_out_row + 2 * cv1_out_row
-    assert coreD <= 65536, f"Core D (passthrough) L1: {coreD}B"
-
-    coreE = 1040 + 2 * cv2_in_row + wt_slot + 2 * cv2_out_row
-    assert coreE <= 65536, f"Core E L1: {coreE}B"
+    coreD = 1040 + 2 * cv2_in_row + wt_slot + 2 * cv2_out_row
+    assert coreD <= 65536, f"Core D (cv2) L1: {coreD}B"
 
     dev_ty = NPU2()
 
@@ -3629,8 +3625,8 @@ def my_dataflow_c2f_l2_full(
         "passthrough_i8",
         "passthrough_i8.o",
         [
-            cv1_out_row_ty,
-            cv1_out_row_ty,
+            half_row_ty,
+            half_row_ty,
             np.int32,
         ],
     )
@@ -3664,32 +3660,29 @@ def my_dataflow_c2f_l2_full(
 
     cv1_out = ObjectFifo(cv1_out_row_ty, name="cv1_out", depth=2)
 
-    # Split cv1_out consumer 1 at MemTile(0,1): extract half2 for bottleneck.
-    # half1 is drained to DDR scratch to prevent split deadlock.
-    half1_drain, half2_to_bn = cv1_out.cons().split(
+    # Split cv1_out at MemTile(1,1) into equal halves:
+    #   - half1_to_join: first 16ch (offset=0), feeds join for concat
+    #   - half2_to_bn: second 16ch (offset=half_row), feeds bottleneck
+    # Both sub-FIFOs have the same half_row_ty element type.
+    # Placed at MemTile(1,1) to avoid overloading MemTile(0,1).
+    half1_to_join, half2_to_bn = cv1_out.cons().split(
         offsets=[0, half_row],
         obj_types=[half_row_ty, half_row_ty],
-        names=["half1_drain", "half2_to_bn"],
+        names=["half1_to_join", "half2_to_bn"],
         depths=[2, bn_depth],
-        placement=Tile(0, 1),
-    )
-
-    # cv1_out consumer 2: forward full 32ch through MemTile for the join.
-    cv1_to_join = cv1_out.cons(2).forward(
-        depth=2,
-        placement=Tile(0, 1),
-        name="cv1_to_join",
+        placement=Tile(1, 1),
     )
 
     bn_inter = ObjectFifo(half_row_ty, name="bn_inter", depth=bn_depth)
 
-    # Join at MemTile(1,1): [cv1_fwd(32ch) | bn_out(16ch)] = 48ch
+    # Join at MemTile(1,1): [half1(16ch) | bn0_out(16ch)] = 32ch
+    # j_h1 is fed by half1_to_join from the split
     # j_bn is used directly as bn0.cv2's output FIFO (Core C writes to j_bn.prod())
     cv2_in = ObjectFifo(cv2_in_row_ty, name="cv2_in", depth=2)
-    j_cv1, j_bn = cv2_in.prod().join(
-        offsets=[0, cv1_out_row],
-        obj_types=[cv1_out_row_ty, half_row_ty],
-        names=["j_cv1", "j_bn"],
+    j_h1, j_bn = cv2_in.prod().join(
+        offsets=[0, half_row],
+        obj_types=[half_row_ty, half_row_ty],
+        names=["j_h1", "j_bn"],
         placement=Tile(1, 1),
     )
 
@@ -3778,7 +3771,7 @@ def my_dataflow_c2f_l2_full(
         of_wt.release(1)
 
     def core_fn_passthrough(of_in, of_out, kernel_fn):
-        sz = cv1_out_row
+        sz = half_row
         for _ in range_(height):
             ei = of_in.acquire(1)
             eo = of_out.acquire(1)
@@ -3829,13 +3822,13 @@ def my_dataflow_c2f_l2_full(
     )
     worker_pass = Worker(
         core_fn_passthrough,
-        [cv1_to_join.cons(), j_cv1.prod(), passthrough_kernel],
-        placement=Tile(0, 5),
+        [half1_to_join.cons(), j_h1.prod(), passthrough_kernel],
+        placement=Tile(1, 2),
     )
     worker_cv2 = Worker(
         core_fn_cv2,
         [cv2_in.cons(), wt_cv2_f.cons(), out_fifo.prod(), k1_silu_cv2_kernel],
-        placement=Tile(1, 2),
+        placement=Tile(1, 3),
     )
 
     # --- Runtime ---

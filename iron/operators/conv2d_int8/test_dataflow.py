@@ -3605,7 +3605,7 @@ class AIEDataflowC2fL2Full(AIEOperatorBase):
 
         self.cv1_oc = 32
         self.bn_ch = 16
-        self.cv2_ic = 48
+        self.cv2_ic = 32
         self.cv2_oc = 32
 
         self.xclbin_artifact = None
@@ -3781,11 +3781,11 @@ def test_dataflow_c2f_l2_full(
     cv2_s2,
     aie_context,
 ):
-    """Test full C2f L2: fused SiLU, 48ch concat for cv2."""
+    """Test full C2f L2: fused SiLU, 32ch concat [half1|bn0_out] for cv2."""
     torch.manual_seed(42)
 
     bn_ch = 16
-    cv2_ic = 48
+    cv2_ic = 32  # 16ch half1 + 16ch bn0_out
     cv2_oc = 32
 
     # Test data
@@ -3806,7 +3806,8 @@ def test_dataflow_c2f_l2_full(
     cv1_out = conv2d_int8_pade_silu_reference(
         x_int8, w_cv1, b_cv1, cv1_s1, cv1_s2, stride=1, padding=0
     )
-    # Split: extract second 16 channels for bottleneck
+    # Split into half1 (first 16ch) and half2 (second 16ch)
+    half1 = cv1_out[:, :bn_ch, :, :]
     half2 = cv1_out[:, bn_ch:, :, :]
     # Bottleneck with fused SiLU
     bn_inter = conv2d_int8_pade_silu_reference(
@@ -3815,8 +3816,8 @@ def test_dataflow_c2f_l2_full(
     bn_out = conv2d_int8_pade_silu_reference(
         bn_inter, w_bn2, b_bn2, bn2_s1, bn2_s2, stride=1, padding=1
     )
-    # Concat: [cv1_out(32ch) | bn_out(16ch)] = 48ch
-    concat = torch.cat([cv1_out, bn_out], dim=1)
+    # Concat: [half1(16ch) | bn_out(16ch)] = 32ch
+    concat = torch.cat([half1, bn_out], dim=1)
     # cv2 fused SiLU
     ref = conv2d_int8_pade_silu_reference(
         concat, w_cv2, b_cv2, cv2_s1, cv2_s2, stride=1, padding=0
