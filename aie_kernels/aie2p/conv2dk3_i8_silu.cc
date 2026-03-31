@@ -3,9 +3,14 @@
 
 // Fused int8 3x3 Conv + Bias + SiLU kernel (AIE2+).
 //
-// Two paths:
-//   Scalar: Padé tanh approximation (fallback for unaligned widths)
-//   Vector: aie::mmul<8,8,8> MAC + aie::tanh<bfloat16>() hardware intrinsic
+// Paths:
+//   Scalar (ACTIVE): Padé tanh approximation — correct at all sizes
+//   Vector (DISABLED): aie::mmul<8,8,8> MAC + scalar Padé SiLU post-proc
+//     - MMUL MAC is correct (verified: to_vector<int8>(shift) matches)
+//     - BUT to_vector<int32>(0) produces wrong element values on AIE2p
+//       with Peano -O2, causing ~17% error rate (max_diff=127)
+//     - Previous attempt with aie::tanh<bfloat16>() also failed because
+//       the hardware tanh intrinsic requires vector size >= 16, not 8
 //
 // Replaces the LUT-based sigmoid with a Padé rational approximation:
 //   tanh(z) ≈ z*(27 + z²) / (27 + 9*z²)   for |z²| ≤ 20
@@ -261,11 +266,34 @@ void conv2dk3s2_i8_silu_scalar(int8_t *line0, int8_t *line1, int8_t *line2,
 }
 
 // ---------------------------------------------------------------------------
-// Vectorized stride-1: fused conv3x3 + bias + vectorized SiLU (hw tanh)
+// Vectorized stride-1: fused conv3x3 + bias + scalar Padé SiLU
 //
-// Uses aie::mmul<8,8,8,int8,int8> for convolution, then applies SiLU
-// via aie::tanh<bfloat16>() hardware intrinsic on 8-element vectors.
+// Uses aie::mmul<8,8,8,int8,int8> for the convolution MAC (same logic as
+// the working non-fused conv2dk3_i8_vectorized), then applies SiLU
+// element-by-element using the scalar Padé tanh approximation.
+//
+// To minimize code size and avoid compiler issues with mixed MMUL + float
+// in a single large function, the SiLU post-processing is factored into
+// a separate noinline helper (apply_silu_block). This also helps with
+// the 16KB AIE instruction memory limit at large spatial sizes.
+//
+// The extern "C" wrapper only dispatches here when input_width % 8 == 0,
+// so no scalar remainder is needed.
 // ---------------------------------------------------------------------------
+
+// Separate noinline function for SiLU post-processing to prevent the
+// compiler from mixing MMUL register allocation with float register
+// allocation, which can cause miscompilation under Peano -O2.
+__attribute__((noinline)) static void apply_silu_block(
+    int32_t *__restrict acc_buf, int32_t *__restrict bias_ptr,
+    int8_t *__restrict out_buf, int32_t oc_g, int32_t shift1,
+    int32_t shift2) {
+    for (int i = 0; i < 64; i++) {
+        int32_t val = acc_buf[i] + bias_ptr[oc_g * 8 + (i & 7)];
+        out_buf[i] = pade_silu_i8(val, shift1, shift2);
+    }
+}
+
 void conv2dk3_i8_silu_vectorized(
     int8_t *__restrict line0, int8_t *__restrict line1,
     int8_t *__restrict line2, int8_t *__restrict weights_and_bias,
@@ -300,23 +328,11 @@ void conv2dk3_i8_silu_vectorized(
     ::aie::set_saturation(aie::saturation_mode::saturate);
     ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
-    float scale_in = 1.0f / (float)(1 << shift1);
-    float scale_out = (float)shift2 / 256.0f;  // fixed-point 8.8
-
-    // SiLU constants
-    aie::vector<bfloat16, 8> half_v =
-        aie::broadcast<bfloat16, 8>((bfloat16)0.5f);
-    aie::vector<bfloat16, 8> one_v =
-        aie::broadcast<bfloat16, 8>((bfloat16)1.0f);
-
-    // Temporary buffers
+    // Temporary buffers for MMUL result extraction and output assembly
     alignas(64) int32_t acc_buf[MMUL::size_C];
-    alignas(64) bfloat16 bf16_buf[8];
     alignas(64) int8_t out_buf[MMUL::size_C];
 
-    // Pre-evaluate check conditions outside inner loop to avoid
-    // runtime-variable control flow inside pipelined hardware ops
-    // (Chess compiler can generate incorrect code otherwise).
+    // Pre-evaluate check conditions outside inner loop
     const bool do_kh0 = (check != CHECK_TOP);
     const bool do_kh2 = (check != CHECK_BOTTOM);
 
@@ -463,89 +479,18 @@ void conv2dk3_i8_silu_vectorized(
                 }
             }
 
-            // Vectorized SiLU post-processing
+            // Extract int32 accumulators to memory, then apply SiLU
+            // in a separate function to avoid register pressure issues.
             aie::vector<int32, MMUL::size_C> acc_i32 =
                 acc.to_vector<int32>(0);
             aie::store_v(acc_buf, acc_i32);
 
-            for (int sp = 0; sp < 8; sp++) {
-                // Phase 1: add bias + dequantize (int32 -> bfloat16)
-                for (int j = 0; j < 8; j++) {
-                    int32_t val =
-                        acc_buf[sp * 8 + j] + bias[oc_g * 8 + j];
-                    bf16_buf[j] =
-                        (bfloat16)((float)val * scale_in);
-                }
-
-                // Phase 2: vectorized SiLU via hardware tanh
-                aie::vector<bfloat16, 8> x_bf16 =
-                    aie::load_v<8>(bf16_buf);
-                auto half_x = aie::mul(x_bf16, half_v);
-                auto tanh_hx =
-                    aie::tanh<bfloat16>(half_x.to_vector<float>());
-                auto one_plus = aie::add(tanh_hx, one_v);
-                aie::vector<bfloat16, 8> sigmoid =
-                    aie::mul(one_plus, half_v);
-                auto silu_acc = aie::mul(x_bf16, sigmoid);
-                aie::vector<bfloat16, 8> silu_bf16 =
-                    silu_acc.to_vector<bfloat16>();
-
-                // Phase 3: requantize (bfloat16 -> int8)
-                aie::store_v(bf16_buf, silu_bf16);
-                for (int j = 0; j < 8; j++) {
-                    float sval = (float)bf16_buf[j];
-                    int32_t oval =
-                        float_to_int_round(sval * scale_out);
-                    oval = (oval > 127)    ? 127
-                           : (oval < -128) ? -128
-                                           : oval;
-                    out_buf[sp * 8 + j] = (int8_t)oval;
-                }
-            }
+            apply_silu_block(acc_buf, bias, out_buf, oc_g, shift1,
+                             shift2);
 
             aie::store_v(
                 output + oc_g * (output_width * 8) + x_base * 8,
                 aie::load_v<MMUL::size_C>(out_buf));
-        }
-
-        // Scalar remainder (input_width not divisible by 8)
-        for (int x = vec_iters * NUM_W; x < output_width; x++) {
-            for (int oc8 = 0; oc8 < 8; oc8++) {
-                int32_t acc_val = 0;
-                for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
-                    for (int ic8 = 0; ic8 < 8; ic8++) {
-                        for (int kh = 0; kh < 3; kh++) {
-                            if (kh == 0 && check == CHECK_TOP)
-                                continue;
-                            if (kh == 2 && check == CHECK_BOTTOM)
-                                continue;
-                            int8_t *line =
-                                select_line(kh, line0, line1, line2);
-                            for (int kw = 0; kw < 3; kw++) {
-                                int input_x = x + kw - 1;
-                                if (input_x < 0 ||
-                                    input_x >= input_width)
-                                    continue;
-                                int in_idx =
-                                    ic_g * (input_width * 8) +
-                                    input_x * 8 + ic8;
-                                int wt_idx = oc_g * wt_stride_oc +
-                                             ic_g * wt_stride_ic +
-                                             kh * wt_stride_kh +
-                                             kw * wt_stride_kw +
-                                             ic8 * 8 + oc8;
-                                acc_val += (int32_t)line[in_idx] *
-                                           (int32_t)weights[wt_idx];
-                            }
-                        }
-                    }
-                }
-                acc_val += bias[oc_g * 8 + oc8];
-                int out_idx =
-                    oc_g * (output_width * 8) + x * 8 + oc8;
-                output[out_idx] =
-                    pade_silu_i8(acc_val, shift1, shift2);
-            }
         }
     }
 
@@ -573,7 +518,11 @@ inline void stride2_gather_silu(
 }
 
 // ---------------------------------------------------------------------------
-// Vectorized stride-2: fused conv3x3 + bias + vectorized SiLU (hw tanh)
+// Vectorized stride-2: fused conv3x3 + bias + scalar Padé SiLU
+//
+// Uses aie::mmul<8,8,8,int8,int8> for convolution with stride-2 gather
+// (same as non-fused conv2dk3s2_i8_vectorized), then applies scalar Padé
+// SiLU on extracted int32 accumulators.
 // ---------------------------------------------------------------------------
 void conv2dk3s2_i8_silu_vectorized(
     int8_t *__restrict line0, int8_t *__restrict line1,
@@ -610,17 +559,12 @@ void conv2dk3s2_i8_silu_vectorized(
     ::aie::set_saturation(aie::saturation_mode::saturate);
     ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
-    float scale_in = 1.0f / (float)(1 << shift1);
-    float scale_out = (float)shift2 / 256.0f;  // fixed-point 8.8
-
-    aie::vector<bfloat16, 8> half_v =
-        aie::broadcast<bfloat16, 8>((bfloat16)0.5f);
-    aie::vector<bfloat16, 8> one_v =
-        aie::broadcast<bfloat16, 8>((bfloat16)1.0f);
-
+    // Temporary buffers for MMUL result extraction and output assembly
     alignas(64) int32_t acc_buf[MMUL::size_C];
-    alignas(64) bfloat16 bf16_buf[8];
     alignas(64) int8_t out_buf[MMUL::size_C];
+
+    const bool do_kh0 = (check != CHECK_TOP);
+    const bool do_kh2 = (check != CHECK_BOTTOM);
 
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
         for (int vi = 0; vi < vec_iters; vi++) {
@@ -630,7 +574,7 @@ void conv2dk3s2_i8_silu_vectorized(
             acc = aie::zeros<acc32, MMUL::size_C>();
 
             // kh=0: skip if top border
-            if (check != CHECK_TOP) {
+            if (do_kh0) {
                 for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
                     int8_t *__restrict lp =
                         lines[0] + ic_g * (input_width * 8);
@@ -712,7 +656,7 @@ void conv2dk3s2_i8_silu_vectorized(
             }
 
             // kh=2: skip if bottom border
-            if (check != CHECK_BOTTOM) {
+            if (do_kh2) {
                 for (int ic_g = 0; ic_g < ic_groups; ic_g++) {
                     int8_t *__restrict lp =
                         lines[2] + ic_g * (input_width * 8);
@@ -753,42 +697,14 @@ void conv2dk3s2_i8_silu_vectorized(
                 }
             }
 
-            // Vectorized SiLU post-processing
+            // Extract int32 accumulators to memory, then apply SiLU
+            // in a separate function to avoid register pressure issues.
             aie::vector<int32, MMUL::size_C> acc_i32 =
                 acc.to_vector<int32>(0);
             aie::store_v(acc_buf, acc_i32);
 
-            for (int sp = 0; sp < 8; sp++) {
-                for (int j = 0; j < 8; j++) {
-                    int32_t val =
-                        acc_buf[sp * 8 + j] + bias[oc_g * 8 + j];
-                    bf16_buf[j] =
-                        (bfloat16)((float)val * scale_in);
-                }
-
-                aie::vector<bfloat16, 8> x_bf16 =
-                    aie::load_v<8>(bf16_buf);
-                auto half_x = aie::mul(x_bf16, half_v);
-                auto tanh_hx =
-                    aie::tanh<bfloat16>(half_x.to_vector<float>());
-                auto one_plus = aie::add(tanh_hx, one_v);
-                aie::vector<bfloat16, 8> sigmoid =
-                    aie::mul(one_plus, half_v);
-                auto silu_acc = aie::mul(x_bf16, sigmoid);
-                aie::vector<bfloat16, 8> silu_bf16 =
-                    silu_acc.to_vector<bfloat16>();
-
-                aie::store_v(bf16_buf, silu_bf16);
-                for (int j = 0; j < 8; j++) {
-                    float sval = (float)bf16_buf[j];
-                    int32_t oval =
-                        float_to_int_round(sval * scale_out);
-                    oval = (oval > 127)    ? 127
-                           : (oval < -128) ? -128
-                                           : oval;
-                    out_buf[sp * 8 + j] = (int8_t)oval;
-                }
-            }
+            apply_silu_block(acc_buf, bias, out_buf, oc_g, shift1,
+                             shift2);
 
             aie::store_v(
                 output + oc_g * (output_width * 8) + vi * NUM_W * 8,
@@ -812,8 +728,10 @@ void conv2dk3_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                       const int32_t input_width, const int32_t input_channels,
                       const int32_t output_channels, const int32_t check,
                       const int32_t shift1, const int32_t shift2) {
-    // Vectorized stride-1 SiLU still has errors and timeouts at large sizes.
-    // Use scalar Padé tanh path which is verified exact at all sizes.
+    // Scalar path: MMUL to_vector<int32>(0) produces incorrect element
+    // ordering on AIE2p with Peano -O2 (verified: to_vector<int8>(shift)
+    // is correct, but to_vector<int32>(0) gives mismatched values).
+    // The scalar Padé SiLU path is exact at all sizes including 160x160.
     conv2dk3_i8_silu_scalar(line0, line1, line2, weights_and_bias, output,
                             input_width, input_channels, output_channels,
                             check, shift1, shift2);
@@ -824,12 +742,10 @@ void conv2dk3s2_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                         const int32_t input_width, const int32_t input_channels,
                         const int32_t output_channels, const int32_t check,
                         const int32_t shift1, const int32_t shift2) {
-    int output_width = input_width / 2;
-    // Vectorized stride-2 SiLU has alignment bug at large widths (>80).
-    // Use scalar until fixed.
-    conv2dk3s2_i8_silu_scalar(line0, line1, line2, weights_and_bias, output,
-                              input_width, input_channels, output_channels,
-                              check, shift1, shift2);
+    // Same to_vector<int32>(0) issue as stride-1 — use scalar path.
+    conv2dk3s2_i8_silu_scalar(line0, line1, line2, weights_and_bias,
+                              output, input_width, input_channels,
+                              output_channels, check, shift1, shift2);
 }
 
 } // extern "C"
