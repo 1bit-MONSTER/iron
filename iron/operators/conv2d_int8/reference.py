@@ -207,3 +207,57 @@ def conv2d_int8_pade_silu_reference(
     out_i8 = torch.clamp(torch.round(silu_out * scale_out), -128, 127)
 
     return out_i8.to(torch.int8)
+
+
+def conv2d_int8_split_silu_reference(
+    x_int8, weight_int8, bias_int32, conv_scale, shift1, shift2,
+    stride=1, padding=1
+):
+    """CPU reference for split conv -> bias+SiLU pipeline.
+
+    Models the two-core dataflow:
+      Core 0 (conv): int8 conv -> int32 acc -> srs(acc, conv_scale) -> int8
+      Core 1 (bias_silu):
+        1. Dequantize: float val = (float)conv_i8
+        2. Add bias:   val += bias_int32 * 2^(-shift1)
+        3. SiLU(x) = x * 0.5 * (1 + tanh_pade(x/2))
+        4. Requantize:  int8 = clamp(round(silu * shift2/256), -128, 127)
+
+    The key difference from the fused reference: the int8 clipping after
+    conv_scale introduces quantization error that the bias+SiLU kernel
+    operates on. For well-chosen conv_scale, this error is negligible
+    because SiLU saturates for large values.
+
+    Args:
+        x_int8: Input [N, C_in, H, W] int8.
+        weight_int8: Weights [C_out, C_in, K, K] int8.
+        bias_int32: Bias [C_out] int32, pre-scaled.
+        conv_scale: Right-shift for conv accumulator -> int8 (Core 0).
+        shift1: Dequantization shift for bias scaling in Core 1.
+        shift2: Requantization shift for SiLU output (8.8 fixed-point).
+        stride: Convolution stride (1 or 2).
+        padding: Convolution padding (default 1).
+
+    Returns:
+        Output [N, C_out, H_out, W_out] int8.
+    """
+    # Core 0: int8 conv -> srs -> int8
+    out_int32 = F.conv2d(
+        x_int8.int(), weight_int8.int(), stride=stride, padding=padding
+    )
+    conv_i8 = torch.clamp(
+        (out_int32 + (1 << (conv_scale - 1))) >> conv_scale, -128, 127
+    ).to(torch.int8)
+
+    # Core 1: dequant + bias + SiLU + requant
+    dequant = 1.0 / float(1 << shift1)
+    val_float = conv_i8.float() + bias_int32.view(1, -1, 1, 1).float() * dequant
+
+    # SiLU via Pade tanh
+    silu_out = val_float * 0.5 * (1.0 + _pade_tanh(val_float * 0.5))
+
+    # Requantize
+    scale_out_val = float(shift2) / 256.0
+    out_i8 = torch.clamp(torch.round(silu_out * scale_out_val), -128, 127)
+
+    return out_i8.to(torch.int8)
