@@ -33,29 +33,32 @@ static void add_i8_scalar_row(int8_t *a, int8_t *b, int8_t *out,
 
 static void add_i8_vector_row(int8_t *restrict a, int8_t *restrict b,
                                int8_t *restrict out, const int32_t row_size) {
-    constexpr int VEC_SIZE = 64;
+    // Process 32 int8 elements at a time: promote to int16 (fits 512-bit reg),
+    // add, clamp to [-128,127], pack back to int8.
+    constexpr int VEC8 = 32;
 
-    // Process VEC_SIZE elements at a time
-    const int n_vecs = row_size / VEC_SIZE;
+    const int n_vecs = row_size / VEC8;
 
     for (int i = 0; i < n_vecs; i++) {
-        aie::vector<int8, VEC_SIZE> va = aie::load_v<VEC_SIZE>(a);
-        aie::vector<int8, VEC_SIZE> vb = aie::load_v<VEC_SIZE>(b);
+        aie::vector<int8, VEC8> va = aie::load_v<VEC8>(a);
+        aie::vector<int8, VEC8> vb = aie::load_v<VEC8>(b);
 
-        // add_sat performs saturating addition
-        aie::vector<int8, VEC_SIZE> vout = aie::add_sat(va, vb);
+        aie::vector<int16, VEC8> va16 = aie::unpack(va);
+        aie::vector<int16, VEC8> vb16 = aie::unpack(vb);
+        aie::vector<int16, VEC8> sum16 = aie::add(va16, vb16);
+        sum16 = aie::max(sum16, (int16)-128);
+        sum16 = aie::min(sum16, (int16)127);
+        aie::vector<int8, VEC8> vout = aie::pack(sum16);
 
         aie::store_v(out, vout);
 
-        a += VEC_SIZE;
-        b += VEC_SIZE;
-        out += VEC_SIZE;
+        a += VEC8;
+        b += VEC8;
+        out += VEC8;
     }
 
-    // Handle remainder (should not happen if row_size is multiple of 64,
-    // which it will be for our tiled layout with channels multiple of 8
-    // and widths multiple of 8)
-    int rem = row_size - n_vecs * VEC_SIZE;
+    // Scalar remainder
+    int rem = row_size - n_vecs * VEC8;
     for (int i = 0; i < rem; i++) {
         int32_t sum = (int32_t)a[i] + (int32_t)b[i];
         if (sum > 127)

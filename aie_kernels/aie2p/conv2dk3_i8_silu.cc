@@ -297,6 +297,14 @@ inline void mac_kh_row_s1(
     }
 }
 
+// Two-pass approach: pass 1 computes all MMUL for one oc_group row
+// into an intermediate buffer, pass 2 applies SiLU from that buffer.
+// This prevents the Peano compiler from overlapping integer MMUL
+// registers with float SiLU registers across loop iterations,
+// which caused incorrect codegen at ≥10 combined iterations.
+// Max width 320 (40 tiles × 64B = 2560B buffer).
+constexpr int MAX_VEC_ITERS = 40;
+
 // TOP: skip kh=0, process kh=1,2
 void conv2dk3_i8_silu_vec_top(
     int8_t *__restrict line0, int8_t *__restrict line1,
@@ -320,35 +328,38 @@ void conv2dk3_i8_silu_vec_top(
     const int vec_iters = input_width / NUM_W;
     aie::vector<int8, MMUL::size_A> zeros_v = aie::zeros<int8, MMUL::size_A>();
 
-    // Set modes once; apply_silu_vec16 no longer changes them.
     ::aie::set_saturation(aie::saturation_mode::saturate);
     ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
     alignas(64) int8_t out_buf[MMUL::size_C];
-    alignas(64) int8_t conv_buf[MMUL::size_C];
+    alignas(64) int8_t row_conv[MAX_VEC_ITERS * MMUL::size_C];
 
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
+        // Pass 1: MMUL only — integer register file.
         for (int vi = 0; vi < vec_iters; vi++) {
             int x_base = vi * NUM_W;
             MMUL acc;
             acc = aie::zeros<acc32, MMUL::size_C>();
 
-            // kh=1 (line1)
             mac_kh_row_s1<NUM_W>(acc, line1, weights, oc_g, ic_groups,
                                  input_width, vi, x_base, 1,
                                  wt_stride_oc, wt_stride_ic,
                                  wt_stride_kh, wt_stride_kw, zeros_v);
-
-            // kh=2 (line2)
             mac_kh_row_s1<NUM_W>(acc, line2, weights, oc_g, ic_groups,
                                  input_width, vi, x_base, 2,
                                  wt_stride_oc, wt_stride_ic,
                                  wt_stride_kh, wt_stride_kw, zeros_v);
 
-            aie::store_v(conv_buf, acc.to_vector<int8>(shift1));
-            apply_silu_vec16(conv_buf, bias, oc_g, out_buf, shift1, shift2);
-            aie::store_v(output + oc_g * (output_width * 8) + x_base * 8,
-                         aie::load_v<MMUL::size_C>(out_buf));
+            aie::store_v(row_conv + vi * MMUL::size_C,
+                         acc.to_vector<int8>(shift1));
+        }
+        // Pass 2: SiLU only — float/bf16 register file.
+        for (int vi = 0; vi < vec_iters; vi++) {
+            apply_silu_vec16(row_conv + vi * MMUL::size_C, bias, oc_g,
+                             out_buf, shift1, shift2);
+            aie::store_v(
+                output + oc_g * (output_width * 8) + vi * NUM_W * 8,
+                aie::load_v<MMUL::size_C>(out_buf));
         }
     }
 }
@@ -376,41 +387,42 @@ void conv2dk3_i8_silu_vec_mid(
     const int vec_iters = input_width / NUM_W;
     aie::vector<int8, MMUL::size_A> zeros_v = aie::zeros<int8, MMUL::size_A>();
 
-    // Set modes once; apply_silu_vec16 no longer changes them.
     ::aie::set_saturation(aie::saturation_mode::saturate);
     ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
     alignas(64) int8_t out_buf[MMUL::size_C];
-    alignas(64) int8_t conv_buf[MMUL::size_C];
+    alignas(64) int8_t row_conv[MAX_VEC_ITERS * MMUL::size_C];
 
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
+        // Pass 1: MMUL only — integer register file.
         for (int vi = 0; vi < vec_iters; vi++) {
             int x_base = vi * NUM_W;
             MMUL acc;
             acc = aie::zeros<acc32, MMUL::size_C>();
 
-            // kh=0 (line0)
             mac_kh_row_s1<NUM_W>(acc, line0, weights, oc_g, ic_groups,
                                  input_width, vi, x_base, 0,
                                  wt_stride_oc, wt_stride_ic,
                                  wt_stride_kh, wt_stride_kw, zeros_v);
-
-            // kh=1 (line1)
             mac_kh_row_s1<NUM_W>(acc, line1, weights, oc_g, ic_groups,
                                  input_width, vi, x_base, 1,
                                  wt_stride_oc, wt_stride_ic,
                                  wt_stride_kh, wt_stride_kw, zeros_v);
-
-            // kh=2 (line2)
             mac_kh_row_s1<NUM_W>(acc, line2, weights, oc_g, ic_groups,
                                  input_width, vi, x_base, 2,
                                  wt_stride_oc, wt_stride_ic,
                                  wt_stride_kh, wt_stride_kw, zeros_v);
 
-            aie::store_v(conv_buf, acc.to_vector<int8>(shift1));
-            apply_silu_vec16(conv_buf, bias, oc_g, out_buf, shift1, shift2);
-            aie::store_v(output + oc_g * (output_width * 8) + x_base * 8,
-                         aie::load_v<MMUL::size_C>(out_buf));
+            aie::store_v(row_conv + vi * MMUL::size_C,
+                         acc.to_vector<int8>(shift1));
+        }
+        // Pass 2: SiLU only — float/bf16 register file.
+        for (int vi = 0; vi < vec_iters; vi++) {
+            apply_silu_vec16(row_conv + vi * MMUL::size_C, bias, oc_g,
+                             out_buf, shift1, shift2);
+            aie::store_v(
+                output + oc_g * (output_width * 8) + vi * NUM_W * 8,
+                aie::load_v<MMUL::size_C>(out_buf));
         }
     }
 }
@@ -438,35 +450,38 @@ void conv2dk3_i8_silu_vec_bot(
     const int vec_iters = input_width / NUM_W;
     aie::vector<int8, MMUL::size_A> zeros_v = aie::zeros<int8, MMUL::size_A>();
 
-    // Set modes once; apply_silu_vec16 no longer changes them.
     ::aie::set_saturation(aie::saturation_mode::saturate);
     ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
     alignas(64) int8_t out_buf[MMUL::size_C];
-    alignas(64) int8_t conv_buf[MMUL::size_C];
+    alignas(64) int8_t row_conv[MAX_VEC_ITERS * MMUL::size_C];
 
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
+        // Pass 1: MMUL only — integer register file.
         for (int vi = 0; vi < vec_iters; vi++) {
             int x_base = vi * NUM_W;
             MMUL acc;
             acc = aie::zeros<acc32, MMUL::size_C>();
 
-            // kh=0 (line0)
             mac_kh_row_s1<NUM_W>(acc, line0, weights, oc_g, ic_groups,
                                  input_width, vi, x_base, 0,
                                  wt_stride_oc, wt_stride_ic,
                                  wt_stride_kh, wt_stride_kw, zeros_v);
-
-            // kh=1 (line1)
             mac_kh_row_s1<NUM_W>(acc, line1, weights, oc_g, ic_groups,
                                  input_width, vi, x_base, 1,
                                  wt_stride_oc, wt_stride_ic,
                                  wt_stride_kh, wt_stride_kw, zeros_v);
 
-            aie::store_v(conv_buf, acc.to_vector<int8>(shift1));
-            apply_silu_vec16(conv_buf, bias, oc_g, out_buf, shift1, shift2);
-            aie::store_v(output + oc_g * (output_width * 8) + x_base * 8,
-                         aie::load_v<MMUL::size_C>(out_buf));
+            aie::store_v(row_conv + vi * MMUL::size_C,
+                         acc.to_vector<int8>(shift1));
+        }
+        // Pass 2: SiLU only — float/bf16 register file.
+        for (int vi = 0; vi < vec_iters; vi++) {
+            apply_silu_vec16(row_conv + vi * MMUL::size_C, bias, oc_g,
+                             out_buf, shift1, shift2);
+            aie::store_v(
+                output + oc_g * (output_width * 8) + vi * NUM_W * 8,
+                aie::load_v<MMUL::size_C>(out_buf));
         }
     }
 }
@@ -513,7 +528,7 @@ inline void mac_kh_row_s2(
 }
 
 // Stride-2 TOP: skip kh=0, process kh=1,2
-void conv2dk3s2_i8_silu_vec_top(
+static void conv2dk3s2_i8_silu_vec_top(
     int8_t *__restrict line0, int8_t *__restrict line1,
     int8_t *__restrict line2, int8_t *__restrict weights_and_bias,
     int8_t *__restrict output, const int32_t input_width,
@@ -569,7 +584,7 @@ void conv2dk3s2_i8_silu_vec_top(
 }
 
 // Stride-2 MIDDLE: process all three kh rows
-void conv2dk3s2_i8_silu_vec_mid(
+static void conv2dk3s2_i8_silu_vec_mid(
     int8_t *__restrict line0, int8_t *__restrict line1,
     int8_t *__restrict line2, int8_t *__restrict weights_and_bias,
     int8_t *__restrict output, const int32_t input_width,
@@ -631,7 +646,7 @@ void conv2dk3s2_i8_silu_vec_mid(
 }
 
 // Stride-2 BOTTOM: process kh=0,1, skip kh=2
-void conv2dk3s2_i8_silu_vec_bot(
+static void conv2dk3s2_i8_silu_vec_bot(
     int8_t *__restrict line0, int8_t *__restrict line1,
     int8_t *__restrict line2, int8_t *__restrict weights_and_bias,
     int8_t *__restrict output, const int32_t input_width,
@@ -696,7 +711,11 @@ void conv2dk3_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                       const int32_t input_width, const int32_t input_channels,
                       const int32_t output_channels, const int32_t check,
                       const int32_t shift1, const int32_t shift2) {
-    if (input_width % 8 == 0 && input_width <= 72) {
+    // Vectorize when width is a multiple of 8 AND vec_iters (width/8) <= 12.
+    // Beyond 12 vec_iters, the Peano compiler's software pipelining generates
+    // incorrect code for the MMUL loop. All YOLO backbone k3 convolutions
+    // (80x80, 40x40, 20x20) fall within this threshold.
+    if (input_width % 8 == 0 && input_width <= 96) {
         event0();
         if (check == CHECK_TOP) {
             conv2dk3_i8_silu_vec_top(line0, line1, line2, weights_and_bias,
@@ -724,28 +743,12 @@ void conv2dk3s2_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                         const int32_t input_width, const int32_t input_channels,
                         const int32_t output_channels, const int32_t check,
                         const int32_t shift1, const int32_t shift2) {
-    int output_width = input_width / 2;
-    if (input_width % 8 == 0 && output_width % 8 == 0) {
-        event0();
-        if (check == CHECK_TOP) {
-            conv2dk3s2_i8_silu_vec_top(line0, line1, line2, weights_and_bias,
-                                       output, input_width, input_channels,
-                                       output_channels, shift1, shift2);
-        } else if (check == CHECK_BOTTOM) {
-            conv2dk3s2_i8_silu_vec_bot(line0, line1, line2, weights_and_bias,
-                                       output, input_width, input_channels,
-                                       output_channels, shift1, shift2);
-        } else {
-            conv2dk3s2_i8_silu_vec_mid(line0, line1, line2, weights_and_bias,
-                                       output, input_width, input_channels,
-                                       output_channels, shift1, shift2);
-        }
-        event1();
-    } else {
-        conv2dk3s2_i8_silu_scalar(line0, line1, line2, weights_and_bias,
-                                   output, input_width, input_channels,
-                                   output_channels, check, shift1, shift2);
-    }
+    // Stride-2 uses scalar-only to stay within 16KB PM budget.
+    // The stride-2 vectorized functions are defined but not referenced
+    // from extern "C", so the linker can dead-strip them.
+    conv2dk3s2_i8_silu_scalar(line0, line1, line2, weights_and_bias,
+                               output, input_width, input_channels,
+                               output_channels, check, shift1, shift2);
 }
 
 // Aliases for multi-kernel designs where different MLIR types need
