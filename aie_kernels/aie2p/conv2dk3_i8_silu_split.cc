@@ -831,7 +831,11 @@ void conv2dk3_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                       const int32_t input_width, const int32_t input_channels,
                       const int32_t output_channels, const int32_t check,
                       const int32_t shift1, const int32_t shift2) {
-    if (input_width >= 8) {
+    // Vectorized path requires IC > 16: Peano generates pipelining-broken
+    // code for IC <= 16 (1-2 ic_groups) when the loop body is fast (split
+    // SiLU). Scalar path uses the same extern SiLU so still benefits from
+    // split compilation, just without the MMUL vectorization.
+    if (input_width >= 8 && input_channels > 16) {
         event0();
         switch (check) {
         case CHECK_TOP:
@@ -868,7 +872,7 @@ void conv2dk3s2_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                         const int32_t input_width, const int32_t input_channels,
                         const int32_t output_channels, const int32_t check,
                         const int32_t shift1, const int32_t shift2) {
-    if ((input_width / 2) >= 8) {
+    if ((input_width / 2) >= 8 && input_channels > 16) {
         event0();
         switch (check) {
         case CHECK_TOP:

@@ -264,7 +264,17 @@ class AIEConv2dInt8(AIEOperatorBase):
             out_channels % num_aie_columns == 0
         ), f"out_channels ({out_channels}) must be divisible by num_aie_columns ({num_aie_columns})"
 
-        self.in_channels = in_channels
+        # P0: pad IC to avoid power-of-2 ic_iters for k1 fused vectorized.
+        # Peano generates corrupt accumulator values when ic_iters is a
+        # power-of-2 (2, 4, 8). Adding one IC group (8 channels of zeros)
+        # shifts ic_iters to a non-power-of-2 value, avoiding the bug.
+        self._ic_padding = 0
+        if fused and kernel_size == 1:
+            ic_iters = in_channels // 8
+            if 0 < ic_iters < 12 and (ic_iters & (ic_iters - 1)) == 0:
+                self._ic_padding = 8
+
+        self.in_channels = in_channels + self._ic_padding
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
@@ -371,19 +381,12 @@ class AIEConv2dInt8(AIEOperatorBase):
                 f"_silu_sh{self.shift1}_{self.shift2}{col_suffix}"
             )
             callback_fn = "my_conv2d_int8_silu"
-            if self.in_channels >= 96:
-                # Split SiLU: MAC and SiLU in separate TUs for faster
-                # codegen. IC >= 96 (ic_iters >= 12) avoids Peano bug.
-                kernel_obj_name = "conv2dk1_i8_silu.o"
-                kernel_src = None  # handled below as linked object
-                kernel_extra_flags = ["-DINT8_ACT", "-ffunction-sections",
-                                      "-fdata-sections"]
-            else:
-                # IC < 96: power-of-2 ic_iters trigger Peano codegen bug
-                # in vectorized path. Use scalar co-compiled fallback.
-                kernel_obj_name = "conv2dk1_i8_silu_scalar.o"
-                kernel_src = "conv2dk1_i8_silu.cc"
-                kernel_extra_flags = ["-DINT8_ACT", "-DSCALAR"]
+            # Always split vectorized — IC padding ensures non-power-of-2
+            # ic_iters, avoiding the Peano regalloc codegen bug.
+            kernel_obj_name = "conv2dk1_i8_silu.o"
+            kernel_src = None  # handled below as linked object
+            kernel_extra_flags = ["-DINT8_ACT", "-ffunction-sections",
+                                  "-fdata-sections"]
             callback_args = [
                 self.context.device_manager.device_type,
                 self.height,
@@ -575,6 +578,15 @@ class AIEConv2dInt8(AIEOperatorBase):
         if self.fused and bias is None:
             raise AIEOperatorConstraintError(
                 "AIEConv2dInt8: bias required for fused mode"
+            )
+
+        # Pad input/weight channels if IC was padded (P0 workaround)
+        if self._ic_padding > 0:
+            x = torch.nn.functional.pad(
+                x, (0, 0, 0, 0, 0, self._ic_padding, 0, 0)
+            )
+            weight = torch.nn.functional.pad(
+                weight, (0, 0, 0, 0, 0, self._ic_padding, 0, 0)
             )
 
         input_tiled = nchw_to_tiled_int8(x)
