@@ -165,9 +165,18 @@ def pytest_sessionfinish(session, exitstatus):
 
 # Generate multiple iterations of each test
 def pytest_generate_tests(metafunc):
-    """Generate multiple iterations of each test for statistics gathering"""
+    """Generate multiple iterations of each test for statistics gathering.
+
+    Tests that handle iterations internally (e.g., benchmarks that reuse a
+    single HW context) should be marked with @pytest.mark.internal_iterations
+    to opt out of this parametrization.
+    """
     iterations = metafunc.config.getoption("--iterations")
 
     if iterations > 1:
+        # Skip tests that handle their own iteration loop
+        markers = list(metafunc.definition.iter_markers("internal_iterations"))
+        if markers:
+            return
         metafunc.fixturenames.append("_iteration")
         metafunc.parametrize("_iteration", range(iterations), ids=lambda i: f"iter{i}")
