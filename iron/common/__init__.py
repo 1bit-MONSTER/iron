@@ -10,6 +10,7 @@ from .compilation import (
     InstsBinArtifact,
     KernelObjectArtifact,
     KernelArchiveArtifact,
+    LinkedKernelObjectArtifact,
     SourceArtifact,
     PythonGeneratedMLIRArtifact,
 )

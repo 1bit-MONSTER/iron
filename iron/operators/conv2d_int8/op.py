@@ -11,6 +11,7 @@ from iron.common import (
     XclbinArtifact,
     InstsBinArtifact,
     KernelObjectArtifact,
+    LinkedKernelObjectArtifact,
     SourceArtifact,
     PythonGeneratedMLIRArtifact,
 )
@@ -208,9 +209,10 @@ class AIEConv2dInt8(AIEOperatorBase):
         shift1: Acc -> int8 shift for LUT lookup (required if fused=True).
         shift2: SiLU product -> int8 shift (required if fused=True).
         num_aie_columns: Number of AIE columns for parallelism.
-        silu_variant: SiLU implementation for fused kernels:
-            "tanh" (default) — bf16 tanh via two-extract int16 reconstruction.
-            "poly" — pure-integer polynomial approximation (k3 only).
+        silu_variant: SiLU implementation for fused k3 kernels:
+            "split" (default) — bf16 tanh in separate .o (95x faster).
+            "tanh" — bf16 tanh co-compiled with MAC (slow due to Peano).
+            "poly" — pure-integer polynomial approximation.
         context: AIEContext instance.
     """
 
@@ -227,7 +229,7 @@ class AIEConv2dInt8(AIEOperatorBase):
         shift1=None,
         shift2=None,
         num_aie_columns=1,
-        silu_variant="tanh",
+        silu_variant="split",
         context=None,
         register=True,
     ):
@@ -239,11 +241,11 @@ class AIEConv2dInt8(AIEOperatorBase):
         assert silu_variant in (
             "tanh",
             "poly",
-        ), f"silu_variant must be 'tanh' or 'poly', got '{silu_variant}'"
-        if silu_variant == "poly":
-            assert (
-                kernel_size == 3 and fused
-            ), "silu_variant='poly' only supported for fused k3 conv"
+            "split",
+        ), f"silu_variant must be 'tanh', 'poly', or 'split', got '{silu_variant}'"
+        # split/poly only apply to fused k3; silently reset for other combos
+        if silu_variant in ("poly", "split") and not (kernel_size == 3 and fused):
+            silu_variant = "tanh"
         if fused:
             assert kernel_size in (1, 3), "fused mode supported for kernel_size=1 and 3"
             assert (
@@ -332,10 +334,16 @@ class AIEConv2dInt8(AIEOperatorBase):
             if self.silu_variant == "poly":
                 kernel_obj_name = "conv2dk3_i8_silu_poly.o"
                 kernel_src = "conv2dk3_i8_silu_poly.cc"
+            elif self.silu_variant == "split":
+                # SiLU compiled in a separate .o to avoid Peano codegen
+                # degradation (100x slower when co-compiled with k3 MAC).
+                kernel_obj_name = "conv2dk3_i8_silu.o"
+                kernel_src = None  # handled below as linked object
             else:
                 kernel_obj_name = "conv2dk3_i8_silu_v2.o"
                 kernel_src = "conv2dk3_i8_silu_v2.cc"
-            kernel_extra_flags = ["-DINT8_ACT"]
+            kernel_extra_flags = ["-DINT8_ACT", "-ffunction-sections",
+                                  "-fdata-sections"]
         elif self.kernel_size == 3:
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
@@ -451,20 +459,35 @@ class AIEConv2dInt8(AIEOperatorBase):
             callback_args=callback_args,
         )
 
+        aie2p_dir = self.context.base_dir / "aie_kernels" / "aie2p"
+        if kernel_src is None and self.silu_variant == "split":
+            # Split SiLU: compile MAC and SiLU in separate TUs, then
+            # partial-link into one .o. Avoids Peano codegen degradation
+            # (100x slower when SiLU is co-compiled with k3 MAC).
+            mac_obj = KernelObjectArtifact.new(
+                "conv2dk3_i8_silu_split.o",
+                depends=[SourceArtifact.new(aie2p_dir / "conv2dk3_i8_silu_split.cc")],
+                extra_flags=kernel_extra_flags,
+            )
+            silu_obj = KernelObjectArtifact.new(
+                "silu_postproc_i8.o",
+                depends=[SourceArtifact.new(aie2p_dir / "silu_postproc_i8.cc")],
+                extra_flags=kernel_extra_flags,
+            )
+            kernel_dep = LinkedKernelObjectArtifact.new(
+                kernel_obj_name,
+                depends=[mac_obj, silu_obj],
+            )
+        else:
+            kernel_dep = KernelObjectArtifact.new(
+                kernel_obj_name,
+                depends=[SourceArtifact.new(aie2p_dir / kernel_src)],
+                extra_flags=kernel_extra_flags,
+            )
+
         xclbin_artifact = XclbinArtifact.new(
             f"{file_name_base}.xclbin",
-            depends=[
-                mlir_artifact,
-                KernelObjectArtifact.new(
-                    kernel_obj_name,
-                    depends=[
-                        SourceArtifact.new(
-                            self.context.base_dir / "aie_kernels" / "aie2p" / kernel_src
-                        )
-                    ],
-                    extra_flags=kernel_extra_flags,
-                ),
-            ],
+            depends=[mlir_artifact, kernel_dep],
         )
 
         insts_artifact = InstsBinArtifact.new(

@@ -143,6 +143,18 @@ class KernelArchiveArtifact(CompilationArtifact):
     pass
 
 
+class LinkedKernelObjectArtifact(CompilationArtifact):
+    """A kernel .o produced by partial-linking multiple KernelObjectArtifacts.
+
+    Uses ld.lld -r to merge separately-compiled .o files into a single
+    relocatable object. This lets functions be compiled in isolation to
+    avoid Peano cross-function codegen issues while producing a single .o
+    that aiecc can consume normally.
+    """
+
+    pass
+
+
 class PythonGeneratedMLIRArtifact(CompilationArtifact):
     def __init__(
         self,
@@ -573,6 +585,46 @@ class ArchiveCompilationRule(CompilationRule):
                     )
                 else:
                     raise RuntimeError(f"Archive creation failed: {result.stderr}")
+            else:
+                artifact.fake_available = True
+                self.dry_run.append(" ".join(cmd))
+
+        return artifacts
+
+
+class LinkKernelObjectsCompilationRule(CompilationRule):
+    """Partial-link multiple .o files into a single relocatable .o."""
+
+    def __init__(self, peano_dir, *args, **kwargs):
+        self.peano_dir = peano_dir
+        super().__init__(*args, **kwargs)
+
+    def matches(self, artifacts):
+        return any(
+            isinstance(artifact, LinkedKernelObjectArtifact)
+            and all(
+                isinstance(dep, KernelObjectArtifact) and dep.is_available()
+                for dep in artifact.depends
+            )
+            for artifact in artifacts
+        )
+
+    def compile(self, artifacts):
+        for artifact in artifacts:
+            if not isinstance(artifact, LinkedKernelObjectArtifact):
+                continue
+            if not all(dep.is_available() for dep in artifact.depends):
+                continue
+
+            object_files = [str(dep.path) for dep in artifact.depends]
+            lld_path = Path(self.peano_dir) / "bin" / "ld.lld"
+            cmd = [str(lld_path), "-r"] + object_files + ["-o", str(artifact.path)]
+
+            if self.dry_run is None:
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode != 0:
+                    raise RuntimeError(f"Partial link failed: {result.stderr}")
+                logging.debug(f"Linked: {artifact.path.name}")
             else:
                 artifact.fake_available = True
                 self.dry_run.append(" ".join(cmd))

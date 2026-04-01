@@ -154,6 +154,9 @@ class AIEOperatorBase(ABC):
             comp.PeanoCompilationRule(
                 context.peano_dir, context.mlir_aie_dir, dry_run=dry_run
             ),
+            comp.LinkKernelObjectsCompilationRule(
+                context.peano_dir, dry_run=dry_run
+            ),
             comp.ArchiveCompilationRule(context.peano_dir, dry_run=dry_run),
             comp.AieccCompilationRule(
                 context.build_dir,
