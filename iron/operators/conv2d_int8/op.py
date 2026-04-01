@@ -208,6 +208,9 @@ class AIEConv2dInt8(AIEOperatorBase):
         shift1: Acc -> int8 shift for LUT lookup (required if fused=True).
         shift2: SiLU product -> int8 shift (required if fused=True).
         num_aie_columns: Number of AIE columns for parallelism.
+        silu_variant: SiLU implementation for fused kernels:
+            "tanh" (default) — bf16 tanh via two-extract int16 reconstruction.
+            "poly" — pure-integer polynomial approximation (k3 only).
         context: AIEContext instance.
     """
 
@@ -224,6 +227,7 @@ class AIEConv2dInt8(AIEOperatorBase):
         shift1=None,
         shift2=None,
         num_aie_columns=1,
+        silu_variant="tanh",
         context=None,
         register=True,
     ):
@@ -232,6 +236,14 @@ class AIEConv2dInt8(AIEOperatorBase):
             assert stride == 1, "Only stride=1 supported for 1x1 conv"
         else:
             assert stride in (1, 2), "Only stride 1 or 2 supported for 3x3 conv"
+        assert silu_variant in (
+            "tanh",
+            "poly",
+        ), f"silu_variant must be 'tanh' or 'poly', got '{silu_variant}'"
+        if silu_variant == "poly":
+            assert (
+                kernel_size == 3 and fused
+            ), "silu_variant='poly' only supported for fused k3 conv"
         if fused:
             assert kernel_size in (1, 3), "fused mode supported for kernel_size=1 and 3"
             assert (
@@ -261,6 +273,7 @@ class AIEConv2dInt8(AIEOperatorBase):
         self.shift1 = shift1
         self.shift2 = shift2
         self.num_aie_columns = num_aie_columns
+        self.silu_variant = silu_variant
 
         self.xclbin_artifact = None
         self.insts_artifact = None
@@ -298,10 +311,11 @@ class AIEConv2dInt8(AIEOperatorBase):
         )
 
         if self.fused and self.kernel_size == 3:
+            poly_suffix = "_poly" if self.silu_variant == "poly" else ""
             file_name_base = (
                 f"{prefix}{self.in_channels}ic_{self.out_channels}oc_"
                 f"{self.height}h_{self.width}w_k3s{self.stride}"
-                f"_fused_sh{self.shift1}_{self.shift2}{col_suffix}"
+                f"_fused_sh{self.shift1}_{self.shift2}{col_suffix}{poly_suffix}"
             )
             callback_fn = "my_conv2d_int8_k3_fused"
             callback_args = [
@@ -315,8 +329,12 @@ class AIEConv2dInt8(AIEOperatorBase):
                 self.stride,
                 self.num_aie_columns,
             ]
-            kernel_obj_name = "conv2dk3_i8_silu.o"
-            kernel_src = "conv2dk3_i8_silu.cc"
+            if self.silu_variant == "poly":
+                kernel_obj_name = "conv2dk3_i8_silu_poly.o"
+                kernel_src = "conv2dk3_i8_silu_poly.cc"
+            else:
+                kernel_obj_name = "conv2dk3_i8_silu_v2.o"
+                kernel_src = "conv2dk3_i8_silu_v2.cc"
             kernel_extra_flags = ["-DINT8_ACT"]
         elif self.kernel_size == 3:
             file_name_base = (
@@ -345,9 +363,12 @@ class AIEConv2dInt8(AIEOperatorBase):
                 f"_silu_sh{self.shift1}_{self.shift2}{col_suffix}"
             )
             callback_fn = "my_conv2d_int8_silu"
-            # Vectorize when IC >= 8 and width is a multiple of 8
-            can_vec_silu = self.in_channels >= 8 and self.width % 8 == 0
-            if can_vec_silu:
+            # Vectorized path: requires IC >= 96 to avoid Peano codegen
+            # bug where small ic_iters (power-of-2: 2, 4, 8) combined with
+            # large w_iters and oc_groups produces incorrect accumulator
+            # values. IC >= 96 (ic_iters >= 12) is safe for all tested
+            # width/OC combinations in the YOLO layer inventory.
+            if self.in_channels >= 96:
                 kernel_obj_name = "conv2dk1_i8_silu_vec.o"
                 kernel_extra_flags = ["-DINT8_ACT"]
             else:

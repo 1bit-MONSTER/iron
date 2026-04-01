@@ -126,24 +126,22 @@ static void conv2dk1_i8_silu_scalar_row(
 #else // Vector
 
 // ---------------------------------------------------------------------------
-// Vectorized SiLU post-processing using hardware aie::tanh<bfloat16>
+// Vectorized SiLU post-processing v2: two-extract int16 reconstruction
 //
-// Processes 64 int8 values (one MMUL tile = 8 spatial x 8 channels):
-//   1. int8 conv result (from SRS, correct depermutation) in conv_buf
-//   2. Convert groups of 16 to bf16, add pre-scaled bias, apply SiLU
-//   3. Requantize back to int8
+// Takes two int8 buffers (lo8, hi8) from the MMUL accumulator extracted at
+// shifts shift1 and shift1+8 with saturation=none, rounding=floor.
+// Reconstructs int16 = hi8 * 256 + (uint8)lo8 to recover the full
+// (acc >> shift1) value without int8 clipping. Then converts to bf16,
+// adds pre-scaled bias, applies vec-16 SiLU, and requantizes to int8.
 //
-// This function is marked noinline to prevent the Peano compiler from
-// mixing MMUL register allocation with float SiLU operations.
+// Marked noinline to prevent Peano from mixing MMUL register allocation
+// with float SiLU operations across loop iterations.
 // ---------------------------------------------------------------------------
 __attribute__((noinline)) static void apply_silu_vec16_k1(
-    int8_t *__restrict conv_buf,
+    int8_t *__restrict lo8_buf,
+    int8_t *__restrict hi8_buf,
     int32_t *__restrict bias, int32_t oc_g,
     int8_t *__restrict out_buf, int32_t shift1, int32_t shift2) {
-
-    // Reset saturation/rounding modes for float SiLU computation.
-    ::aie::set_saturation(aie::saturation_mode::none);
-    ::aie::set_rounding(aie::rounding_mode::floor);
 
     float dequant = 1.0f / (float)(1 << shift1);
     float scale_out = (float)shift2 / 256.0f;
@@ -168,9 +166,11 @@ __attribute__((noinline)) static void apply_silu_vec16_k1(
     alignas(64) bfloat16 bf16_tmp[16];
 
     for (int g = 0; g < 4; g++) {
-        // Convert 16 int8 values to bf16
+        // Reconstruct int16 from two int8 extractions, convert to bf16
         for (int i = 0; i < 16; i++) {
-            bf16_tmp[i] = (bfloat16)(float)conv_buf[g * 16 + i];
+            int16_t val16 = (int16_t)hi8_buf[g * 16 + i] * (int16_t)256 +
+                            (int16_t)(uint8_t)lo8_buf[g * 16 + i];
+            bf16_tmp[i] = (bfloat16)(float)val16;
         }
 
         // Load as vec-16, add bias, apply SiLU
@@ -199,18 +199,50 @@ __attribute__((noinline)) static void apply_silu_vec16_k1(
             out_buf[g * 16 + i] = (int8_t)oval;
         }
     }
+}
 
-    // Restore modes for the next MMUL iteration
-    ::aie::set_saturation(aie::saturation_mode::saturate);
-    ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
+// ---------------------------------------------------------------------------
+// MAC helper for k1 vectorized: accumulate over all IC groups.
+// INLINE (matching k3 v2's mac_kh_row_s1 pattern) so that Peano sees the
+// full loop body including acc.mac() writes, preventing LICM from hoisting
+// the acc=zeros() zero-init out of the wi loop. With noinline, Peano can't
+// see the acc writes inside this function and legally hoists the zero-init,
+// causing accumulator leakage across wi iterations for small ic_iters.
+// ---------------------------------------------------------------------------
+inline void mac_k1_all_ic(
+    aie::mmul<8, 8, 8, int8, int8> &acc,
+    int8_t *__restrict input_base, int8_t *__restrict kernels,
+    int32_t oc_g, int32_t wi, int32_t iw, int32_t ic_iters) {
+
+    using MMUL = aie::mmul<8, 8, 8, int8, int8>;
+
+    int8_t *in_ptr = input_base + wi * MMUL::size_A;
+    int8_t *wt_ptr = kernels + oc_g * ic_iters * MMUL::size_B;
+
+    for (int ic = 0; ic < ic_iters; ic++) {
+        aie::vector<int8, MMUL::size_B> in_b =
+            aie::load_v<MMUL::size_B>(wt_ptr);
+        wt_ptr += MMUL::size_B;
+
+        aie::vector<int8, MMUL::size_A> in_a =
+            aie::load_v<MMUL::size_A>(in_ptr);
+        in_ptr += iw * 8;
+
+        acc.mac(in_a, in_b);
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Vectorized MAC + SiLU using MMUL int8 extraction + vec-16 hardware tanh
 //
 // MAC phase uses aie::mmul<8,8,8,int8,int8>.
-// After accumulation, extracts int8 via SRS (correct depermutation),
-// converts to bf16, adds bias, applies SiLU via hardware tanh, requantizes.
+// After accumulation, uses two-extract for int16 reconstruction (avoids
+// int8 clipping before bias), then applies SiLU via hardware tanh.
+//
+// Key fix: MMUL declared inside inner loop (fresh per iteration) to prevent
+// Peano register allocator from incorrectly reusing accumulator registers
+// across loop iterations at high w_iters. MAC and SiLU are both noinline
+// to create clean function boundaries matching the k3 v2 pattern.
 // ---------------------------------------------------------------------------
 static void conv2dk1_i8_silu_vector_row(
     int8_t *input, int8_t *weights_and_bias, int8_t *output,
@@ -218,15 +250,8 @@ static void conv2dk1_i8_silu_vector_row(
     const int32_t output_channels, const int32_t shift1,
     const int32_t shift2) {
 
-    constexpr int MMUL_M = 8;
-    constexpr int MMUL_K = 8;
-    constexpr int MMUL_N = 8;
-    constexpr int CHANNEL_FACTOR = MMUL_K;
-    constexpr int MMUL_MK = MMUL_M * MMUL_K;
-    constexpr int MMUL_KN = MMUL_K * MMUL_N;
-    constexpr int MMUL_MN = MMUL_M * MMUL_N;
+    using MMUL = aie::mmul<8, 8, 8, int8, int8>;
 
-    using MMUL8x8x8 = aie::mmul<MMUL_M, MMUL_K, MMUL_N, int8, int8>;
     ::aie::set_saturation(aie::saturation_mode::saturate);
     ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
@@ -235,48 +260,41 @@ static void conv2dk1_i8_silu_vector_row(
     int8_t *kernels = weights_and_bias;
 
     const int iw = input_width;
-    const int ic_iters = input_channels / CHANNEL_FACTOR;
-    const int oc_groups = output_channels / CHANNEL_FACTOR;
-    const int w_iters = iw / MMUL_M; // process 8 spatial cols at a time
+    const int ic_iters = input_channels / 8;
+    const int oc_groups = output_channels / 8;
+    const int w_iters = iw / 8; // process 8 spatial cols at a time
 
     int8_t *input_base = input;
 
-    // Temporary buffers on stack for SiLU processing
-    alignas(64) int8_t conv_buf[MMUL_MN];
-    alignas(64) int8_t out_buf[MMUL_MN];
-
-    MMUL8x8x8 acc_mmul;
+    alignas(64) int8_t lo8_buf[MMUL::size_C];
+    alignas(64) int8_t hi8_buf[MMUL::size_C];
+    alignas(64) int8_t out_buf[MMUL::size_C];
 
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
         for (int wi = 0; wi < w_iters; wi++) {
-            // Initialize accumulator
-            acc_mmul = aie::zeros<acc32, MMUL_MN>();
+            // Fresh accumulator per iteration (prevents Peano regalloc bug)
+            MMUL acc;
+            acc = aie::zeros<acc32, MMUL::size_C>();
 
-            int8_t *in_ptr = input_base + wi * MMUL_MK;
-            int8_t *wt_ptr = kernels + oc_g * ic_iters * MMUL_KN;
+            // MAC over all IC groups (noinline for codegen isolation)
+            mac_k1_all_ic(acc, input_base, kernels,
+                          oc_g, wi, iw, ic_iters);
 
-            // Vectorized MAC over all IC groups
-            for (int ic = 0; ic < ic_iters; ic++) {
-                aie::vector<int8, MMUL_KN> in_b =
-                    aie::load_v<MMUL_KN>(wt_ptr);
-                wt_ptr += MMUL_KN;
+            // Two-extract with mode switching (matching k3 v2 pattern)
+            ::aie::set_saturation(aie::saturation_mode::none);
+            ::aie::set_rounding(aie::rounding_mode::floor);
+            aie::store_v(lo8_buf, acc.to_vector<int8>(shift1));
+            aie::store_v(hi8_buf, acc.to_vector<int8>(shift1 + 8));
+            ::aie::set_saturation(aie::saturation_mode::saturate);
+            ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
 
-                aie::vector<int8, MMUL_MK> in_a =
-                    aie::load_v<MMUL_MK>(in_ptr);
-                in_ptr += iw * CHANNEL_FACTOR;
-
-                acc_mmul.mac(in_a, in_b);
-            }
-
-            // Extract as int8 via SRS (correct depermutation)
-            aie::store_v(conv_buf, acc_mmul.to_vector<int8>(shift1));
-
-            // Apply vectorized SiLU (noinline, resets/restores modes)
-            apply_silu_vec16_k1(conv_buf, bias, oc_g, out_buf, shift1, shift2);
+            // Apply vectorized SiLU with int16 reconstruction (noinline)
+            apply_silu_vec16_k1(lo8_buf, hi8_buf, bias, oc_g, out_buf,
+                                shift1, shift2);
 
             // Store 64 int8 output values
-            int8_t *dst = output + oc_g * (iw * 8) + wi * MMUL_MN;
-            aie::store_v(dst, aie::load_v<MMUL_MN>(out_buf));
+            int8_t *dst = output + oc_g * (iw * 8) + wi * MMUL::size_C;
+            aie::store_v(dst, aie::load_v<MMUL::size_C>(out_buf));
         }
     }
 }
