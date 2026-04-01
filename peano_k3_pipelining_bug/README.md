@@ -20,6 +20,10 @@ xrt-smi examine
 python3 -c "from iron.operators.conv2d_int8.op import AIEConv2dInt8; print('OK')"
 ```
 
+> NOTE: if xrt is installed from upstream packages or PPA:
+>
+> `export PYTHONPATH=/usr/lib/python3/dist-packages:$PYTHONPATH`
+
 ## Running the Tests
 
 Each test is a standalone script for one affected YOLOv8n layer.
