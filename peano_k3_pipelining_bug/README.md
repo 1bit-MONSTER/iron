@@ -23,22 +23,28 @@ python3 -c "from iron.operators.conv2d_int8.op import AIEConv2dInt8; print('OK')
 ## Running the Tests
 
 Each test is a standalone script for one affected YOLOv8n layer.
-Each will compile the kernel, run on the NPU, and timeout after ~90s
-to confirm the hang. Output is verified against a CPU Pade-tanh SiLU
-golden reference.
+Each compiles the kernel, runs on the NPU, and verifies against a CPU
+Pade-tanh SiLU golden reference.
+
+By default, tests use the **vectorized** kernel (no IC guard) and will
+**hang** to demonstrate the bug. Pass `--scalar` to use the scalar MAC
+workaround, which runs correctly but slowly.
 
 ```bash
-# L0: stem layer, IC=8 -> OC=16, 640x640 stride-2 (HANGS)
+# --- Demonstrate the bug (HANGS, timeout ~90s) ---
 python3 peano_k3_pipelining_bug/test_L0_k3s2_8ic_16oc_640.py
-
-# L1: first downsample, IC=16 -> OC=32, 320x320 stride-2 (HANGS)
 python3 peano_k3_pipelining_bug/test_L1_k3s2_16ic_32oc_320.py
-
-# L2bn: C2f bottleneck, IC=16 -> OC=16, 160x160 stride-1 (HANGS)
 python3 peano_k3_pipelining_bug/test_L2bn_k3s1_16ic_16oc_160.py
+
+# --- Verify scalar workaround (PASSES, but slow) ---
+python3 peano_k3_pipelining_bug/test_L0_k3s2_8ic_16oc_640.py --scalar
+python3 peano_k3_pipelining_bug/test_L1_k3s2_16ic_32oc_320.py --scalar
+python3 peano_k3_pipelining_bug/test_L2bn_k3s1_16ic_16oc_160.py --scalar
 ```
 
-All three scripts exit with code 1 and print the hang confirmation.
+The two kernel variants:
+- `conv2dk3_i8_silu_bug.cc` — vectorized dispatch for all IC (**hangs** at IC<=16)
+- `conv2dk3_i8_silu_scalar_workaround.cc` — adds `input_channels > 16` guard (**passes**)
 
 ## Affected Layers
 
@@ -132,10 +138,11 @@ void conv2dk3_i8_silu_vec_mid_v2(...) {
 
 ```
 peano_k3_pipelining_bug/
-├── README.md                              This file
-├── conv2dk3_i8_silu_bug.cc                MAC kernel, IC guard REMOVED
-├── silu_postproc_i8.cc                    SiLU in separate TU
-├── test_L0_k3s2_8ic_16oc_640.py           L0 test (IC=8, HANGS)
-├── test_L1_k3s2_16ic_32oc_320.py          L1 test (IC=16, HANGS)
-└── test_L2bn_k3s1_16ic_16oc_160.py        L2bn test (IC=16, HANGS)
+├── README.md                                   This file
+├── conv2dk3_i8_silu_bug.cc                     MAC kernel, IC guard REMOVED (HANGS)
+├── conv2dk3_i8_silu_scalar_workaround.cc       MAC kernel, IC>16 guard (PASSES)
+├── silu_postproc_i8.cc                         SiLU in separate TU (shared by both)
+├── test_L0_k3s2_8ic_16oc_640.py                L0 test (--scalar for workaround)
+├── test_L1_k3s2_16ic_32oc_320.py               L1 test (--scalar for workaround)
+└── test_L2bn_k3s1_16ic_16oc_160.py             L2bn test (--scalar for workaround)
 ```
