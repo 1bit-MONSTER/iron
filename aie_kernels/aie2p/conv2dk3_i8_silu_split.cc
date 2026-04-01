@@ -84,6 +84,92 @@ inline int32_t float_to_int_round(float x) {
 }
 
 // ---------------------------------------------------------------------------
+// Scalar tail helpers: process remaining width%8 elements after vectorized
+// loop. Shared by all 3 vec functions per stride to avoid code duplication.
+// ---------------------------------------------------------------------------
+
+// Stride-1 scalar tail: processes elements [tail_start, output_width)
+inline void scalar_tail_s1(
+    int8_t *line0, int8_t *line1, int8_t *line2,
+    int8_t *weights_and_bias, int8_t *output,
+    int32_t input_width, int32_t input_channels, int32_t output_channels,
+    int32_t oc_g, int32_t tail_start, int32_t output_width,
+    int32_t shift1, int32_t shift2, int skip_top, int skip_bot) {
+
+    int8_t *weights = weights_and_bias;
+    int32_t *bias =
+        (int32_t *)(weights_and_bias + output_channels * input_channels * 9);
+    const int ic_groups = input_channels / 8;
+    const int wt_stride_kw = 64;
+    const int wt_stride_kh = 3 * 64;
+    const int wt_stride_ic = 3 * 3 * 64;
+    const int wt_stride_oc = ic_groups * wt_stride_ic;
+
+    for (int x = tail_start; x < output_width; x++) {
+        for (int oc8 = 0; oc8 < 8; oc8++) {
+            int32_t acc = 0;
+            for (int ic_g = 0; ic_g < ic_groups; ic_g++)
+                for (int ic8 = 0; ic8 < 8; ic8++)
+                    for (int kh = 0; kh < 3; kh++) {
+                        if (kh == 0 && skip_top) continue;
+                        if (kh == 2 && skip_bot) continue;
+                        int8_t *line = select_line(kh, line0, line1, line2);
+                        for (int kw = 0; kw < 3; kw++) {
+                            int ix = x + kw - 1;
+                            if (ix < 0 || ix >= input_width) continue;
+                            acc += (int32_t)line[ic_g * (input_width * 8) + ix * 8 + ic8] *
+                                   (int32_t)weights[oc_g * wt_stride_oc + ic_g * wt_stride_ic +
+                                                    kh * wt_stride_kh + kw * wt_stride_kw + ic8 * 8 + oc8];
+                        }
+                    }
+            acc += bias[oc_g * 8 + oc8];
+            output[oc_g * (output_width * 8) + x * 8 + oc8] = pade_silu_i8(acc, shift1, shift2);
+        }
+    }
+}
+
+// Stride-2 scalar tail: processes output elements [tail_start, output_width)
+inline void scalar_tail_s2(
+    int8_t *line0, int8_t *line1, int8_t *line2,
+    int8_t *weights_and_bias, int8_t *output,
+    int32_t input_width, int32_t input_channels, int32_t output_channels,
+    int32_t oc_g, int32_t tail_start, int32_t output_width,
+    int32_t shift1, int32_t shift2, int skip_top, int skip_bot) {
+
+    int8_t *weights = weights_and_bias;
+    int32_t *bias =
+        (int32_t *)(weights_and_bias + output_channels * input_channels * 9);
+    const int ic_groups = input_channels / 8;
+    const int wt_stride_kw = 64;
+    const int wt_stride_kh = 3 * 64;
+    const int wt_stride_ic = 3 * 3 * 64;
+    const int wt_stride_oc = ic_groups * wt_stride_ic;
+
+    for (int x_out = tail_start; x_out < output_width; x_out++) {
+        int x_in_base = x_out * 2;
+        for (int oc8 = 0; oc8 < 8; oc8++) {
+            int32_t acc = 0;
+            for (int ic_g = 0; ic_g < ic_groups; ic_g++)
+                for (int ic8 = 0; ic8 < 8; ic8++)
+                    for (int kh = 0; kh < 3; kh++) {
+                        if (kh == 0 && skip_top) continue;
+                        if (kh == 2 && skip_bot) continue;
+                        int8_t *line = select_line(kh, line0, line1, line2);
+                        for (int kw = 0; kw < 3; kw++) {
+                            int ix = x_in_base + kw - 1;
+                            if (ix < 0 || ix >= input_width) continue;
+                            acc += (int32_t)line[ic_g * (input_width * 8) + ix * 8 + ic8] *
+                                   (int32_t)weights[oc_g * wt_stride_oc + ic_g * wt_stride_ic +
+                                                    kh * wt_stride_kh + kw * wt_stride_kw + ic8 * 8 + oc8];
+                        }
+                    }
+            acc += bias[oc_g * 8 + oc8];
+            output[oc_g * (output_width * 8) + x_out * 8 + oc8] = pade_silu_i8(acc, shift1, shift2);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Scalar stride-1
 // ---------------------------------------------------------------------------
 void conv2dk3_i8_silu_scalar(int8_t *line0, int8_t *line1, int8_t *line2,
@@ -259,8 +345,11 @@ void conv2dk3_i8_silu_vec_top_v2(
     alignas(64) int8_t hi8_buf[MMUL::size_C];
     alignas(64) int8_t out_buf[MMUL::size_C];
 
+    constexpr int MAX_VI = 12;
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
-        for (int vi = 0; vi < vec_iters; vi++) {
+        for (int vi_base = 0; vi_base < vec_iters; vi_base += MAX_VI) {
+            int vi_end = (vi_base + MAX_VI < vec_iters) ? vi_base + MAX_VI : vec_iters;
+            for (int vi = vi_base; vi < vi_end; vi++) {
             int x_base = vi * NUM_W;
             MMUL acc;
             acc = aie::zeros<acc32, MMUL::size_C>();
@@ -289,6 +378,14 @@ void conv2dk3_i8_silu_vec_top_v2(
                           shift1, shift2);
             aie::store_v(output + oc_g * (output_width * 8) + x_base * 8,
                          aie::load_v<MMUL::size_C>(out_buf));
+            }
+        }
+        // Scalar tail for remaining width % 8 elements
+        if (vec_iters * NUM_W < output_width) {
+            scalar_tail_s1(line0, line1, line2, weights_and_bias, output,
+                           input_width, input_channels, output_channels,
+                           oc_g, vec_iters * NUM_W, output_width,
+                           shift1, shift2, /*skip_top=*/1, /*skip_bot=*/0);
         }
     }
 }
@@ -323,8 +420,11 @@ void conv2dk3_i8_silu_vec_mid_v2(
     alignas(64) int8_t hi8_buf[MMUL::size_C];
     alignas(64) int8_t out_buf[MMUL::size_C];
 
+    constexpr int MAX_VI = 12;
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
-        for (int vi = 0; vi < vec_iters; vi++) {
+        for (int vi_base = 0; vi_base < vec_iters; vi_base += MAX_VI) {
+            int vi_end = (vi_base + MAX_VI < vec_iters) ? vi_base + MAX_VI : vec_iters;
+            for (int vi = vi_base; vi < vi_end; vi++) {
             int x_base = vi * NUM_W;
             MMUL acc;
             acc = aie::zeros<acc32, MMUL::size_C>();
@@ -359,6 +459,14 @@ void conv2dk3_i8_silu_vec_mid_v2(
                           shift1, shift2);
             aie::store_v(output + oc_g * (output_width * 8) + x_base * 8,
                          aie::load_v<MMUL::size_C>(out_buf));
+            }
+        }
+        // Scalar tail for remaining width % 8 elements
+        if (vec_iters * NUM_W < output_width) {
+            scalar_tail_s1(line0, line1, line2, weights_and_bias, output,
+                           input_width, input_channels, output_channels,
+                           oc_g, vec_iters * NUM_W, output_width,
+                           shift1, shift2, /*skip_top=*/0, /*skip_bot=*/0);
         }
     }
 }
@@ -393,8 +501,11 @@ void conv2dk3_i8_silu_vec_bot_v2(
     alignas(64) int8_t hi8_buf[MMUL::size_C];
     alignas(64) int8_t out_buf[MMUL::size_C];
 
+    constexpr int MAX_VI = 12;
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
-        for (int vi = 0; vi < vec_iters; vi++) {
+        for (int vi_base = 0; vi_base < vec_iters; vi_base += MAX_VI) {
+            int vi_end = (vi_base + MAX_VI < vec_iters) ? vi_base + MAX_VI : vec_iters;
+            for (int vi = vi_base; vi < vi_end; vi++) {
             int x_base = vi * NUM_W;
             MMUL acc;
             acc = aie::zeros<acc32, MMUL::size_C>();
@@ -423,6 +534,14 @@ void conv2dk3_i8_silu_vec_bot_v2(
                           shift1, shift2);
             aie::store_v(output + oc_g * (output_width * 8) + x_base * 8,
                          aie::load_v<MMUL::size_C>(out_buf));
+            }
+        }
+        // Scalar tail for remaining width % 8 elements
+        if (vec_iters * NUM_W < output_width) {
+            scalar_tail_s1(line0, line1, line2, weights_and_bias, output,
+                           input_width, input_channels, output_channels,
+                           oc_g, vec_iters * NUM_W, output_width,
+                           shift1, shift2, /*skip_top=*/0, /*skip_bot=*/1);
         }
     }
 }
@@ -499,8 +618,11 @@ void conv2dk3s2_i8_silu_vec_top_v2(
     alignas(64) int8_t hi8_buf[MMUL::size_C];
     alignas(64) int8_t out_buf[MMUL::size_C];
 
+    constexpr int MAX_VI = 12;
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
-        for (int vi = 0; vi < vec_iters; vi++) {
+        for (int vi_base = 0; vi_base < vec_iters; vi_base += MAX_VI) {
+            int vi_end = (vi_base + MAX_VI < vec_iters) ? vi_base + MAX_VI : vec_iters;
+            for (int vi = vi_base; vi < vi_end; vi++) {
             int x_in = vi * INPUT_PER_ITER;
             MMUL acc;
             acc = aie::zeros<acc32, MMUL::size_C>();
@@ -529,6 +651,14 @@ void conv2dk3s2_i8_silu_vec_top_v2(
                           shift1, shift2);
             aie::store_v(output + oc_g * (output_width * 8) + vi * NUM_W * 8,
                          aie::load_v<MMUL::size_C>(out_buf));
+            }
+        }
+        // Scalar tail for remaining output_width % 8 elements
+        if (vec_iters * NUM_W < output_width) {
+            scalar_tail_s2(line0, line1, line2, weights_and_bias, output,
+                           input_width, input_channels, output_channels,
+                           oc_g, vec_iters * NUM_W, output_width,
+                           shift1, shift2, /*skip_top=*/1, /*skip_bot=*/0);
         }
     }
 }
@@ -564,8 +694,11 @@ void conv2dk3s2_i8_silu_vec_mid_v2(
     alignas(64) int8_t hi8_buf[MMUL::size_C];
     alignas(64) int8_t out_buf[MMUL::size_C];
 
+    constexpr int MAX_VI = 12;
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
-        for (int vi = 0; vi < vec_iters; vi++) {
+        for (int vi_base = 0; vi_base < vec_iters; vi_base += MAX_VI) {
+            int vi_end = (vi_base + MAX_VI < vec_iters) ? vi_base + MAX_VI : vec_iters;
+            for (int vi = vi_base; vi < vi_end; vi++) {
             int x_in = vi * INPUT_PER_ITER;
             MMUL acc;
             acc = aie::zeros<acc32, MMUL::size_C>();
@@ -600,6 +733,14 @@ void conv2dk3s2_i8_silu_vec_mid_v2(
                           shift1, shift2);
             aie::store_v(output + oc_g * (output_width * 8) + vi * NUM_W * 8,
                          aie::load_v<MMUL::size_C>(out_buf));
+            }
+        }
+        // Scalar tail for remaining output_width % 8 elements
+        if (vec_iters * NUM_W < output_width) {
+            scalar_tail_s2(line0, line1, line2, weights_and_bias, output,
+                           input_width, input_channels, output_channels,
+                           oc_g, vec_iters * NUM_W, output_width,
+                           shift1, shift2, /*skip_top=*/0, /*skip_bot=*/0);
         }
     }
 }
@@ -635,8 +776,11 @@ void conv2dk3s2_i8_silu_vec_bot_v2(
     alignas(64) int8_t hi8_buf[MMUL::size_C];
     alignas(64) int8_t out_buf[MMUL::size_C];
 
+    constexpr int MAX_VI = 12;
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
-        for (int vi = 0; vi < vec_iters; vi++) {
+        for (int vi_base = 0; vi_base < vec_iters; vi_base += MAX_VI) {
+            int vi_end = (vi_base + MAX_VI < vec_iters) ? vi_base + MAX_VI : vec_iters;
+            for (int vi = vi_base; vi < vi_end; vi++) {
             int x_in = vi * INPUT_PER_ITER;
             MMUL acc;
             acc = aie::zeros<acc32, MMUL::size_C>();
@@ -665,6 +809,14 @@ void conv2dk3s2_i8_silu_vec_bot_v2(
                           shift1, shift2);
             aie::store_v(output + oc_g * (output_width * 8) + vi * NUM_W * 8,
                          aie::load_v<MMUL::size_C>(out_buf));
+            }
+        }
+        // Scalar tail for remaining output_width % 8 elements
+        if (vec_iters * NUM_W < output_width) {
+            scalar_tail_s2(line0, line1, line2, weights_and_bias, output,
+                           input_width, input_channels, output_channels,
+                           oc_g, vec_iters * NUM_W, output_width,
+                           shift1, shift2, /*skip_top=*/0, /*skip_bot=*/1);
         }
     }
 }
@@ -679,7 +831,7 @@ void conv2dk3_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                       const int32_t input_width, const int32_t input_channels,
                       const int32_t output_channels, const int32_t check,
                       const int32_t shift1, const int32_t shift2) {
-    if (input_width % 8 == 0) {
+    if (input_width >= 8) {
         event0();
         switch (check) {
         case CHECK_TOP:
@@ -716,7 +868,7 @@ void conv2dk3s2_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                         const int32_t input_width, const int32_t input_channels,
                         const int32_t output_channels, const int32_t check,
                         const int32_t shift1, const int32_t shift2) {
-    if ((input_width / 2) % 8 == 0) {
+    if ((input_width / 2) >= 8) {
         event0();
         switch (check) {
         case CHECK_TOP:

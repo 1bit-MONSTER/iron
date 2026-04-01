@@ -371,18 +371,19 @@ class AIEConv2dInt8(AIEOperatorBase):
                 f"_silu_sh{self.shift1}_{self.shift2}{col_suffix}"
             )
             callback_fn = "my_conv2d_int8_silu"
-            # Vectorized path: requires IC >= 96 to avoid Peano codegen
-            # bug where small ic_iters (power-of-2: 2, 4, 8) combined with
-            # large w_iters and oc_groups produces incorrect accumulator
-            # values. IC >= 96 (ic_iters >= 12) is safe for all tested
-            # width/OC combinations in the YOLO layer inventory.
             if self.in_channels >= 96:
-                kernel_obj_name = "conv2dk1_i8_silu_vec.o"
-                kernel_extra_flags = ["-DINT8_ACT"]
+                # Split SiLU: MAC and SiLU in separate TUs for faster
+                # codegen. IC >= 96 (ic_iters >= 12) avoids Peano bug.
+                kernel_obj_name = "conv2dk1_i8_silu.o"
+                kernel_src = None  # handled below as linked object
+                kernel_extra_flags = ["-DINT8_ACT", "-ffunction-sections",
+                                      "-fdata-sections"]
             else:
+                # IC < 96: power-of-2 ic_iters trigger Peano codegen bug
+                # in vectorized path. Use scalar co-compiled fallback.
                 kernel_obj_name = "conv2dk1_i8_silu_scalar.o"
+                kernel_src = "conv2dk1_i8_silu.cc"
                 kernel_extra_flags = ["-DINT8_ACT", "-DSCALAR"]
-            kernel_src = "conv2dk1_i8_silu.cc"
             callback_args = [
                 self.context.device_manager.device_type,
                 self.height,
@@ -460,13 +461,30 @@ class AIEConv2dInt8(AIEOperatorBase):
         )
 
         aie2p_dir = self.context.base_dir / "aie_kernels" / "aie2p"
-        if kernel_src is None and self.silu_variant == "split":
-            # Split SiLU: compile MAC and SiLU in separate TUs, then
+        if kernel_src is None and self.fused and self.kernel_size == 3:
+            # Split SiLU for k3: compile MAC and SiLU in separate TUs, then
             # partial-link into one .o. Avoids Peano codegen degradation
             # (100x slower when SiLU is co-compiled with k3 MAC).
             mac_obj = KernelObjectArtifact.new(
                 "conv2dk3_i8_silu_split.o",
                 depends=[SourceArtifact.new(aie2p_dir / "conv2dk3_i8_silu_split.cc")],
+                extra_flags=kernel_extra_flags,
+            )
+            silu_obj = KernelObjectArtifact.new(
+                "silu_postproc_i8.o",
+                depends=[SourceArtifact.new(aie2p_dir / "silu_postproc_i8.cc")],
+                extra_flags=kernel_extra_flags,
+            )
+            kernel_dep = LinkedKernelObjectArtifact.new(
+                kernel_obj_name,
+                depends=[mac_obj, silu_obj],
+            )
+        elif kernel_src is None and self.fused and self.kernel_size == 1:
+            # Split SiLU for k1: same pattern, avoids Peano codegen bug
+            # at IC < 96 by isolating SiLU from MAC register allocation.
+            mac_obj = KernelObjectArtifact.new(
+                "conv2dk1_i8_silu_split.o",
+                depends=[SourceArtifact.new(aie2p_dir / "conv2dk1_i8_silu_split.cc")],
                 extra_flags=kernel_extra_flags,
             )
             silu_obj = KernelObjectArtifact.new(
