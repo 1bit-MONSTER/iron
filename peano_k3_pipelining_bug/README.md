@@ -15,10 +15,10 @@ python3 -m venv ironenv && source ironenv/bin/activate
 pip install -r requirements.txt
 pip install -e .  # install IRON package
 
-# Set up MLIR-AIE and XRT environment
-source /path/to/mlir-aie/utils/env_setup.sh /path/to/mlir-aie /opt/xrt
+# If XRT was installed via Xilinx installer (optional):
+source /opt/xilinx/xrt/setup.sh
 
-# If pyxrt is not found (upstream XRT / Ubuntu package):
+# If pyxrt is installed as a system package (upstream XRT / Ubuntu PPA):
 export PYTHONPATH=/usr/lib/python3/dist-packages:$PYTHONPATH
 
 # Verify:
