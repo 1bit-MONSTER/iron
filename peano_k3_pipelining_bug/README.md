@@ -13,7 +13,7 @@ via `ld.lld -r`.
 # From the IRON repo root:
 python3 -m venv ironenv && source ironenv/bin/activate
 pip install -r requirements.txt
-source /path/to/mlir-aie/utils/env_setup.sh /path/to/mlir-aie /opt/xrt
+source /opt/xlinx/xrt/setup.sh
 
 # Verify:
 xrt-smi examine
