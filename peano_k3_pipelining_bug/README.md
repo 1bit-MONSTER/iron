@@ -15,10 +15,10 @@ python3 -m venv ironenv && source ironenv/bin/activate
 pip install -r requirements.txt
 pip install -e .  # install IRON package
 
-# If XRT was installed from source:
-source /opt/xilinx/xrt/setup.sh
+# If XRT was installed via Xilinx installer (optional):
+# source /opt/xilinx/xrt/setup.sh
 
-# If XRT is installed as a system package (upstream XRT / Ubuntu PPA):
+# pyxrt must be importable — add system packages if needed:
 export PYTHONPATH=/usr/lib/python3/dist-packages:$PYTHONPATH
 
 # Verify:
