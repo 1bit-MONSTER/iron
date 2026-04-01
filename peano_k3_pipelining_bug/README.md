@@ -13,16 +13,18 @@ via `ld.lld -r`.
 # From the IRON repo root:
 python3 -m venv ironenv && source ironenv/bin/activate
 pip install -r requirements.txt
-source /opt/xlinx/xrt/setup.sh
+pip install -e .  # install IRON package
+
+# Set up MLIR-AIE and XRT environment
+source /path/to/mlir-aie/utils/env_setup.sh /path/to/mlir-aie /opt/xrt
+
+# If pyxrt is not found (upstream XRT / Ubuntu package):
+export PYTHONPATH=/usr/lib/python3/dist-packages:$PYTHONPATH
 
 # Verify:
 xrt-smi examine
 python3 -c "from iron.operators.conv2d_int8.op import AIEConv2dInt8; print('OK')"
 ```
-
-> NOTE: if xrt is installed from upstream packages or PPA:
->
-> `export PYTHONPATH=/usr/lib/python3/dist-packages:$PYTHONPATH`
 
 ## Running the Tests
 
