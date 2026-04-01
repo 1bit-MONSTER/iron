@@ -7,71 +7,70 @@ input channels (IC) is 8 or 16, but works correctly at IC >= 32. The hang
 only occurs with **split compilation** — SiLU in a separate `.o`, linked
 via `ld.lld -r`.
 
-## Quick Start
+## Setup
 
 ```bash
-# 1. Set up the IRON environment
+# From the IRON repo root:
 python3 -m venv ironenv && source ironenv/bin/activate
-source /opt/xilinx/xrt/setup.sh  # or wherever XRT is installed
 pip install -r requirements.txt
+source /path/to/mlir-aie/utils/env_setup.sh /path/to/mlir-aie /opt/xrt
 
-# 2. Verify NPU hardware
+# Verify:
 xrt-smi examine
-
-# 3. Run safe tests (scalar + vectorized IC>=32)
-python3 peano_k3_pipelining_bug/reproduce.py
-
-# 4. Run ALL tests including the ones that hang (will timeout at ~90s)
-python3 peano_k3_pipelining_bug/reproduce.py --all
-
-# 5. Run a single hanging test to see the bug
-python3 peano_k3_pipelining_bug/reproduce.py --test ic8_vec_HANGS
-
-# 6. Show the full test matrix
-python3 peano_k3_pipelining_bug/reproduce.py --list
+python3 -c "from iron.operators.conv2d_int8.op import AIEConv2dInt8; print('OK')"
 ```
 
-## Test Matrix
+## Running the Tests
 
-| Test                   | IC | OC | HxW      | S | Kernel   | Expected |
-|------------------------|----|----|----------|---|----------|----------|
-| ic8_scalar_PASS        |  8 | 16 | 640x640  | 2 | scalar   | PASS     |
-| ic16s2_scalar_PASS     | 16 | 32 | 320x320  | 2 | scalar   | PASS     |
-| ic16s1_scalar_PASS     | 16 | 16 | 160x160  | 1 | scalar   | PASS     |
-| ic32_vec_PASS          | 32 | 64 | 160x160  | 2 | **vec**  | PASS     |
-| ic64_vec_PASS          | 64 |128 |  80x80   | 2 | **vec**  | PASS     |
-| ic8_vec_HANGS          |  8 | 16 | 640x640  | 2 | **vec**  | **HANG** |
-| ic16s2_vec_HANGS       | 16 | 32 | 320x320  | 2 | **vec**  | **HANG** |
-| ic16s1_vec_HANGS       | 16 | 16 | 160x160  | 1 | **vec**  | **HANG** |
+Each test is a standalone script for one affected YOLOv8n layer.
+Each will compile the kernel, run on the NPU, and timeout after ~90s
+to confirm the hang. Output is verified against a CPU Pade-tanh SiLU
+golden reference.
 
-All tests verify NPU output against a CPU reference (Pade tanh SiLU).
-The "vec" tests use the bug kernel (`conv2dk3_i8_silu_bug.cc`) which has
-the IC guard removed, forcing the vectorized path at all IC values.
+```bash
+# L0: stem layer, IC=8 -> OC=16, 640x640 stride-2 (HANGS)
+python3 peano_k3_pipelining_bug/test_L0_k3s2_8ic_16oc_640.py
+
+# L1: first downsample, IC=16 -> OC=32, 320x320 stride-2 (HANGS)
+python3 peano_k3_pipelining_bug/test_L1_k3s2_16ic_32oc_320.py
+
+# L2bn: C2f bottleneck, IC=16 -> OC=16, 160x160 stride-1 (HANGS)
+python3 peano_k3_pipelining_bug/test_L2bn_k3s1_16ic_16oc_160.py
+```
+
+All three scripts exit with code 1 and print the hang confirmation.
+
+## Affected Layers
+
+| Layer | Config              | IC | ic_groups | Output Size | Status    |
+|-------|---------------------|----|-----------|-------------|-----------|
+| L0    | k3s2 8->16 640x640  |  8 | 1         | 320x320     | **HANGS** |
+| L1    | k3s2 16->32 320x320 | 16 | 2         | 160x160     | **HANGS** |
+| L2bn  | k3s1 16->16 160x160 | 16 | 2         | 160x160     | **HANGS** |
+
+These are the first three conv layers of the YOLOv8n backbone. All
+subsequent layers have IC >= 32 and work correctly with the same kernel.
 
 ## Bug Details
 
-**Symptom**: `ERT_CMD_STATE_TIMEOUT` — NPU hardware never completes.
-The core enters an infinite loop in the vectorized MAC+SiLU loop body.
+**Symptom**: `ERT_CMD_STATE_TIMEOUT` — NPU core enters infinite loop.
 
-**Trigger conditions** (all must be true):
-1. Split compilation: MAC in one `.o`, SiLU (`apply_silu_i8`) in another,
-   partial-linked with `ld.lld -r`
+**Trigger conditions** (all required):
+1. Split compilation: MAC in `conv2dk3_i8_silu_bug.cc`, SiLU in
+   `silu_postproc_i8.cc`, partial-linked with `ld.lld -r`
 2. IC <= 16 (1-2 ic_groups in the inner MAC loop)
 3. Vectorized path using `aie::mmul<8,8,8,int8,int8>`
 
 **Does NOT hang when**:
-- IC >= 32 (4+ ic_groups) — works correctly with split compilation
-- Scalar MAC path (element-by-element C loops) — always works
-- Co-compiled SiLU (noinline, same `.cc` file) — works but SiLU is 100x
-  slower due to Peano codegen degradation when tanh intrinsics are visible
-  alongside MMUL code
+- IC >= 32 (4+ ic_groups) — same kernel, same compilation, works fine
+- Scalar MAC path — always correct
+- Co-compiled SiLU (noinline, same `.cc` file) — works but SiLU runs
+  100x slower due to Peano codegen degradation with tanh intrinsics
 
 ## Compilation Commands
 
-The bug kernel is compiled with these exact Peano flags:
-
 ```bash
-PEANO=/path/to/peano  # typically inside mlir-aie install
+PEANO=/path/to/peano  # inside mlir-aie install
 MLIR_AIE=/path/to/mlir-aie
 
 # 1. Compile MAC kernel (declares extern "C" apply_silu_i8)
@@ -95,53 +94,48 @@ $PEANO/bin/ld.lld -r conv2dk3_i8_silu_bug.o silu_postproc_i8.o \
     -o conv2dk3_i8_silu.o
 ```
 
-## Code Structure
+## Key Code Path
 
-The vectorized loop that hangs (simplified from `conv2dk3_i8_silu_bug.cc`):
+The vectorized loop that hangs (from `conv2dk3_i8_silu_bug.cc`):
 
 ```cpp
-// In conv2dk3_i8_silu_vec_mid_v2():
-for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
-    for (int vi_base = 0; vi_base < vec_iters; vi_base += MAX_VI) {
-        for (int vi = vi_base; vi < vi_end; vi++) {
-            MMUL acc = zeros();
-            // MAC: at IC=8, this is just 1 iteration per kh row
-            for kh in {0,1,2}:
-                mac_kh_row_s1<8>(acc, line[kh], weights, ...);
-                //              ^^^ only 1 ic_group — trivially fast
+void conv2dk3_i8_silu_vec_mid_v2(...) {
+    constexpr int NUM_W = 8;
+    const int vec_iters = input_width / NUM_W;
 
-            // Extract + extern SiLU (from silu_postproc_i8.o, ~5us)
-            store(lo8_buf, acc.to_vector<int8>(shift1));
-            store(hi8_buf, acc.to_vector<int8>(shift1 + 8));
-            apply_silu_i8(lo8_buf, hi8_buf, bias, ...);  // extern call
-            store(output + ..., load(out_buf));
+    for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
+        for (int vi = 0; vi < vec_iters; vi++) {
+            MMUL acc = zeros();
+
+            // At IC=8: only 1 ic_group per kh row — trivially fast
+            for (int ic_g = 0; ic_g < ic_groups; ic_g++) {  // 1 iteration!
+                acc.mac(input_vec, weight_vec);
+            }
+            // ... repeat for kh=0,1,2 ...
+
+            // Extern SiLU call (~5us, from silu_postproc_i8.o)
+            apply_silu_i8(lo8_buf, hi8_buf, bias, oc_g, out_buf, ...);
         }
     }
 }
 ```
-
-At IC=8 the loop body is very fast (tiny MAC + fast extern SiLU). Peano
-appears to auto-pipeline this loop and generate broken control flow.
 
 ## What We Tried
 
 | Approach | Result |
 |----------|--------|
 | Loop chunking (MAX_VI = 4, 8, 12) | Still hangs |
-| `[[clang::optnone]]` on vec functions | Not supported on AIE target |
-| Co-compiled SiLU (noinline, same TU) | Works but SiLU is 100x slower |
-| Scalar MAC fallback | Works (current workaround) |
+| Co-compiled SiLU (noinline, same TU) | Works but 100x slower SiLU |
+| Scalar MAC fallback | Works (current workaround, 50-100x slower) |
 
 ## Files
 
 ```
 peano_k3_pipelining_bug/
-├── README.md                       This file
-├── reproduce.py                    Test harness (uses IRON operator framework)
-├── conv2dk3_i8_silu_bug.cc         MAC kernel with IC guard REMOVED (triggers hang)
-└── silu_postproc_i8.cc             SiLU post-processor (separate TU, extern "C")
+├── README.md                              This file
+├── conv2dk3_i8_silu_bug.cc                MAC kernel, IC guard REMOVED
+├── silu_postproc_i8.cc                    SiLU in separate TU
+├── test_L0_k3s2_8ic_16oc_640.py           L0 test (IC=8, HANGS)
+├── test_L1_k3s2_16ic_32oc_320.py          L1 test (IC=16, HANGS)
+└── test_L2bn_k3s1_16ic_16oc_160.py        L2bn test (IC=16, HANGS)
 ```
-
-The guarded (working) version of the MAC kernel lives in the main repo at
-`aie_kernels/aie2p/conv2dk3_i8_silu_split.cc` with `input_channels > 16`
-in the dispatch condition.
