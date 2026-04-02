@@ -18,10 +18,10 @@ from iron.common import (
     PythonGeneratedMLIRArtifact,
 )
 from iron.common.utils import torch_to_numpy, numpy_to_torch
+from iron.common.device_utils import DEVICE_CONFIGS
 
 
 class AIEMHA(MLIROperator):
-
     def __init__(
         self,
         num_heads: int,
@@ -68,12 +68,17 @@ class AIEMHA(MLIROperator):
         )
 
     def get_kernel_artifacts(self):
+        device_str = self.context.device_manager.device_str()
+        kernel_dir = DEVICE_CONFIGS[device_str]["kernel_dir"]
+
         # Define source files
-        mm_source = str(self.context.base_dir / "aie_kernels" / "aie2p" / "mm.cc")
+        mm_source = str(self.context.base_dir / "aie_kernels" / kernel_dir / "mm.cc")
         softmax_source = str(
-            self.context.base_dir / "aie_kernels" / "aie2p" / "softmax.cc"
+            self.context.base_dir / "aie_kernels" / kernel_dir / "softmax.cc"
         )
-        mha_source = str(self.context.base_dir / "aie_kernels" / "aie2p" / "mha.cc")
+        mha_source = str(
+            self.context.base_dir / "aie_kernels" / "aie2p" / "mha.cc"
+        )  # TODO: MHA kernel only exists in aie2p
         passthrough_source = str(
             self.context.base_dir / "aie_kernels" / "generic" / "passThrough.cc"
         )

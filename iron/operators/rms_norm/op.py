@@ -18,6 +18,7 @@ from iron.common import (
     PythonGeneratedMLIRArtifact,
 )
 from iron.common.utils import torch_to_numpy
+from iron.common.device_utils import DEVICE_CONFIGS
 
 
 class AIERMSNorm(MLIROperator):
@@ -93,12 +94,15 @@ class AIERMSNorm(MLIROperator):
         )
 
     def get_kernel_artifacts(self):
+        arch_dir = DEVICE_CONFIGS[self.context.device_manager.device_str()][
+            "kernel_dir"
+        ]
         artifacts = [
             KernelObjectArtifact(
                 f"rms_norm.o",
                 dependencies=[
                     SourceArtifact(
-                        self.context.base_dir / "aie_kernels" / "aie2p" / "rms_norm.cc"
+                        self.context.base_dir / "aie_kernels" / arch_dir / "rms_norm.cc"
                     )
                 ],
             ),

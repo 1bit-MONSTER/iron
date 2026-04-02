@@ -6,6 +6,7 @@ import numpy as np
 from ml_dtypes import bfloat16
 from pathlib import Path
 
+from iron.common.device_utils import DEVICE_CONFIGS
 from iron.common import (
     MLIROperator,
     AIERuntimeArgSpec,
@@ -60,6 +61,9 @@ class AIELayerNorm(MLIROperator):
         )
 
     def get_kernel_artifacts(self):
+        arch_dir = DEVICE_CONFIGS[self.context.device_manager.device_str()][
+            "kernel_dir"
+        ]
         return [
             KernelObjectArtifact(
                 f"layer_norm.o",
@@ -67,7 +71,7 @@ class AIELayerNorm(MLIROperator):
                     SourceArtifact(
                         self.context.base_dir
                         / "aie_kernels"
-                        / "aie2p"
+                        / arch_dir
                         / "layer_norm.cc"
                     )
                 ],

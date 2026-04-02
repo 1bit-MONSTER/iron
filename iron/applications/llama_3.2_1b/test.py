@@ -8,7 +8,6 @@ import sys
 import os
 import resource
 from pathlib import Path
-import os
 
 test_dir = Path(__file__).parent
 weights_dir = Path(os.environ.get("IRON_EXAMPLE_WEIGHTS_DIR", "/srv"))
@@ -30,6 +29,7 @@ def generate_test_params():
 params, names = generate_test_params()
 
 
+@pytest.mark.supported_devices("npu2")
 @pytest.mark.metrics(
     TTFT=r"\[Prefill\]\s*Time to first token:\s*(?P<value>[\d\.e\+-]+) s",
     TPS=r"\[Decode\]\s*Tokens per second:\s*(?P<value>[\d\.e\+-]+)",
