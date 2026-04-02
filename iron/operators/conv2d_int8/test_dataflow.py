@@ -3769,7 +3769,17 @@ def _pack_k1_silu_weights(w_int8, b_int32):
         pytest.param(16, 16, 32, 10, 7, 10, 7, 10, 7, 10, 7, id="c2f_full_16x16"),
         pytest.param(32, 32, 32, 10, 7, 10, 7, 10, 7, 10, 7, id="c2f_full_32x32"),
         pytest.param(
-            160, 160, 32, 10, 7, 10, 7, 10, 7, 10, 7,
+            160,
+            160,
+            32,
+            10,
+            7,
+            10,
+            7,
+            10,
+            7,
+            10,
+            7,
             id="c2f_full_160x160",
             marks=pytest.mark.extensive,
         ),
@@ -4292,8 +4302,7 @@ class AIEDataflowC2fL6(AIEOperatorBase):
     def set_up_artifacts(self):
         operator_dir = Path(__file__).parent
         file_name_base = (
-            f"dataflow_c2f_l6_{self.in_channels}ic_"
-            f"{self.height}h_{self.width}w"
+            f"dataflow_c2f_l6_{self.in_channels}ic_" f"{self.height}h_{self.width}w"
         )
 
         mlir_artifact = PythonGeneratedMLIRArtifact.new(
@@ -4319,10 +4328,7 @@ class AIEDataflowC2fL6(AIEOperatorBase):
             "conv2dk1_i8.o",
             depends=[
                 SourceArtifact.new(
-                    self.context.base_dir
-                    / "aie_kernels"
-                    / "aie2p"
-                    / "conv2dk1_i8.cc"
+                    self.context.base_dir / "aie_kernels" / "aie2p" / "conv2dk1_i8.cc"
                 )
             ],
             extra_flags=["-DINT8_ACT"],
@@ -4332,10 +4338,7 @@ class AIEDataflowC2fL6(AIEOperatorBase):
             "conv2dk3_i8_bn.o",
             depends=[
                 SourceArtifact.new(
-                    self.context.base_dir
-                    / "aie_kernels"
-                    / "aie2p"
-                    / "conv2dk3_i8.cc"
+                    self.context.base_dir / "aie_kernels" / "aie2p" / "conv2dk3_i8.cc"
                 )
             ],
             extra_flags=[
@@ -4349,10 +4352,7 @@ class AIEDataflowC2fL6(AIEOperatorBase):
             "add_i8.o",
             depends=[
                 SourceArtifact.new(
-                    self.context.base_dir
-                    / "aie_kernels"
-                    / "aie2p"
-                    / "add_i8.cc"
+                    self.context.base_dir / "aie_kernels" / "aie2p" / "add_i8.cc"
                 )
             ],
             extra_flags=["-DINT8_ACT"],
@@ -4362,10 +4362,7 @@ class AIEDataflowC2fL6(AIEOperatorBase):
             "conv2dk1_i8_cv2.o",
             depends=[
                 SourceArtifact.new(
-                    self.context.base_dir
-                    / "aie_kernels"
-                    / "aie2p"
-                    / "conv2dk1_i8.cc"
+                    self.context.base_dir / "aie_kernels" / "aie2p" / "conv2dk1_i8.cc"
                 )
             ],
             extra_flags=[
@@ -4861,21 +4858,72 @@ class AIEDataflowBackbonePhase1(AIEOperatorBase):
     "l3_oc,l3_s1,l3_s2",
     [
         pytest.param(
-            32, 32, 8, 16, 10, 7, 32, 10, 7,
-            10, 7, 10, 7, 10, 7, 10, 7,
-            64, 10, 7,
+            32,
+            32,
+            8,
+            16,
+            10,
+            7,
+            32,
+            10,
+            7,
+            10,
+            7,
+            10,
+            7,
+            10,
+            7,
+            10,
+            7,
+            64,
+            10,
+            7,
             id="backbone_p1_32x32",
         ),
         pytest.param(
-            64, 64, 8, 16, 10, 7, 32, 10, 7,
-            10, 7, 10, 7, 10, 7, 10, 7,
-            64, 10, 7,
+            64,
+            64,
+            8,
+            16,
+            10,
+            7,
+            32,
+            10,
+            7,
+            10,
+            7,
+            10,
+            7,
+            10,
+            7,
+            10,
+            7,
+            64,
+            10,
+            7,
             id="backbone_p1_64x64",
         ),
         pytest.param(
-            640, 640, 8, 16, 10, 7, 32, 10, 7,
-            10, 7, 10, 7, 10, 7, 10, 7,
-            64, 10, 7,
+            640,
+            640,
+            8,
+            16,
+            10,
+            7,
+            32,
+            10,
+            7,
+            10,
+            7,
+            10,
+            7,
+            10,
+            7,
+            10,
+            7,
+            64,
+            10,
+            7,
             id="backbone_p1_640x640",
             marks=pytest.mark.extensive,
         ),
@@ -5066,9 +5114,9 @@ def test_dataflow_backbone_phase1(
     print(f"  NPU time: {1000 * (t1 - t0):.1f} ms")
 
     # 7-layer pipeline (L0,L1,cv1,bn.cv1,bn.cv2,cv2,L3) compounds errors
-    assert max_diff <= 8, (
-        f"Backbone Phase 1 failed: max_diff={max_diff} exceeds threshold 8"
-    )
+    assert (
+        max_diff <= 8
+    ), f"Backbone Phase 1 failed: max_diff={max_diff} exceeds threshold 8"
     error_rate_gt3 = errors_gt3 / total if total > 0 else 0
     assert error_rate_gt3 < 0.10, (
         f"Backbone Phase 1: {100 * error_rate_gt3:.2f}% errors > 3 "
@@ -5160,9 +5208,7 @@ def test_dataflow_backbone_p1_through_p5(l0_h, l0_w):
     b0 = torch.randint(-500, 501, (l0_oc,), dtype=torch.int32)
     w1 = torch.randint(-50, 51, (l1_oc, l0_oc, 3, 3), dtype=torch.int8)
     b1 = torch.randint(-500, 501, (l1_oc,), dtype=torch.int32)
-    w_l2_cv1 = torch.randint(
-        -50, 51, (c2f_l2_cv1_oc, l1_oc, 1, 1), dtype=torch.int8
-    )
+    w_l2_cv1 = torch.randint(-50, 51, (c2f_l2_cv1_oc, l1_oc, 1, 1), dtype=torch.int8)
     b_l2_cv1 = torch.randint(-500, 501, (c2f_l2_cv1_oc,), dtype=torch.int32)
     w_l2_bn1 = torch.randint(
         -50, 51, (c2f_l2_bn_ch, c2f_l2_bn_ch, 3, 3), dtype=torch.int8
@@ -5254,9 +5300,7 @@ def test_dataflow_backbone_p1_through_p5(l0_h, l0_w):
     )
 
     # Phase 2: C2f L4 (non-fused, scale only)
-    ref_l4_cv1 = conv2d_int8_reference(
-        ref_l3, w_l4_cv1, scale, stride=1, padding=0
-    )
+    ref_l4_cv1 = conv2d_int8_reference(ref_l3, w_l4_cv1, scale, stride=1, padding=0)
     l4_half1 = ref_l4_cv1[:, :c2f_l4_bn_ch, :, :]
     l4_half2 = ref_l4_cv1[:, c2f_l4_bn_ch:, :, :]
     ref_l4_bn0_inter = conv2d_int8_reference(
@@ -5273,22 +5317,14 @@ def test_dataflow_backbone_p1_through_p5(l0_h, l0_w):
         ref_l4_bn1_inter, w_l4_bn1cv2, scale, stride=1, padding=1
     )
     ref_l4_bn1_out = add_i8_reference(ref_l4_bn1_cv2, ref_l4_bn0_out)
-    l4_concat = torch.cat(
-        [l4_half1, l4_half2, ref_l4_bn0_out, ref_l4_bn1_out], dim=1
-    )
-    ref_l4 = conv2d_int8_reference(
-        l4_concat, w_l4_cv2, scale, stride=1, padding=0
-    )
+    l4_concat = torch.cat([l4_half1, l4_half2, ref_l4_bn0_out, ref_l4_bn1_out], dim=1)
+    ref_l4 = conv2d_int8_reference(l4_concat, w_l4_cv2, scale, stride=1, padding=0)
 
     # Phase 3: L5 (fused SiLU, stride-2)
-    ref_l5 = conv2d_int8_pade_silu_reference(
-        ref_l4, w5, b5, scale, shift2, stride=2
-    )
+    ref_l5 = conv2d_int8_pade_silu_reference(ref_l4, w5, b5, scale, shift2, stride=2)
 
     # Phase 4: C2f L6 (non-fused, scale only)
-    ref_l6_cv1 = conv2d_int8_reference(
-        ref_l5, w_l6_cv1, scale, stride=1, padding=0
-    )
+    ref_l6_cv1 = conv2d_int8_reference(ref_l5, w_l6_cv1, scale, stride=1, padding=0)
     l6_half1 = ref_l6_cv1[:, :c2f_l6_bn_ch, :, :]
     l6_half2 = ref_l6_cv1[:, c2f_l6_bn_ch:, :, :]
     ref_l6_bn0_inter = conv2d_int8_reference(
@@ -5305,17 +5341,11 @@ def test_dataflow_backbone_p1_through_p5(l0_h, l0_w):
         ref_l6_bn1_inter, w_l6_bn1cv2, scale, stride=1, padding=1
     )
     ref_l6_bn1_out = add_i8_reference(ref_l6_bn1_cv2, ref_l6_bn0_out)
-    l6_concat = torch.cat(
-        [l6_half1, l6_half2, ref_l6_bn0_out, ref_l6_bn1_out], dim=1
-    )
-    ref_l6 = conv2d_int8_reference(
-        l6_concat, w_l6_cv2, scale, stride=1, padding=0
-    )
+    l6_concat = torch.cat([l6_half1, l6_half2, ref_l6_bn0_out, ref_l6_bn1_out], dim=1)
+    ref_l6 = conv2d_int8_reference(l6_concat, w_l6_cv2, scale, stride=1, padding=0)
 
     # Phase 5: L7 (fused SiLU, stride-2)
-    ref_final = conv2d_int8_pade_silu_reference(
-        ref_l6, w7, b7, scale, shift2, stride=2
-    )
+    ref_final = conv2d_int8_pade_silu_reference(ref_l6, w7, b7, scale, shift2, stride=2)
 
     phase_times = {}
 
@@ -5387,9 +5417,7 @@ def test_dataflow_backbone_p1_through_p5(l0_h, l0_w):
 
     # Read Phase 1 output (tiled int8, at offset 0)
     p1_total_output = op1._total_output
-    p1_out_buf = op1.read_buffer(
-        "output", (total_output_buf_p1,), dtype=np.int8
-    )
+    p1_out_buf = op1.read_buffer("output", (total_output_buf_p1,), dtype=np.int8)
     p1_output_tiled = p1_out_buf[:p1_total_output].copy()
 
     # Verify Phase 1 intermediate
@@ -5454,9 +5482,7 @@ def test_dataflow_backbone_p1_through_p5(l0_h, l0_w):
     phase_times["Phase 2"] = t1 - t0
 
     # Read Phase 2 output (tiled int8, first p2_total_output bytes)
-    p2_out_buf = op2.read_buffer(
-        "output", (p2_output_buf_size,), dtype=np.int8
-    )
+    p2_out_buf = op2.read_buffer("output", (p2_output_buf_size,), dtype=np.int8)
     p2_output_tiled = p2_out_buf[:p2_total_output].copy()
 
     # Verify Phase 2 intermediate
@@ -5575,9 +5601,7 @@ def test_dataflow_backbone_p1_through_p5(l0_h, l0_w):
     phase_times["Phase 4"] = t1 - t0
 
     # Read Phase 4 output (first p4_total_output bytes)
-    p4_out_buf = op4.read_buffer(
-        "output", (p4_output_buf_size,), dtype=np.int8
-    )
+    p4_out_buf = op4.read_buffer("output", (p4_output_buf_size,), dtype=np.int8)
     p4_output_tiled = p4_out_buf[:p4_total_output].copy()
 
     # Verify Phase 4 intermediate
@@ -5630,9 +5654,7 @@ def test_dataflow_backbone_p1_through_p5(l0_h, l0_w):
     phase_times["Phase 5"] = t1 - t0
 
     # Read Phase 5 final output
-    p5_output_raw = op5.read_buffer(
-        "output", (p5_total_output,), dtype=np.int8
-    ).copy()
+    p5_output_raw = op5.read_buffer("output", (p5_total_output,), dtype=np.int8).copy()
     npu_final = tiled_to_nchw_int8(p5_output_raw, l7_oc, p5_out_h, p5_out_w)
 
     # ================================================================
@@ -5662,9 +5684,9 @@ def test_dataflow_backbone_p1_through_p5(l0_h, l0_w):
     print(f"  Total NPU time: {1000 * total_time:.1f} ms")
 
     # 5-phase pipeline (17+ layers) compounds quantization errors
-    assert max_diff <= 15, (
-        f"Backbone P1-P5 failed: max_diff={max_diff} exceeds threshold 15"
-    )
+    assert (
+        max_diff <= 15
+    ), f"Backbone P1-P5 failed: max_diff={max_diff} exceeds threshold 15"
     error_rate_gt5 = errors_gt5 / total if total > 0 else 0
     assert error_rate_gt5 < 0.20, (
         f"Backbone P1-P5: {100 * error_rate_gt5:.2f}% errors > 5 "
@@ -5806,8 +5828,13 @@ class AIEDataflowL4L5Combined(AIEOperatorBase):
             ],
         )
 
-        kernel_deps = [mlir_artifact, k1_kernel_obj, k3_bn_kernel_obj,
-                       add_kernel_obj, k1_cv2_kernel_obj]
+        kernel_deps = [
+            mlir_artifact,
+            k1_kernel_obj,
+            k3_bn_kernel_obj,
+            add_kernel_obj,
+            k1_cv2_kernel_obj,
+        ]
 
         # L5 kernel object (single core, OC streaming)
         # conv2dk3s2_i8_silu_l5 is already defined in conv2dk3_i8_silu.cc
@@ -6046,9 +6073,9 @@ def test_dataflow_l4_l5_step1(
     # Non-fused C2f rounding scales with spatial size (max_diff=4 at 16x16,
     # 37 at 80x80). Matches existing standalone C2f L4 behavior exactly.
     threshold = 4 if height <= 16 else 40
-    assert max_diff <= threshold, (
-        f"L4+L5 Step 1 failed: max_diff={max_diff} exceeds threshold {threshold}"
-    )
+    assert (
+        max_diff <= threshold
+    ), f"L4+L5 Step 1 failed: max_diff={max_diff} exceeds threshold {threshold}"
 
 
 @pytest.mark.parametrize(
@@ -6211,9 +6238,9 @@ def test_dataflow_l4_l5_step2(height, width, aie_context):
     print(f"  NPU time: {1000 * (t1 - t0):.1f} ms")
 
     # L4 C2f (8 layers) + L5 fused SiLU compounds rounding errors
-    assert max_diff <= 10, (
-        f"L4+L5 Step 2 failed: max_diff={max_diff} exceeds threshold 10"
-    )
+    assert (
+        max_diff <= 10
+    ), f"L4+L5 Step 2 failed: max_diff={max_diff} exceeds threshold 10"
     error_rate_gt5 = errors_gt5 / total if total > 0 else 0
     assert error_rate_gt5 < 0.15, (
         f"L4+L5 Step 2: {100 * error_rate_gt5:.2f}% errors > 5 "
@@ -6330,19 +6357,11 @@ def test_dataflow_p1_p2_combined(l0_h, l0_w):
     cv1_l4 = conv2d_int8_reference(l3_out, w_cv1_l4, scale, stride=1, padding=0)
     half1_l4 = cv1_l4[:, :bn_ch_l4, :, :]
     half2_l4 = cv1_l4[:, bn_ch_l4:, :, :]
-    bn0_inter = conv2d_int8_reference(
-        half2_l4, w_bn0cv1_l4, scale, stride=1, padding=1
-    )
-    bn0_cv2 = conv2d_int8_reference(
-        bn0_inter, w_bn0cv2_l4, scale, stride=1, padding=1
-    )
+    bn0_inter = conv2d_int8_reference(half2_l4, w_bn0cv1_l4, scale, stride=1, padding=1)
+    bn0_cv2 = conv2d_int8_reference(bn0_inter, w_bn0cv2_l4, scale, stride=1, padding=1)
     bn0_out = add_i8_reference(bn0_cv2, half2_l4)
-    bn1_inter = conv2d_int8_reference(
-        bn0_out, w_bn1cv1_l4, scale, stride=1, padding=1
-    )
-    bn1_cv2 = conv2d_int8_reference(
-        bn1_inter, w_bn1cv2_l4, scale, stride=1, padding=1
-    )
+    bn1_inter = conv2d_int8_reference(bn0_out, w_bn1cv1_l4, scale, stride=1, padding=1)
+    bn1_cv2 = conv2d_int8_reference(bn1_inter, w_bn1cv2_l4, scale, stride=1, padding=1)
     bn1_out = add_i8_reference(bn1_cv2, bn0_out)
     concat_l4 = torch.cat([half1_l4, half2_l4, bn0_out, bn1_out], dim=1)
     l4_out = conv2d_int8_reference(concat_l4, w_cv2_l4, scale, stride=1, padding=0)
@@ -6357,15 +6376,26 @@ def test_dataflow_p1_p2_combined(l0_h, l0_w):
     # ================================================================
     ctx1 = AIEContext()
     op1 = AIEDataflowBackbonePhase1(
-        l0_height=l0_h, l0_width=l0_w,
-        l0_ic=l0_ic, l0_oc=l0_oc,
-        l0_shift1=scale, l0_shift2=shift2,
-        l1_oc=l1_oc, l1_shift1=scale, l1_shift2=shift2,
-        cv1_shift1=scale, cv1_shift2=shift2,
-        bn_cv1_shift1=scale, bn_cv1_shift2=shift2,
-        bn_cv2_shift1=scale, bn_cv2_shift2=shift2,
-        cv2_shift1=scale, cv2_shift2=shift2,
-        l3_oc=l3_oc, l3_shift1=scale, l3_shift2=shift2,
+        l0_height=l0_h,
+        l0_width=l0_w,
+        l0_ic=l0_ic,
+        l0_oc=l0_oc,
+        l0_shift1=scale,
+        l0_shift2=shift2,
+        l1_oc=l1_oc,
+        l1_shift1=scale,
+        l1_shift2=shift2,
+        cv1_shift1=scale,
+        cv1_shift2=shift2,
+        bn_cv1_shift1=scale,
+        bn_cv1_shift2=shift2,
+        bn_cv2_shift1=scale,
+        bn_cv2_shift2=shift2,
+        cv2_shift1=scale,
+        cv2_shift2=shift2,
+        l3_oc=l3_oc,
+        l3_shift1=scale,
+        l3_shift2=shift2,
         context=ctx1,
     )
     op1.context.compile_all()
@@ -6380,16 +6410,20 @@ def test_dataflow_p1_p2_combined(l0_h, l0_w):
         pad = np.zeros(slot_size - len(data), dtype=np.int8)
         return np.concatenate([data, pad])
 
-    tg1_packed = np.concatenate([
-        _pad(pack_fused_weights_k3(w0, b0), tg1_wt_slot),
-        _pad(pack_fused_weights_k3(w1, b1), tg1_wt_slot),
-    ])
-    c2f_packed = np.concatenate([
-        _pad(_pack_k1_silu_weights(w_cv1_l2, b_cv1_l2), c2f_wt_slot),
-        _pad(pack_fused_weights_k3(w_bn1_l2, b_bn1_l2), c2f_wt_slot),
-        _pad(pack_fused_weights_k3(w_bn2_l2, b_bn2_l2), c2f_wt_slot),
-        _pad(_pack_k1_silu_weights(w_cv2_l2, b_cv2_l2), c2f_wt_slot),
-    ])
+    tg1_packed = np.concatenate(
+        [
+            _pad(pack_fused_weights_k3(w0, b0), tg1_wt_slot),
+            _pad(pack_fused_weights_k3(w1, b1), tg1_wt_slot),
+        ]
+    )
+    c2f_packed = np.concatenate(
+        [
+            _pad(_pack_k1_silu_weights(w_cv1_l2, b_cv1_l2), c2f_wt_slot),
+            _pad(pack_fused_weights_k3(w_bn1_l2, b_bn1_l2), c2f_wt_slot),
+            _pad(pack_fused_weights_k3(w_bn2_l2, b_bn2_l2), c2f_wt_slot),
+            _pad(_pack_k1_silu_weights(w_cv2_l2, b_cv2_l2), c2f_wt_slot),
+        ]
+    )
     l3_wt_packed = pack_fused_weights_k3(w3, b3)
     op1.write_buffer("weights", np.concatenate([tg1_packed, c2f_packed, l3_wt_packed]))
 
@@ -6411,13 +6445,18 @@ def test_dataflow_p1_p2_combined(l0_h, l0_w):
     # ================================================================
     ctx2 = AIEContext()
     op2 = AIEDataflowL4L5Combined(
-        height=l3_out_h, width=l3_out_w,
+        height=l3_out_h,
+        width=l3_out_w,
         in_channels=l3_oc,
         cv1_scale=scale,
-        bn0_cv1_scale=scale, bn0_cv2_scale=scale,
-        bn1_cv1_scale=scale, bn1_cv2_scale=scale,
+        bn0_cv1_scale=scale,
+        bn0_cv2_scale=scale,
+        bn1_cv1_scale=scale,
+        bn1_cv2_scale=scale,
         cv2_scale=scale,
-        l5_oc=l5_oc, l5_shift1=scale, l5_shift2=shift2,
+        l5_oc=l5_oc,
+        l5_shift1=scale,
+        l5_shift2=shift2,
         context=ctx2,
     )
     op2.context.compile_all()
@@ -6426,14 +6465,16 @@ def test_dataflow_p1_p2_combined(l0_h, l0_w):
     op2.write_buffer("input", p1_output_tiled)
 
     # Pack Phase 2 weights
-    l4_packed = np.concatenate([
-        weights_to_tiled_int8(w_cv1_l4),
-        weights_to_tiled_int8_k3(w_bn0cv1_l4),
-        weights_to_tiled_int8_k3(w_bn0cv2_l4),
-        weights_to_tiled_int8_k3(w_bn1cv1_l4),
-        weights_to_tiled_int8_k3(w_bn1cv2_l4),
-        weights_to_tiled_int8(w_cv2_l4),
-    ])
+    l4_packed = np.concatenate(
+        [
+            weights_to_tiled_int8(w_cv1_l4),
+            weights_to_tiled_int8_k3(w_bn0cv1_l4),
+            weights_to_tiled_int8_k3(w_bn0cv2_l4),
+            weights_to_tiled_int8_k3(w_bn1cv1_l4),
+            weights_to_tiled_int8_k3(w_bn1cv2_l4),
+            weights_to_tiled_int8(w_cv2_l4),
+        ]
+    )
 
     l5_oc_chunk = op2._l5_oc_chunk
     l5_n_oc_groups = op2._l5_n_oc_groups
@@ -6481,13 +6522,11 @@ def test_dataflow_p1_p2_combined(l0_h, l0_w):
     print(f"  Total NPU time: {1000 * total_time:.1f} ms")
 
     # P1 (7 fused SiLU layers) + P2 (8 non-fused layers + 1 fused SiLU)
-    assert max_diff <= 15, (
-        f"P1→P2 failed: max_diff={max_diff} exceeds threshold 15"
-    )
+    assert max_diff <= 15, f"P1→P2 failed: max_diff={max_diff} exceeds threshold 15"
     error_rate_gt5 = errors_gt5 / total if total > 0 else 0
-    assert error_rate_gt5 < 0.20, (
-        f"P1→P2: {100 * error_rate_gt5:.2f}% errors > 5 exceeds 20% threshold"
-    )
+    assert (
+        error_rate_gt5 < 0.20
+    ), f"P1→P2: {100 * error_rate_gt5:.2f}% errors > 5 exceeds 20% threshold"
 
 
 # ---------------------------------------------------------------------------
@@ -6623,8 +6662,13 @@ class AIEDataflowL6L7Combined(AIEOperatorBase):
             ],
         )
 
-        kernel_deps = [mlir_artifact, k1_kernel_obj, k3_bn_kernel_obj,
-                       add_kernel_obj, k1_cv2_kernel_obj]
+        kernel_deps = [
+            mlir_artifact,
+            k1_kernel_obj,
+            k3_bn_kernel_obj,
+            add_kernel_obj,
+            k1_cv2_kernel_obj,
+        ]
 
         # L7 kernel object (conv2dk3s2_i8_silu_l7 already defined in source)
         if self.l7_mode:
@@ -6748,21 +6792,32 @@ def test_dataflow_l6_l7_step1(height, width, ic, aie_context):
     ref = conv2d_int8_reference(concat, w_cv2, scale, stride=1, padding=0)
 
     op = AIEDataflowL6L7Combined(
-        height=height, width=width, in_channels=ic,
-        cv1_scale=scale, bn0_cv1_scale=scale, bn0_cv2_scale=scale,
-        bn1_cv1_scale=scale, bn1_cv2_scale=scale, cv2_scale=scale,
-        l7_oc=0, context=aie_context,
+        height=height,
+        width=width,
+        in_channels=ic,
+        cv1_scale=scale,
+        bn0_cv1_scale=scale,
+        bn0_cv2_scale=scale,
+        bn1_cv1_scale=scale,
+        bn1_cv2_scale=scale,
+        cv2_scale=scale,
+        l7_oc=0,
+        context=aie_context,
     )
     op.context.compile_all()
     op.context.prepare_runtime()
 
     op.write_buffer("input", nchw_to_tiled_int8(x_int8))
-    packed_all = np.concatenate([
-        weights_to_tiled_int8(w_cv1),
-        weights_to_tiled_int8_k3(w_bn0cv1), weights_to_tiled_int8_k3(w_bn0cv2),
-        weights_to_tiled_int8_k3(w_bn1cv1), weights_to_tiled_int8_k3(w_bn1cv2),
-        weights_to_tiled_int8(w_cv2),
-    ])
+    packed_all = np.concatenate(
+        [
+            weights_to_tiled_int8(w_cv1),
+            weights_to_tiled_int8_k3(w_bn0cv1),
+            weights_to_tiled_int8_k3(w_bn0cv2),
+            weights_to_tiled_int8_k3(w_bn1cv1),
+            weights_to_tiled_int8_k3(w_bn1cv2),
+            weights_to_tiled_int8(w_cv2),
+        ]
+    )
     op.write_buffer("weights", packed_all)
     op.write_buffer("output", np.zeros(op._output_buf_size, dtype=np.int8))
 
@@ -6792,9 +6847,9 @@ def test_dataflow_l6_l7_step1(height, width, ic, aie_context):
 
     # L6 has larger channels (128/64/256/128) than L4, more rounding
     # Matches existing C2f L6 standalone tolerance (max_diff=9 at 16x16)
-    assert max_diff <= 9, (
-        f"L6+L7 Step 1 failed: max_diff={max_diff} exceeds threshold 9"
-    )
+    assert (
+        max_diff <= 9
+    ), f"L6+L7 Step 1 failed: max_diff={max_diff} exceeds threshold 9"
 
 
 @pytest.mark.parametrize(
@@ -6802,7 +6857,10 @@ def test_dataflow_l6_l7_step1(height, width, ic, aie_context):
     [
         pytest.param(16, 16, id="l6l7_step2_16x16"),
         pytest.param(
-            40, 40, id="l6l7_step2_40x40", marks=pytest.mark.extensive,
+            40,
+            40,
+            id="l6l7_step2_40x40",
+            marks=pytest.mark.extensive,
         ),
     ],
 )
@@ -6851,10 +6909,18 @@ def test_dataflow_l6_l7_step2(height, width, aie_context):
     )
 
     op = AIEDataflowL6L7Combined(
-        height=height, width=width, in_channels=ic,
-        cv1_scale=scale, bn0_cv1_scale=scale, bn0_cv2_scale=scale,
-        bn1_cv1_scale=scale, bn1_cv2_scale=scale, cv2_scale=scale,
-        l7_oc=l7_oc, l7_shift1=l7_shift1, l7_shift2=l7_shift2,
+        height=height,
+        width=width,
+        in_channels=ic,
+        cv1_scale=scale,
+        bn0_cv1_scale=scale,
+        bn0_cv2_scale=scale,
+        bn1_cv1_scale=scale,
+        bn1_cv2_scale=scale,
+        cv2_scale=scale,
+        l7_oc=l7_oc,
+        l7_shift1=l7_shift1,
+        l7_shift2=l7_shift2,
         context=aie_context,
     )
     op.context.compile_all()
@@ -6863,21 +6929,27 @@ def test_dataflow_l6_l7_step2(height, width, aie_context):
     op.write_buffer("input", nchw_to_tiled_int8(x_int8))
 
     # Pack L6 + L7 weights
-    l6_packed = np.concatenate([
-        weights_to_tiled_int8(w_cv1),
-        weights_to_tiled_int8_k3(w_bn0cv1), weights_to_tiled_int8_k3(w_bn0cv2),
-        weights_to_tiled_int8_k3(w_bn1cv1), weights_to_tiled_int8_k3(w_bn1cv2),
-        weights_to_tiled_int8(w_cv2),
-    ])
+    l6_packed = np.concatenate(
+        [
+            weights_to_tiled_int8(w_cv1),
+            weights_to_tiled_int8_k3(w_bn0cv1),
+            weights_to_tiled_int8_k3(w_bn0cv2),
+            weights_to_tiled_int8_k3(w_bn1cv1),
+            weights_to_tiled_int8_k3(w_bn1cv2),
+            weights_to_tiled_int8(w_cv2),
+        ]
+    )
 
     l7_oc_chunk = op._l7_oc_chunk
     l7_n_oc_groups = op._l7_n_oc_groups
     l7_chunks = []
     for g in range(l7_n_oc_groups):
         oc_s = g * l7_oc_chunk
-        l7_chunks.append(pack_fused_weights_k3(
-            w_l7[oc_s : oc_s + l7_oc_chunk], b_l7[oc_s : oc_s + l7_oc_chunk]
-        ))
+        l7_chunks.append(
+            pack_fused_weights_k3(
+                w_l7[oc_s : oc_s + l7_oc_chunk], b_l7[oc_s : oc_s + l7_oc_chunk]
+            )
+        )
 
     op.write_buffer("weights", np.concatenate([l6_packed, np.concatenate(l7_chunks)]))
     op.write_buffer("output", np.zeros(op._output_buf_size, dtype=np.int8))
@@ -6908,9 +6980,9 @@ def test_dataflow_l6_l7_step2(height, width, aie_context):
     print(f"  Errors (>5): {errors_gt5}/{total}")
     print(f"  NPU time: {1000 * (t1 - t0):.1f} ms")
 
-    assert max_diff <= 10, (
-        f"L6+L7 Step 2 failed: max_diff={max_diff} exceeds threshold 10"
-    )
+    assert (
+        max_diff <= 10
+    ), f"L6+L7 Step 2 failed: max_diff={max_diff} exceeds threshold 10"
     error_rate_gt5 = errors_gt5 / total if total > 0 else 0
     assert error_rate_gt5 < 0.15, (
         f"L6+L7 Step 2: {100 * error_rate_gt5:.2f}% errors > 5 "
@@ -6928,7 +7000,10 @@ def test_dataflow_l6_l7_step2(height, width, aie_context):
     [
         pytest.param(64, 64, id="p1_p2_p3_64x64"),
         pytest.param(
-            640, 640, id="p1_p2_p3_640x640", marks=pytest.mark.extensive,
+            640,
+            640,
+            id="p1_p2_p3_640x640",
+            marks=pytest.mark.extensive,
         ),
     ],
 )
@@ -6954,7 +7029,7 @@ def test_dataflow_p1_through_p3(l0_h, l0_w):
     bn_ch_l6 = 64
 
     # Spatial dims through the backbone
-    l3_out_h = l0_h // 8   # after L0(s2), L1(s2), L3(s2)
+    l3_out_h = l0_h // 8  # after L0(s2), L1(s2), L3(s2)
     l3_out_w = l0_w // 8
     l5_out_h = l3_out_h // 2  # after L5(s2)
     l5_out_w = l3_out_w // 2
@@ -7029,25 +7104,43 @@ def test_dataflow_p1_through_p3(l0_h, l0_w):
     cv1_l4 = conv2d_int8_reference(l3_out, w_cv1_l4, scale, stride=1, padding=0)
     half1_l4 = cv1_l4[:, :bn_ch_l4, :, :]
     half2_l4 = cv1_l4[:, bn_ch_l4:, :, :]
-    bn0_inter_l4 = conv2d_int8_reference(half2_l4, w_bn0cv1_l4, scale, stride=1, padding=1)
-    bn0_cv2_l4 = conv2d_int8_reference(bn0_inter_l4, w_bn0cv2_l4, scale, stride=1, padding=1)
+    bn0_inter_l4 = conv2d_int8_reference(
+        half2_l4, w_bn0cv1_l4, scale, stride=1, padding=1
+    )
+    bn0_cv2_l4 = conv2d_int8_reference(
+        bn0_inter_l4, w_bn0cv2_l4, scale, stride=1, padding=1
+    )
     bn0_out_l4 = add_i8_reference(bn0_cv2_l4, half2_l4)
-    bn1_inter_l4 = conv2d_int8_reference(bn0_out_l4, w_bn1cv1_l4, scale, stride=1, padding=1)
-    bn1_cv2_l4 = conv2d_int8_reference(bn1_inter_l4, w_bn1cv2_l4, scale, stride=1, padding=1)
+    bn1_inter_l4 = conv2d_int8_reference(
+        bn0_out_l4, w_bn1cv1_l4, scale, stride=1, padding=1
+    )
+    bn1_cv2_l4 = conv2d_int8_reference(
+        bn1_inter_l4, w_bn1cv2_l4, scale, stride=1, padding=1
+    )
     bn1_out_l4 = add_i8_reference(bn1_cv2_l4, bn0_out_l4)
     concat_l4 = torch.cat([half1_l4, half2_l4, bn0_out_l4, bn1_out_l4], dim=1)
     l4_out = conv2d_int8_reference(concat_l4, w_cv2_l4, scale, stride=1, padding=0)
-    l5_out = conv2d_int8_pade_silu_reference(l4_out, w_l5, b_l5, scale, shift2, stride=2)
+    l5_out = conv2d_int8_pade_silu_reference(
+        l4_out, w_l5, b_l5, scale, shift2, stride=2
+    )
 
     # P3
     cv1_l6 = conv2d_int8_reference(l5_out, w_cv1_l6, scale, stride=1, padding=0)
     half1_l6 = cv1_l6[:, :bn_ch_l6, :, :]
     half2_l6 = cv1_l6[:, bn_ch_l6:, :, :]
-    bn0_inter_l6 = conv2d_int8_reference(half2_l6, w_bn0cv1_l6, scale, stride=1, padding=1)
-    bn0_cv2_l6 = conv2d_int8_reference(bn0_inter_l6, w_bn0cv2_l6, scale, stride=1, padding=1)
+    bn0_inter_l6 = conv2d_int8_reference(
+        half2_l6, w_bn0cv1_l6, scale, stride=1, padding=1
+    )
+    bn0_cv2_l6 = conv2d_int8_reference(
+        bn0_inter_l6, w_bn0cv2_l6, scale, stride=1, padding=1
+    )
     bn0_out_l6 = add_i8_reference(bn0_cv2_l6, half2_l6)
-    bn1_inter_l6 = conv2d_int8_reference(bn0_out_l6, w_bn1cv1_l6, scale, stride=1, padding=1)
-    bn1_cv2_l6 = conv2d_int8_reference(bn1_inter_l6, w_bn1cv2_l6, scale, stride=1, padding=1)
+    bn1_inter_l6 = conv2d_int8_reference(
+        bn0_out_l6, w_bn1cv1_l6, scale, stride=1, padding=1
+    )
+    bn1_cv2_l6 = conv2d_int8_reference(
+        bn1_inter_l6, w_bn1cv2_l6, scale, stride=1, padding=1
+    )
     bn1_out_l6 = add_i8_reference(bn1_cv2_l6, bn0_out_l6)
     concat_l6 = torch.cat([half1_l6, half2_l6, bn0_out_l6, bn1_out_l6], dim=1)
     l6_out = conv2d_int8_reference(concat_l6, w_cv2_l6, scale, stride=1, padding=0)
@@ -7062,15 +7155,26 @@ def test_dataflow_p1_through_p3(l0_h, l0_w):
     # ================================================================
     ctx1 = AIEContext()
     op1 = AIEDataflowBackbonePhase1(
-        l0_height=l0_h, l0_width=l0_w,
-        l0_ic=l0_ic, l0_oc=l0_oc,
-        l0_shift1=scale, l0_shift2=shift2,
-        l1_oc=l1_oc, l1_shift1=scale, l1_shift2=shift2,
-        cv1_shift1=scale, cv1_shift2=shift2,
-        bn_cv1_shift1=scale, bn_cv1_shift2=shift2,
-        bn_cv2_shift1=scale, bn_cv2_shift2=shift2,
-        cv2_shift1=scale, cv2_shift2=shift2,
-        l3_oc=l3_oc, l3_shift1=scale, l3_shift2=shift2,
+        l0_height=l0_h,
+        l0_width=l0_w,
+        l0_ic=l0_ic,
+        l0_oc=l0_oc,
+        l0_shift1=scale,
+        l0_shift2=shift2,
+        l1_oc=l1_oc,
+        l1_shift1=scale,
+        l1_shift2=shift2,
+        cv1_shift1=scale,
+        cv1_shift2=shift2,
+        bn_cv1_shift1=scale,
+        bn_cv1_shift2=shift2,
+        bn_cv2_shift1=scale,
+        bn_cv2_shift2=shift2,
+        cv2_shift1=scale,
+        cv2_shift2=shift2,
+        l3_oc=l3_oc,
+        l3_shift1=scale,
+        l3_shift2=shift2,
         context=ctx1,
     )
     op1.context.compile_all()
@@ -7082,15 +7186,17 @@ def test_dataflow_p1_through_p3(l0_h, l0_w):
 
     tg1_wt_slot = op1._tg1_wt_slot
     c2f_wt_slot = op1._c2f_wt_slot
-    p1_packed = np.concatenate([
-        _pad(pack_fused_weights_k3(w0, b0), tg1_wt_slot),
-        _pad(pack_fused_weights_k3(w1, b1), tg1_wt_slot),
-        _pad(_pack_k1_silu_weights(w_cv1_l2, b_cv1_l2), c2f_wt_slot),
-        _pad(pack_fused_weights_k3(w_bn1_l2, b_bn1_l2), c2f_wt_slot),
-        _pad(pack_fused_weights_k3(w_bn2_l2, b_bn2_l2), c2f_wt_slot),
-        _pad(_pack_k1_silu_weights(w_cv2_l2, b_cv2_l2), c2f_wt_slot),
-        pack_fused_weights_k3(w3, b3),
-    ])
+    p1_packed = np.concatenate(
+        [
+            _pad(pack_fused_weights_k3(w0, b0), tg1_wt_slot),
+            _pad(pack_fused_weights_k3(w1, b1), tg1_wt_slot),
+            _pad(_pack_k1_silu_weights(w_cv1_l2, b_cv1_l2), c2f_wt_slot),
+            _pad(pack_fused_weights_k3(w_bn1_l2, b_bn1_l2), c2f_wt_slot),
+            _pad(pack_fused_weights_k3(w_bn2_l2, b_bn2_l2), c2f_wt_slot),
+            _pad(_pack_k1_silu_weights(w_cv2_l2, b_cv2_l2), c2f_wt_slot),
+            pack_fused_weights_k3(w3, b3),
+        ]
+    )
     op1.write_buffer("weights", p1_packed)
     op1.write_buffer("output", np.zeros(op1.buffers["output"], dtype=np.int8))
 
@@ -7107,28 +7213,43 @@ def test_dataflow_p1_through_p3(l0_h, l0_w):
     # ================================================================
     ctx2 = AIEContext()
     op2 = AIEDataflowL4L5Combined(
-        height=l3_out_h, width=l3_out_w, in_channels=l3_oc,
-        cv1_scale=scale, bn0_cv1_scale=scale, bn0_cv2_scale=scale,
-        bn1_cv1_scale=scale, bn1_cv2_scale=scale, cv2_scale=scale,
-        l5_oc=l5_oc, l5_shift1=scale, l5_shift2=shift2,
+        height=l3_out_h,
+        width=l3_out_w,
+        in_channels=l3_oc,
+        cv1_scale=scale,
+        bn0_cv1_scale=scale,
+        bn0_cv2_scale=scale,
+        bn1_cv1_scale=scale,
+        bn1_cv2_scale=scale,
+        cv2_scale=scale,
+        l5_oc=l5_oc,
+        l5_shift1=scale,
+        l5_shift2=shift2,
         context=ctx2,
     )
     op2.context.compile_all()
     op2.context.prepare_runtime()
     op2.write_buffer("input", p1_output_tiled)
 
-    l4_packed = np.concatenate([
-        weights_to_tiled_int8(w_cv1_l4),
-        weights_to_tiled_int8_k3(w_bn0cv1_l4), weights_to_tiled_int8_k3(w_bn0cv2_l4),
-        weights_to_tiled_int8_k3(w_bn1cv1_l4), weights_to_tiled_int8_k3(w_bn1cv2_l4),
-        weights_to_tiled_int8(w_cv2_l4),
-    ])
+    l4_packed = np.concatenate(
+        [
+            weights_to_tiled_int8(w_cv1_l4),
+            weights_to_tiled_int8_k3(w_bn0cv1_l4),
+            weights_to_tiled_int8_k3(w_bn0cv2_l4),
+            weights_to_tiled_int8_k3(w_bn1cv1_l4),
+            weights_to_tiled_int8_k3(w_bn1cv2_l4),
+            weights_to_tiled_int8(w_cv2_l4),
+        ]
+    )
     l5_oc_chunk = op2._l5_oc_chunk
     l5_n_oc_groups = op2._l5_n_oc_groups
-    l5_chunks = [pack_fused_weights_k3(
-        w_l5[g * l5_oc_chunk : (g + 1) * l5_oc_chunk],
-        b_l5[g * l5_oc_chunk : (g + 1) * l5_oc_chunk],
-    ) for g in range(l5_n_oc_groups)]
+    l5_chunks = [
+        pack_fused_weights_k3(
+            w_l5[g * l5_oc_chunk : (g + 1) * l5_oc_chunk],
+            b_l5[g * l5_oc_chunk : (g + 1) * l5_oc_chunk],
+        )
+        for g in range(l5_n_oc_groups)
+    ]
     op2.write_buffer("weights", np.concatenate([l4_packed, np.concatenate(l5_chunks)]))
     op2.write_buffer("output", np.zeros(op2._output_buf_size, dtype=np.int8))
 
@@ -7145,28 +7266,43 @@ def test_dataflow_p1_through_p3(l0_h, l0_w):
     # ================================================================
     ctx3 = AIEContext()
     op3 = AIEDataflowL6L7Combined(
-        height=l5_out_h, width=l5_out_w, in_channels=l5_oc,
-        cv1_scale=scale, bn0_cv1_scale=scale, bn0_cv2_scale=scale,
-        bn1_cv1_scale=scale, bn1_cv2_scale=scale, cv2_scale=scale,
-        l7_oc=l7_oc, l7_shift1=scale, l7_shift2=shift2,
+        height=l5_out_h,
+        width=l5_out_w,
+        in_channels=l5_oc,
+        cv1_scale=scale,
+        bn0_cv1_scale=scale,
+        bn0_cv2_scale=scale,
+        bn1_cv1_scale=scale,
+        bn1_cv2_scale=scale,
+        cv2_scale=scale,
+        l7_oc=l7_oc,
+        l7_shift1=scale,
+        l7_shift2=shift2,
         context=ctx3,
     )
     op3.context.compile_all()
     op3.context.prepare_runtime()
     op3.write_buffer("input", p2_output_tiled)
 
-    l6_packed = np.concatenate([
-        weights_to_tiled_int8(w_cv1_l6),
-        weights_to_tiled_int8_k3(w_bn0cv1_l6), weights_to_tiled_int8_k3(w_bn0cv2_l6),
-        weights_to_tiled_int8_k3(w_bn1cv1_l6), weights_to_tiled_int8_k3(w_bn1cv2_l6),
-        weights_to_tiled_int8(w_cv2_l6),
-    ])
+    l6_packed = np.concatenate(
+        [
+            weights_to_tiled_int8(w_cv1_l6),
+            weights_to_tiled_int8_k3(w_bn0cv1_l6),
+            weights_to_tiled_int8_k3(w_bn0cv2_l6),
+            weights_to_tiled_int8_k3(w_bn1cv1_l6),
+            weights_to_tiled_int8_k3(w_bn1cv2_l6),
+            weights_to_tiled_int8(w_cv2_l6),
+        ]
+    )
     l7_oc_chunk = op3._l7_oc_chunk
     l7_n_oc_groups = op3._l7_n_oc_groups
-    l7_chunks = [pack_fused_weights_k3(
-        w_l7[g * l7_oc_chunk : (g + 1) * l7_oc_chunk],
-        b_l7[g * l7_oc_chunk : (g + 1) * l7_oc_chunk],
-    ) for g in range(l7_n_oc_groups)]
+    l7_chunks = [
+        pack_fused_weights_k3(
+            w_l7[g * l7_oc_chunk : (g + 1) * l7_oc_chunk],
+            b_l7[g * l7_oc_chunk : (g + 1) * l7_oc_chunk],
+        )
+        for g in range(l7_n_oc_groups)
+    ]
     op3.write_buffer("weights", np.concatenate([l6_packed, np.concatenate(l7_chunks)]))
     op3.write_buffer("output", np.zeros(op3._output_buf_size, dtype=np.int8))
 
@@ -7206,13 +7342,11 @@ def test_dataflow_p1_through_p3(l0_h, l0_w):
     print(f"  Total NPU time: {1000 * total_time:.1f} ms")
 
     # 3 PDIs, ~25 layers total, compounds errors
-    assert max_diff <= 15, (
-        f"P1→P2→P3 failed: max_diff={max_diff} exceeds threshold 15"
-    )
+    assert max_diff <= 15, f"P1→P2→P3 failed: max_diff={max_diff} exceeds threshold 15"
     error_rate_gt5 = errors_gt5 / total if total > 0 else 0
-    assert error_rate_gt5 < 0.20, (
-        f"P1→P2→P3: {100 * error_rate_gt5:.2f}% errors > 5 exceeds 20% threshold"
-    )
+    assert (
+        error_rate_gt5 < 0.20
+    ), f"P1→P2→P3: {100 * error_rate_gt5:.2f}% errors > 5 exceeds 20% threshold"
 
 
 # ---------------------------------------------------------------------------
@@ -7268,8 +7402,7 @@ class AIEDataflowL8C2f(AIEOperatorBase):
     def set_up_artifacts(self):
         operator_dir = Path(__file__).parent
         file_name_base = (
-            f"dataflow_l8_c2f_{self.in_channels}ic_"
-            f"{self.height}h_{self.width}w"
+            f"dataflow_l8_c2f_{self.in_channels}ic_" f"{self.height}h_{self.width}w"
         )
 
         mlir_artifact = PythonGeneratedMLIRArtifact.new(
@@ -7351,8 +7484,14 @@ class AIEDataflowL8C2f(AIEOperatorBase):
 
         xclbin_artifact = XclbinArtifact.new(
             f"{file_name_base}.xclbin",
-            depends=[mlir_artifact, k1_obj, k3_bn_obj, k3_bn_cv2_obj,
-                     add_obj, k1_cv2_obj],
+            depends=[
+                mlir_artifact,
+                k1_obj,
+                k3_bn_obj,
+                k3_bn_cv2_obj,
+                add_obj,
+                k1_cv2_obj,
+            ],
         )
 
         insts_artifact = InstsBinArtifact.new(
@@ -7427,17 +7566,20 @@ def test_dataflow_l8(height, width, aie_context):
     half1 = cv1_out[:, :half_ch, :, :]
     half2 = cv1_out[:, half_ch:, :, :]
     bn0_inter = conv2d_int8_reference(half2, w_bn0cv1, scale, stride=1, padding=1)
-    bn0_cv2_out = conv2d_int8_reference(
-        bn0_inter, w_bn0cv2, scale, stride=1, padding=1
-    )
+    bn0_cv2_out = conv2d_int8_reference(bn0_inter, w_bn0cv2, scale, stride=1, padding=1)
     bn0_out = add_i8_reference(bn0_cv2_out, half2)
     concat = torch.cat([half1, half2, bn0_out], dim=1)
     ref = conv2d_int8_reference(concat, w_cv2, scale, stride=1, padding=0)
 
     op = AIEDataflowL8C2f(
-        height=height, width=width, in_channels=ic,
-        cv1_scale=scale, bn0_cv1_scale=scale, bn0_cv2_scale=scale,
-        cv2_scale=scale, context=aie_context,
+        height=height,
+        width=width,
+        in_channels=ic,
+        cv1_scale=scale,
+        bn0_cv1_scale=scale,
+        bn0_cv2_scale=scale,
+        cv2_scale=scale,
+        context=aie_context,
     )
     op.context.compile_all()
     op.context.prepare_runtime()
@@ -7456,18 +7598,14 @@ def test_dataflow_l8(height, width, aie_context):
     bn0cv1_chunks = []
     for g in range(4):
         oc_s = g * 32
-        bn0cv1_chunks.append(
-            weights_to_tiled_int8_k3(w_bn0cv1[oc_s : oc_s + 32])
-        )
+        bn0cv1_chunks.append(weights_to_tiled_int8_k3(w_bn0cv1[oc_s : oc_s + 32]))
     bn0cv1_packed = np.concatenate(bn0cv1_chunks)
 
     # bn0cv2: oc_chunk=32, 4 groups
     bn0cv2_chunks = []
     for g in range(4):
         oc_s = g * 32
-        bn0cv2_chunks.append(
-            weights_to_tiled_int8_k3(w_bn0cv2[oc_s : oc_s + 32])
-        )
+        bn0cv2_chunks.append(weights_to_tiled_int8_k3(w_bn0cv2[oc_s : oc_s + 32]))
     bn0cv2_packed = np.concatenate(bn0cv2_chunks)
 
     # cv2: oc_chunk=64, 4 groups
@@ -7509,9 +7647,7 @@ def test_dataflow_l8(height, width, aie_context):
     # 5-phase pipeline with OC streaming on 256ch tensors compounds
     # rounding through cv1(256->256) + bn0.cv1(128->128) + bn0.cv2(128->128)
     # + add + cv2(384->256). Non-fused integer conv accumulates errors.
-    assert max_diff <= 15, (
-        f"L8 C2f failed: max_diff={max_diff} exceeds threshold 15"
-    )
+    assert max_diff <= 15, f"L8 C2f failed: max_diff={max_diff} exceeds threshold 15"
 
 
 # ---------------------------------------------------------------------------
@@ -7524,7 +7660,10 @@ def test_dataflow_l8(height, width, aie_context):
     [
         pytest.param(64, 64, id="full_backbone_64x64"),
         pytest.param(
-            640, 640, id="full_backbone_640x640", marks=pytest.mark.extensive,
+            640,
+            640,
+            id="full_backbone_640x640",
+            marks=pytest.mark.extensive,
         ),
     ],
 )
@@ -7611,61 +7750,120 @@ def test_dataflow_full_backbone(l0_h, l0_w):
     inter01 = conv2d_int8_pade_silu_reference(x_int8, w0, b0, scale, shift2, stride=2)
     l1_out = conv2d_int8_pade_silu_reference(inter01, w1, b1, scale, shift2, stride=2)
     cv1_l2 = conv2d_int8_pade_silu_reference(
-        l1_out, w_cv1_l2, b_cv1_l2, scale, shift2, stride=1, padding=0)
+        l1_out, w_cv1_l2, b_cv1_l2, scale, shift2, stride=1, padding=0
+    )
     half1_l2 = cv1_l2[:, :bn_ch_l2, :, :]
     half2_l2 = cv1_l2[:, bn_ch_l2:, :, :]
     bn_inter_l2 = conv2d_int8_pade_silu_reference(
-        half2_l2, w_bn1_l2, b_bn1_l2, scale, shift2, stride=1, padding=1)
+        half2_l2, w_bn1_l2, b_bn1_l2, scale, shift2, stride=1, padding=1
+    )
     bn_out_l2 = conv2d_int8_pade_silu_reference(
-        bn_inter_l2, w_bn2_l2, b_bn2_l2, scale, shift2, stride=1, padding=1)
+        bn_inter_l2, w_bn2_l2, b_bn2_l2, scale, shift2, stride=1, padding=1
+    )
     c2f_l2_out = conv2d_int8_pade_silu_reference(
         torch.cat([half1_l2, half2_l2, bn_out_l2], dim=1),
-        w_cv2_l2, b_cv2_l2, scale, shift2, stride=1, padding=0)
+        w_cv2_l2,
+        b_cv2_l2,
+        scale,
+        shift2,
+        stride=1,
+        padding=0,
+    )
     l3_out = conv2d_int8_pade_silu_reference(
-        c2f_l2_out, w3, b3, scale, shift2, stride=2)
+        c2f_l2_out, w3, b3, scale, shift2, stride=2
+    )
 
     # P2
     cv1_l4 = conv2d_int8_reference(l3_out, w_cv1_l4, scale, stride=1, padding=0)
     half1_l4 = cv1_l4[:, :bn_ch_l4, :, :]
     half2_l4 = cv1_l4[:, bn_ch_l4:, :, :]
-    bn0_l4 = add_i8_reference(conv2d_int8_reference(
-        conv2d_int8_reference(half2_l4, w_bn0cv1_l4, scale, stride=1, padding=1),
-        w_bn0cv2_l4, scale, stride=1, padding=1), half2_l4)
-    bn1_l4 = add_i8_reference(conv2d_int8_reference(
-        conv2d_int8_reference(bn0_l4, w_bn1cv1_l4, scale, stride=1, padding=1),
-        w_bn1cv2_l4, scale, stride=1, padding=1), bn0_l4)
+    bn0_l4 = add_i8_reference(
+        conv2d_int8_reference(
+            conv2d_int8_reference(half2_l4, w_bn0cv1_l4, scale, stride=1, padding=1),
+            w_bn0cv2_l4,
+            scale,
+            stride=1,
+            padding=1,
+        ),
+        half2_l4,
+    )
+    bn1_l4 = add_i8_reference(
+        conv2d_int8_reference(
+            conv2d_int8_reference(bn0_l4, w_bn1cv1_l4, scale, stride=1, padding=1),
+            w_bn1cv2_l4,
+            scale,
+            stride=1,
+            padding=1,
+        ),
+        bn0_l4,
+    )
     l4_out = conv2d_int8_reference(
         torch.cat([half1_l4, half2_l4, bn0_l4, bn1_l4], dim=1),
-        w_cv2_l4, scale, stride=1, padding=0)
+        w_cv2_l4,
+        scale,
+        stride=1,
+        padding=0,
+    )
     l5_out = conv2d_int8_pade_silu_reference(
-        l4_out, w_l5, b_l5, scale, shift2, stride=2)
+        l4_out, w_l5, b_l5, scale, shift2, stride=2
+    )
 
     # P3
     cv1_l6 = conv2d_int8_reference(l5_out, w_cv1_l6, scale, stride=1, padding=0)
     half1_l6 = cv1_l6[:, :bn_ch_l6, :, :]
     half2_l6 = cv1_l6[:, bn_ch_l6:, :, :]
-    bn0_l6 = add_i8_reference(conv2d_int8_reference(
-        conv2d_int8_reference(half2_l6, w_bn0cv1_l6, scale, stride=1, padding=1),
-        w_bn0cv2_l6, scale, stride=1, padding=1), half2_l6)
-    bn1_l6 = add_i8_reference(conv2d_int8_reference(
-        conv2d_int8_reference(bn0_l6, w_bn1cv1_l6, scale, stride=1, padding=1),
-        w_bn1cv2_l6, scale, stride=1, padding=1), bn0_l6)
+    bn0_l6 = add_i8_reference(
+        conv2d_int8_reference(
+            conv2d_int8_reference(half2_l6, w_bn0cv1_l6, scale, stride=1, padding=1),
+            w_bn0cv2_l6,
+            scale,
+            stride=1,
+            padding=1,
+        ),
+        half2_l6,
+    )
+    bn1_l6 = add_i8_reference(
+        conv2d_int8_reference(
+            conv2d_int8_reference(bn0_l6, w_bn1cv1_l6, scale, stride=1, padding=1),
+            w_bn1cv2_l6,
+            scale,
+            stride=1,
+            padding=1,
+        ),
+        bn0_l6,
+    )
     l6_out = conv2d_int8_reference(
         torch.cat([half1_l6, half2_l6, bn0_l6, bn1_l6], dim=1),
-        w_cv2_l6, scale, stride=1, padding=0)
+        w_cv2_l6,
+        scale,
+        stride=1,
+        padding=0,
+    )
     l7_out = conv2d_int8_pade_silu_reference(
-        l6_out, w_l7, b_l7, scale, shift2, stride=2)
+        l6_out, w_l7, b_l7, scale, shift2, stride=2
+    )
 
     # P4 (L8 C2f)
     cv1_l8 = conv2d_int8_reference(l7_out, w_cv1_l8, scale, stride=1, padding=0)
     half1_l8 = cv1_l8[:, :bn_ch_l8, :, :]
     half2_l8 = cv1_l8[:, bn_ch_l8:, :, :]
-    bn0_l8 = add_i8_reference(conv2d_int8_reference(
-        conv2d_int8_reference(half2_l8, w_bn0cv1_l8, scale, stride=1, padding=1),
-        w_bn0cv2_l8, scale, stride=1, padding=1), half2_l8)
+    bn0_l8 = add_i8_reference(
+        conv2d_int8_reference(
+            conv2d_int8_reference(half2_l8, w_bn0cv1_l8, scale, stride=1, padding=1),
+            w_bn0cv2_l8,
+            scale,
+            stride=1,
+            padding=1,
+        ),
+        half2_l8,
+    )
     ref_final = conv2d_int8_reference(
         torch.cat([half1_l8, half2_l8, bn0_l8], dim=1),
-        w_cv2_l8, scale, stride=1, padding=0)
+        w_cv2_l8,
+        scale,
+        stride=1,
+        padding=0,
+    )
 
     phase_times = {}
 
@@ -7677,28 +7875,47 @@ def test_dataflow_full_backbone(l0_h, l0_w):
     # ================================================================
     ctx1 = AIEContext()
     op1 = AIEDataflowBackbonePhase1(
-        l0_height=l0_h, l0_width=l0_w, l0_ic=l0_ic, l0_oc=l0_oc,
-        l0_shift1=scale, l0_shift2=shift2, l1_oc=l1_oc,
-        l1_shift1=scale, l1_shift2=shift2,
-        cv1_shift1=scale, cv1_shift2=shift2,
-        bn_cv1_shift1=scale, bn_cv1_shift2=shift2,
-        bn_cv2_shift1=scale, bn_cv2_shift2=shift2,
-        cv2_shift1=scale, cv2_shift2=shift2,
-        l3_oc=l3_oc, l3_shift1=scale, l3_shift2=shift2,
-        context=ctx1)
+        l0_height=l0_h,
+        l0_width=l0_w,
+        l0_ic=l0_ic,
+        l0_oc=l0_oc,
+        l0_shift1=scale,
+        l0_shift2=shift2,
+        l1_oc=l1_oc,
+        l1_shift1=scale,
+        l1_shift2=shift2,
+        cv1_shift1=scale,
+        cv1_shift2=shift2,
+        bn_cv1_shift1=scale,
+        bn_cv1_shift2=shift2,
+        bn_cv2_shift1=scale,
+        bn_cv2_shift2=shift2,
+        cv2_shift1=scale,
+        cv2_shift2=shift2,
+        l3_oc=l3_oc,
+        l3_shift1=scale,
+        l3_shift2=shift2,
+        context=ctx1,
+    )
     op1.context.compile_all()
     op1.context.prepare_runtime()
     op1.write_buffer("input", nchw_to_tiled_int8(x_int8))
     tg1s = op1._tg1_wt_slot
     c2fs = op1._c2f_wt_slot
-    op1.write_buffer("weights", np.concatenate([
-        _pad(pack_fused_weights_k3(w0, b0), tg1s),
-        _pad(pack_fused_weights_k3(w1, b1), tg1s),
-        _pad(_pack_k1_silu_weights(w_cv1_l2, b_cv1_l2), c2fs),
-        _pad(pack_fused_weights_k3(w_bn1_l2, b_bn1_l2), c2fs),
-        _pad(pack_fused_weights_k3(w_bn2_l2, b_bn2_l2), c2fs),
-        _pad(_pack_k1_silu_weights(w_cv2_l2, b_cv2_l2), c2fs),
-        pack_fused_weights_k3(w3, b3)]))
+    op1.write_buffer(
+        "weights",
+        np.concatenate(
+            [
+                _pad(pack_fused_weights_k3(w0, b0), tg1s),
+                _pad(pack_fused_weights_k3(w1, b1), tg1s),
+                _pad(_pack_k1_silu_weights(w_cv1_l2, b_cv1_l2), c2fs),
+                _pad(pack_fused_weights_k3(w_bn1_l2, b_bn1_l2), c2fs),
+                _pad(pack_fused_weights_k3(w_bn2_l2, b_bn2_l2), c2fs),
+                _pad(_pack_k1_silu_weights(w_cv2_l2, b_cv2_l2), c2fs),
+                pack_fused_weights_k3(w3, b3),
+            ]
+        ),
+    )
     op1.write_buffer("output", np.zeros(op1.buffers["output"], dtype=np.int8))
     t0 = time.perf_counter()
     op1.run_runlist()
@@ -7712,22 +7929,43 @@ def test_dataflow_full_backbone(l0_h, l0_w):
     # ================================================================
     ctx2 = AIEContext()
     op2 = AIEDataflowL4L5Combined(
-        height=l3_out_h, width=l3_out_w, in_channels=l3_oc,
-        cv1_scale=scale, bn0_cv1_scale=scale, bn0_cv2_scale=scale,
-        bn1_cv1_scale=scale, bn1_cv2_scale=scale, cv2_scale=scale,
-        l5_oc=l5_oc, l5_shift1=scale, l5_shift2=shift2, context=ctx2)
+        height=l3_out_h,
+        width=l3_out_w,
+        in_channels=l3_oc,
+        cv1_scale=scale,
+        bn0_cv1_scale=scale,
+        bn0_cv2_scale=scale,
+        bn1_cv1_scale=scale,
+        bn1_cv2_scale=scale,
+        cv2_scale=scale,
+        l5_oc=l5_oc,
+        l5_shift1=scale,
+        l5_shift2=shift2,
+        context=ctx2,
+    )
     op2.context.compile_all()
     op2.context.prepare_runtime()
     op2.write_buffer("input", p1_tiled)
-    l4p = np.concatenate([
-        weights_to_tiled_int8(w_cv1_l4),
-        weights_to_tiled_int8_k3(w_bn0cv1_l4), weights_to_tiled_int8_k3(w_bn0cv2_l4),
-        weights_to_tiled_int8_k3(w_bn1cv1_l4), weights_to_tiled_int8_k3(w_bn1cv2_l4),
-        weights_to_tiled_int8(w_cv2_l4)])
+    l4p = np.concatenate(
+        [
+            weights_to_tiled_int8(w_cv1_l4),
+            weights_to_tiled_int8_k3(w_bn0cv1_l4),
+            weights_to_tiled_int8_k3(w_bn0cv2_l4),
+            weights_to_tiled_int8_k3(w_bn1cv1_l4),
+            weights_to_tiled_int8_k3(w_bn1cv2_l4),
+            weights_to_tiled_int8(w_cv2_l4),
+        ]
+    )
     l5c = op2._l5_oc_chunk
     l5g = op2._l5_n_oc_groups
-    l5p = np.concatenate([pack_fused_weights_k3(
-        w_l5[g*l5c:(g+1)*l5c], b_l5[g*l5c:(g+1)*l5c]) for g in range(l5g)])
+    l5p = np.concatenate(
+        [
+            pack_fused_weights_k3(
+                w_l5[g * l5c : (g + 1) * l5c], b_l5[g * l5c : (g + 1) * l5c]
+            )
+            for g in range(l5g)
+        ]
+    )
     op2.write_buffer("weights", np.concatenate([l4p, l5p]))
     op2.write_buffer("output", np.zeros(op2._output_buf_size, dtype=np.int8))
     t0 = time.perf_counter()
@@ -7742,22 +7980,43 @@ def test_dataflow_full_backbone(l0_h, l0_w):
     # ================================================================
     ctx3 = AIEContext()
     op3 = AIEDataflowL6L7Combined(
-        height=l5_out_h, width=l5_out_w, in_channels=l5_oc,
-        cv1_scale=scale, bn0_cv1_scale=scale, bn0_cv2_scale=scale,
-        bn1_cv1_scale=scale, bn1_cv2_scale=scale, cv2_scale=scale,
-        l7_oc=l7_oc, l7_shift1=scale, l7_shift2=shift2, context=ctx3)
+        height=l5_out_h,
+        width=l5_out_w,
+        in_channels=l5_oc,
+        cv1_scale=scale,
+        bn0_cv1_scale=scale,
+        bn0_cv2_scale=scale,
+        bn1_cv1_scale=scale,
+        bn1_cv2_scale=scale,
+        cv2_scale=scale,
+        l7_oc=l7_oc,
+        l7_shift1=scale,
+        l7_shift2=shift2,
+        context=ctx3,
+    )
     op3.context.compile_all()
     op3.context.prepare_runtime()
     op3.write_buffer("input", p2_tiled)
-    l6p = np.concatenate([
-        weights_to_tiled_int8(w_cv1_l6),
-        weights_to_tiled_int8_k3(w_bn0cv1_l6), weights_to_tiled_int8_k3(w_bn0cv2_l6),
-        weights_to_tiled_int8_k3(w_bn1cv1_l6), weights_to_tiled_int8_k3(w_bn1cv2_l6),
-        weights_to_tiled_int8(w_cv2_l6)])
+    l6p = np.concatenate(
+        [
+            weights_to_tiled_int8(w_cv1_l6),
+            weights_to_tiled_int8_k3(w_bn0cv1_l6),
+            weights_to_tiled_int8_k3(w_bn0cv2_l6),
+            weights_to_tiled_int8_k3(w_bn1cv1_l6),
+            weights_to_tiled_int8_k3(w_bn1cv2_l6),
+            weights_to_tiled_int8(w_cv2_l6),
+        ]
+    )
     l7c = op3._l7_oc_chunk
     l7g = op3._l7_n_oc_groups
-    l7p = np.concatenate([pack_fused_weights_k3(
-        w_l7[g*l7c:(g+1)*l7c], b_l7[g*l7c:(g+1)*l7c]) for g in range(l7g)])
+    l7p = np.concatenate(
+        [
+            pack_fused_weights_k3(
+                w_l7[g * l7c : (g + 1) * l7c], b_l7[g * l7c : (g + 1) * l7c]
+            )
+            for g in range(l7g)
+        ]
+    )
     op3.write_buffer("weights", np.concatenate([l6p, l7p]))
     op3.write_buffer("output", np.zeros(op3._output_buf_size, dtype=np.int8))
     t0 = time.perf_counter()
@@ -7772,24 +8031,38 @@ def test_dataflow_full_backbone(l0_h, l0_w):
     # ================================================================
     ctx4 = AIEContext()
     op4 = AIEDataflowL8C2f(
-        height=l7_out_h, width=l7_out_w, in_channels=l7_oc,
-        cv1_scale=scale, bn0_cv1_scale=scale, bn0_cv2_scale=scale,
-        cv2_scale=scale, context=ctx4)
+        height=l7_out_h,
+        width=l7_out_w,
+        in_channels=l7_oc,
+        cv1_scale=scale,
+        bn0_cv1_scale=scale,
+        bn0_cv2_scale=scale,
+        cv2_scale=scale,
+        context=ctx4,
+    )
     op4.context.compile_all()
     op4.context.prepare_runtime()
     op4.write_buffer("input", p3_tiled)
 
     # L8 weights: [cv1_chunks | bn0cv1_chunks | bn0cv2_chunks | cv2_chunks]
-    cv1_l8_chunks = np.concatenate([
-        weights_to_tiled_int8(w_cv1_l8[g*128:(g+1)*128]) for g in range(2)])
-    bn0cv1_l8_chunks = np.concatenate([
-        weights_to_tiled_int8_k3(w_bn0cv1_l8[g*32:(g+1)*32]) for g in range(4)])
-    bn0cv2_l8_chunks = np.concatenate([
-        weights_to_tiled_int8_k3(w_bn0cv2_l8[g*32:(g+1)*32]) for g in range(4)])
-    cv2_l8_chunks = np.concatenate([
-        weights_to_tiled_int8(w_cv2_l8[g*64:(g+1)*64]) for g in range(4)])
-    op4.write_buffer("weights", np.concatenate([
-        cv1_l8_chunks, bn0cv1_l8_chunks, bn0cv2_l8_chunks, cv2_l8_chunks]))
+    cv1_l8_chunks = np.concatenate(
+        [weights_to_tiled_int8(w_cv1_l8[g * 128 : (g + 1) * 128]) for g in range(2)]
+    )
+    bn0cv1_l8_chunks = np.concatenate(
+        [weights_to_tiled_int8_k3(w_bn0cv1_l8[g * 32 : (g + 1) * 32]) for g in range(4)]
+    )
+    bn0cv2_l8_chunks = np.concatenate(
+        [weights_to_tiled_int8_k3(w_bn0cv2_l8[g * 32 : (g + 1) * 32]) for g in range(4)]
+    )
+    cv2_l8_chunks = np.concatenate(
+        [weights_to_tiled_int8(w_cv2_l8[g * 64 : (g + 1) * 64]) for g in range(4)]
+    )
+    op4.write_buffer(
+        "weights",
+        np.concatenate(
+            [cv1_l8_chunks, bn0cv1_l8_chunks, bn0cv2_l8_chunks, cv2_l8_chunks]
+        ),
+    )
     op4.write_buffer("output", np.zeros(op4._output_buf_size, dtype=np.int8))
     t0 = time.perf_counter()
     op4.run_runlist()
@@ -7801,7 +8074,8 @@ def test_dataflow_full_backbone(l0_h, l0_w):
     # ================================================================
     p4_buf = op4.read_buffer("output", (op4._output_buf_size,), dtype=np.int8)
     npu_final = tiled_to_nchw_int8(
-        p4_buf[: op4._final_size].copy(), 256, l7_out_h, l7_out_w)
+        p4_buf[: op4._final_size].copy(), 256, l7_out_h, l7_out_w
+    )
 
     ref_np = ref_final.numpy().reshape(-1).astype(np.int32)
     npu_np = npu_final.numpy().reshape(-1).astype(np.int32)
@@ -7823,11 +8097,773 @@ def test_dataflow_full_backbone(l0_h, l0_w):
     print(f"  Total NPU time: {1000 * sum(phase_times.values()):.1f} ms")
 
     # 4 PDIs, ~30 layers, heavy rounding accumulation
-    assert max_diff <= 25, (
-        f"Full backbone failed: max_diff={max_diff} exceeds threshold 25"
-    )
+    assert (
+        max_diff <= 25
+    ), f"Full backbone failed: max_diff={max_diff} exceeds threshold 25"
     error_rate_gt10 = errors_gt10 / total if total > 0 else 0
     assert error_rate_gt10 < 0.30, (
         f"Full backbone: {100 * error_rate_gt10:.2f}% errors > 10 "
         f"exceeds 30% threshold"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Step 16: P1+P2 combined PDI + P3 separate PDI test
+# ---------------------------------------------------------------------------
+
+
+class AIEDataflowP1P2Combined(AIEOperatorBase):
+    """Combined P1(L0-L3) + P2(L4+L5) in one PDI.
+
+    P1: L0(k3s2)->L1(k3s2)->C2f L2->L3(k3s2)
+    P2: C2f L4 + L5(k3s2, OC streaming)
+    """
+
+    def __init__(
+        self,
+        # P1 params
+        l0_height,
+        l0_width,
+        l0_ic,
+        l0_oc,
+        l0_shift1,
+        l0_shift2,
+        l1_oc,
+        l1_shift1,
+        l1_shift2,
+        cv1_shift1,
+        cv1_shift2,
+        bn_cv1_shift1,
+        bn_cv1_shift2,
+        bn_cv2_shift1,
+        bn_cv2_shift2,
+        cv2_shift1,
+        cv2_shift2,
+        l3_oc,
+        l3_shift1,
+        l3_shift2,
+        # P2 params
+        l4_cv1_scale,
+        l4_bn0_cv1_scale,
+        l4_bn0_cv2_scale,
+        l4_bn1_cv1_scale,
+        l4_bn1_cv2_scale,
+        l4_cv2_scale,
+        l5_oc,
+        l5_shift1,
+        l5_shift2,
+        context=None,
+    ):
+        # P1 params
+        self.l0_height = l0_height
+        self.l0_width = l0_width
+        self.l0_ic = l0_ic
+        self.l0_oc = l0_oc
+        self.l0_shift1 = l0_shift1
+        self.l0_shift2 = l0_shift2
+        self.l1_oc = l1_oc
+        self.l1_shift1 = l1_shift1
+        self.l1_shift2 = l1_shift2
+        self.cv1_shift1 = cv1_shift1
+        self.cv1_shift2 = cv1_shift2
+        self.bn_cv1_shift1 = bn_cv1_shift1
+        self.bn_cv1_shift2 = bn_cv1_shift2
+        self.bn_cv2_shift1 = bn_cv2_shift1
+        self.bn_cv2_shift2 = bn_cv2_shift2
+        self.cv2_shift1 = cv2_shift1
+        self.cv2_shift2 = cv2_shift2
+        self.l3_oc = l3_oc
+        self.l3_shift1 = l3_shift1
+        self.l3_shift2 = l3_shift2
+
+        # P2 params
+        self.l4_cv1_scale = l4_cv1_scale
+        self.l4_bn0_cv1_scale = l4_bn0_cv1_scale
+        self.l4_bn0_cv2_scale = l4_bn0_cv2_scale
+        self.l4_bn1_cv1_scale = l4_bn1_cv1_scale
+        self.l4_bn1_cv2_scale = l4_bn1_cv2_scale
+        self.l4_cv2_scale = l4_cv2_scale
+        self.l5_oc = l5_oc
+        self.l5_shift1 = l5_shift1
+        self.l5_shift2 = l5_shift2
+
+        # P1 derived dims
+        self.l1_ic = l0_oc
+        self.l1_height = l0_height // 2
+        self.l1_width = l0_width // 2
+        self.c2f_ic = l1_oc
+        self.c2f_height = l0_height // 4
+        self.c2f_width = l0_width // 4
+        self.p1_cv1_oc = 32
+        self.p1_bn_ch = 16
+        self.p1_cv2_ic = 48
+        self.p1_cv2_oc = 32
+        self.l3_ic = 32
+        self.l3_height = self.c2f_height
+        self.l3_width = self.c2f_width
+        self.l3_out_h = self.l3_height // 2
+        self.l3_out_w = self.l3_width // 2
+
+        # P2 derived dims
+        self.p2_in_channels = 64
+        self.p2_height = self.l3_out_h
+        self.p2_width = self.l3_out_w
+        self.p2_cv1_oc = 64
+        self.p2_bn_ch = 32
+        self.p2_cv2_ic = 128
+        self.p2_cv2_oc = 64
+        self.l5_out_h = self.p2_height // 2
+        self.l5_out_w = self.p2_width // 2
+
+        self.xclbin_artifact = None
+        self.insts_artifact = None
+
+        AIEOperatorBase.__init__(self, context=context, register=True)
+
+    def set_up_artifacts(self):
+        operator_dir = Path(__file__).parent
+        file_name_base = (
+            f"dataflow_p1p2_{self.l0_ic}ic_{self.l5_oc}oc_"
+            f"{self.l0_height}h_{self.l0_width}w"
+        )
+
+        mlir_artifact = PythonGeneratedMLIRArtifact.new(
+            f"{file_name_base}.mlir",
+            import_path=operator_dir / "dataflow_design.py",
+            callback_fn="my_dataflow_p1_p2_combined",
+            callback_args=[
+                self.context.device_manager.device_type,
+                # P1 params
+                self.l0_height,
+                self.l0_width,
+                self.l0_ic,
+                self.l0_oc,
+                self.l0_shift1,
+                self.l0_shift2,
+                self.l1_oc,
+                self.l1_shift1,
+                self.l1_shift2,
+                self.cv1_shift1,
+                self.cv1_shift2,
+                self.bn_cv1_shift1,
+                self.bn_cv1_shift2,
+                self.bn_cv2_shift1,
+                self.bn_cv2_shift2,
+                self.cv2_shift1,
+                self.cv2_shift2,
+                self.l3_oc,
+                self.l3_shift1,
+                self.l3_shift2,
+                # P2 params
+                self.l4_cv1_scale,
+                self.l4_bn0_cv1_scale,
+                self.l4_bn0_cv2_scale,
+                self.l4_bn1_cv1_scale,
+                self.l4_bn1_cv2_scale,
+                self.l4_cv2_scale,
+                self.l5_oc,
+                self.l5_shift1,
+                self.l5_shift2,
+            ],
+        )
+
+        # P1 kernel objects (6 total)
+        k3s2_silu_obj = KernelObjectArtifact.new(
+            "conv2dk3_i8_silu.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk3_i8_silu.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT"],
+        )
+
+        k1_silu_obj = KernelObjectArtifact.new(
+            "conv2dk1_i8_silu.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk1_i8_silu.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT"],
+        )
+
+        k3_silu_bn_fwd_obj = KernelObjectArtifact.new(
+            "conv2dk3_i8_silu_bn_fwd.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk3_i8_silu_fwd.cc"
+                )
+            ],
+            extra_flags=[
+                "-DINT8_ACT",
+                "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_bn",
+                "-Dconv2dk3s2_i8_silu=conv2dk3s2_i8_silu_bn",
+            ],
+        )
+
+        passthrough_obj = KernelObjectArtifact.new(
+            "passthrough_i8.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "passthrough_i8.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT"],
+        )
+
+        k1_silu_cv2_obj = KernelObjectArtifact.new(
+            "conv2dk1_i8_silu_cv2.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk1_i8_silu.cc"
+                )
+            ],
+            extra_flags=[
+                "-DINT8_ACT",
+                "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2",
+            ],
+        )
+
+        k3s2_silu_l3_obj = KernelObjectArtifact.new(
+            "conv2dk3_i8_silu_l3.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk3_i8_silu.cc"
+                )
+            ],
+            extra_flags=[
+                "-DINT8_ACT",
+                "-Dconv2dk3s2_i8_silu=conv2dk3s2_i8_silu_l3",
+            ],
+        )
+
+        # P2 kernel objects (5 total)
+        k1_i8_obj = KernelObjectArtifact.new(
+            "conv2dk1_i8.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir / "aie_kernels" / "aie2p" / "conv2dk1_i8.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT"],
+        )
+
+        k3_bn_obj = KernelObjectArtifact.new(
+            "conv2dk3_i8_bn.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir / "aie_kernels" / "aie2p" / "conv2dk3_i8.cc"
+                )
+            ],
+            extra_flags=[
+                "-DINT8_ACT",
+                "-Dconv2dk3_i8=conv2dk3_i8_bn",
+                "-Dconv2dk3s2_i8=conv2dk3s2_i8_bn",
+            ],
+        )
+
+        add_i8_obj = KernelObjectArtifact.new(
+            "add_i8.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir / "aie_kernels" / "aie2p" / "add_i8.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT", "-DSCALAR"],
+        )
+
+        k1_cv2_obj = KernelObjectArtifact.new(
+            "conv2dk1_i8_cv2.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir / "aie_kernels" / "aie2p" / "conv2dk1_i8.cc"
+                )
+            ],
+            extra_flags=[
+                "-DINT8_ACT",
+                "-Dconv2dk1_i8=conv2dk1_i8_cv2",
+            ],
+        )
+
+        l5_obj = KernelObjectArtifact.new(
+            "conv2dk3_i8_silu_l5.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk3_i8_silu.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT"],
+        )
+
+        xclbin_artifact = XclbinArtifact.new(
+            f"{file_name_base}.xclbin",
+            depends=[
+                mlir_artifact,
+                # P1
+                k3s2_silu_obj,
+                k1_silu_obj,
+                k3_silu_bn_fwd_obj,
+                passthrough_obj,
+                k1_silu_cv2_obj,
+                k3s2_silu_l3_obj,
+                # P2
+                k1_i8_obj,
+                k3_bn_obj,
+                add_i8_obj,
+                k1_cv2_obj,
+                l5_obj,
+            ],
+        )
+
+        insts_artifact = InstsBinArtifact.new(
+            f"{file_name_base}.bin", depends=[mlir_artifact]
+        )
+
+        self.xclbin_artifact = xclbin_artifact
+        self.insts_artifact = insts_artifact
+        self.add_artifacts([xclbin_artifact, insts_artifact])
+
+    def set_up_runtime(self):
+        total_input = self.l0_ic * self.l0_height * self.l0_width
+
+        # ---- P1 weight sizes ----
+        l0_wt = self.l0_oc * self.l0_ic * 9 + self.l0_oc * 4
+        l1_wt = self.l1_oc * self.l1_ic * 9 + self.l1_oc * 4
+        tg1_wt_slot = max(l0_wt, l1_wt)
+        tg1_total_wt = 2 * tg1_wt_slot
+        self._tg1_wt_slot = tg1_wt_slot
+
+        cv1_wt = self.p1_cv1_oc * self.c2f_ic + self.p1_cv1_oc * 4
+        bn_cv1_wt = self.p1_bn_ch * self.p1_bn_ch * 9 + self.p1_bn_ch * 4
+        bn_cv2_wt = self.p1_bn_ch * self.p1_bn_ch * 9 + self.p1_bn_ch * 4
+        cv2_wt = self.p1_cv2_oc * self.p1_cv2_ic + self.p1_cv2_oc * 4
+        c2f_wt_slot = max(cv1_wt, bn_cv1_wt, bn_cv2_wt, cv2_wt)
+        c2f_total_wt = 4 * c2f_wt_slot
+        self._c2f_wt_slot = c2f_wt_slot
+
+        l3_wt = self.l3_oc * self.l3_ic * 9 + self.l3_oc * 4
+        p1_total_wt = tg1_total_wt + c2f_total_wt + l3_wt
+
+        p1_scratch_a = self.l1_oc * self.c2f_height * self.c2f_width
+        p1_scratch_b = self.p1_cv2_oc * self.c2f_height * self.c2f_width
+
+        # ---- P2 weight sizes ----
+        p2_cv1_wt = self.p2_cv1_oc * self.p2_in_channels
+        p2_bn_k3_wt = self.p2_bn_ch * self.p2_bn_ch * 9
+        p2_cv2_wt = self.p2_cv2_oc * self.p2_cv2_ic
+        p2_bn_wt_slot = p2_bn_k3_wt
+        p2_l4_total_wt = p2_cv1_wt + 4 * p2_bn_wt_slot + p2_cv2_wt
+
+        p2_l4_output_size = self.p2_cv2_oc * self.p2_height * self.p2_width
+        p2_total_concat = self.p2_cv2_ic * self.p2_height * self.p2_width
+        p2_total_input = self.p2_in_channels * self.p2_height * self.p2_width
+
+        from iron.operators.conv2d_int8.dataflow_design import (
+            _compute_oc_streaming_params,
+        )
+
+        l5_ic = self.p2_cv2_oc
+        l5_oc_chunk, l5_n_oc_groups, _ = _compute_oc_streaming_params(
+            l5_ic, self.l5_oc, self.p2_width, 2
+        )
+        l5_wt_chunk = l5_oc_chunk * l5_ic * 9 + l5_oc_chunk * 4
+        l5_total_wt = l5_n_oc_groups * l5_wt_chunk
+        self._l5_oc_chunk = l5_oc_chunk
+        self._l5_n_oc_groups = l5_n_oc_groups
+
+        l5_total_output = self.l5_oc * self.l5_out_h * self.l5_out_w
+        self._l5_total_output = l5_total_output
+
+        p2_total_wt = p2_l4_total_wt + l5_total_wt
+
+        # ---- Total weights ----
+        total_weights = p1_total_wt + p2_total_wt
+
+        # ---- Output buffer layout ----
+        # [L5_final | P1_scratch_A | P1_scratch_B |
+        #  P2_input | P2_concat | P2_L4_scratch]
+        total_output_buf = (
+            l5_total_output
+            + p1_scratch_a
+            + p1_scratch_b
+            + p2_total_input
+            + p2_total_concat
+            + p2_l4_output_size
+        )
+        self._total_output_buf = total_output_buf
+
+        self.add_buffer("input", total_input, dtype=np.int8)
+        self.add_buffer("weights", total_weights, dtype=np.int8)
+        self.add_buffer("output", total_output_buf, dtype=np.int8)
+
+        self.add_kernel(
+            "p1_p2_combined",
+            self.xclbin_artifact,
+            self.xclbin_artifact.kernel_name,
+            self.insts_artifact,
+        )
+        self.add_to_runlist("p1_p2_combined", "input", "weights", "output")
+
+
+@pytest.mark.parametrize(
+    "l0_h,l0_w",
+    [
+        pytest.param(64, 64, id="p1p2_fused_p3_64x64"),
+        pytest.param(
+            640,
+            640,
+            id="p1p2_fused_p3_640x640",
+            marks=pytest.mark.extensive,
+        ),
+    ],
+)
+def test_dataflow_p1p2_fused_p3(l0_h, l0_w):
+    """Test P1+P2 combined in one PDI, then P3 in a separate PDI.
+
+    PDI 1 (P1+P2): L0(8->16)->L1(16->32)->C2f L2->L3(32->64)
+                    + C2f L4(64ch) + L5(64->128, OC streaming)
+    PDI 2 (P3):    C2f L6(128ch) + L7(128->256, OC streaming)
+    """
+    torch.manual_seed(42)
+
+    l0_ic = 8
+    l0_oc = 16
+    l1_oc = 32
+    l3_oc = 64
+    l5_oc = 128
+    l7_oc = 256
+    scale = 10
+    shift2 = 7
+    bn_ch_l2 = 16
+    bn_ch_l4 = 32
+    bn_ch_l6 = 64
+
+    # Spatial dims through the backbone
+    l3_out_h = l0_h // 8  # after L0(s2), L1(s2), L3(s2)
+    l3_out_w = l0_w // 8
+    l5_out_h = l3_out_h // 2  # after L5(s2)
+    l5_out_w = l3_out_w // 2
+    l7_out_h = l5_out_h // 2  # after L7(s2)
+    l7_out_w = l5_out_w // 2
+
+    # Generate all weights (same seed -> same values as p1_through_p3)
+    x_int8 = torch.randint(-20, 21, (1, l0_ic, l0_h, l0_w), dtype=torch.int8)
+
+    # P1 weights
+    w0 = torch.randint(-50, 51, (l0_oc, l0_ic, 3, 3), dtype=torch.int8)
+    b0 = torch.randint(-500, 501, (l0_oc,), dtype=torch.int32)
+    w1 = torch.randint(-50, 51, (l1_oc, l0_oc, 3, 3), dtype=torch.int8)
+    b1 = torch.randint(-500, 501, (l1_oc,), dtype=torch.int32)
+    w_cv1_l2 = torch.randint(-50, 51, (32, l1_oc, 1, 1), dtype=torch.int8)
+    b_cv1_l2 = torch.randint(-500, 501, (32,), dtype=torch.int32)
+    w_bn1_l2 = torch.randint(-50, 51, (bn_ch_l2, bn_ch_l2, 3, 3), dtype=torch.int8)
+    b_bn1_l2 = torch.randint(-500, 501, (bn_ch_l2,), dtype=torch.int32)
+    w_bn2_l2 = torch.randint(-50, 51, (bn_ch_l2, bn_ch_l2, 3, 3), dtype=torch.int8)
+    b_bn2_l2 = torch.randint(-500, 501, (bn_ch_l2,), dtype=torch.int32)
+    w_cv2_l2 = torch.randint(-50, 51, (32, 48, 1, 1), dtype=torch.int8)
+    b_cv2_l2 = torch.randint(-500, 501, (32,), dtype=torch.int32)
+    w3 = torch.randint(-50, 51, (l3_oc, 32, 3, 3), dtype=torch.int8)
+    b3 = torch.randint(-500, 501, (l3_oc,), dtype=torch.int32)
+
+    # P2 weights (L4 C2f non-fused + L5 fused)
+    w_cv1_l4 = torch.randint(-50, 51, (64, l3_oc, 1, 1), dtype=torch.int8)
+    w_bn0cv1_l4 = torch.randint(-50, 51, (bn_ch_l4, bn_ch_l4, 3, 3), dtype=torch.int8)
+    w_bn0cv2_l4 = torch.randint(-50, 51, (bn_ch_l4, bn_ch_l4, 3, 3), dtype=torch.int8)
+    w_bn1cv1_l4 = torch.randint(-50, 51, (bn_ch_l4, bn_ch_l4, 3, 3), dtype=torch.int8)
+    w_bn1cv2_l4 = torch.randint(-50, 51, (bn_ch_l4, bn_ch_l4, 3, 3), dtype=torch.int8)
+    w_cv2_l4 = torch.randint(-50, 51, (64, 128, 1, 1), dtype=torch.int8)
+    w_l5 = torch.randint(-50, 51, (l5_oc, 64, 3, 3), dtype=torch.int8)
+    b_l5 = torch.randint(-500, 501, (l5_oc,), dtype=torch.int32)
+
+    # P3 weights (L6 C2f non-fused + L7 fused)
+    w_cv1_l6 = torch.randint(-50, 51, (128, l5_oc, 1, 1), dtype=torch.int8)
+    w_bn0cv1_l6 = torch.randint(-50, 51, (bn_ch_l6, bn_ch_l6, 3, 3), dtype=torch.int8)
+    w_bn0cv2_l6 = torch.randint(-50, 51, (bn_ch_l6, bn_ch_l6, 3, 3), dtype=torch.int8)
+    w_bn1cv1_l6 = torch.randint(-50, 51, (bn_ch_l6, bn_ch_l6, 3, 3), dtype=torch.int8)
+    w_bn1cv2_l6 = torch.randint(-50, 51, (bn_ch_l6, bn_ch_l6, 3, 3), dtype=torch.int8)
+    w_cv2_l6 = torch.randint(-50, 51, (128, 256, 1, 1), dtype=torch.int8)
+    w_l7 = torch.randint(-50, 51, (l7_oc, 128, 3, 3), dtype=torch.int8)
+    b_l7 = torch.randint(-500, 501, (l7_oc,), dtype=torch.int32)
+
+    # ================================================================
+    # CPU reference (full pipeline, identical to test_dataflow_p1_through_p3)
+    # ================================================================
+    # P1
+    inter01 = conv2d_int8_pade_silu_reference(x_int8, w0, b0, scale, shift2, stride=2)
+    l1_out = conv2d_int8_pade_silu_reference(inter01, w1, b1, scale, shift2, stride=2)
+    cv1_l2 = conv2d_int8_pade_silu_reference(
+        l1_out, w_cv1_l2, b_cv1_l2, scale, shift2, stride=1, padding=0
+    )
+    half1_l2 = cv1_l2[:, :bn_ch_l2, :, :]
+    half2_l2 = cv1_l2[:, bn_ch_l2:, :, :]
+    bn_inter_l2 = conv2d_int8_pade_silu_reference(
+        half2_l2, w_bn1_l2, b_bn1_l2, scale, shift2, stride=1, padding=1
+    )
+    bn_out_l2 = conv2d_int8_pade_silu_reference(
+        bn_inter_l2, w_bn2_l2, b_bn2_l2, scale, shift2, stride=1, padding=1
+    )
+    concat_l2 = torch.cat([half1_l2, half2_l2, bn_out_l2], dim=1)
+    c2f_l2_out = conv2d_int8_pade_silu_reference(
+        concat_l2, w_cv2_l2, b_cv2_l2, scale, shift2, stride=1, padding=0
+    )
+    l3_out = conv2d_int8_pade_silu_reference(
+        c2f_l2_out, w3, b3, scale, shift2, stride=2
+    )
+
+    # P2
+    cv1_l4 = conv2d_int8_reference(l3_out, w_cv1_l4, scale, stride=1, padding=0)
+    half1_l4 = cv1_l4[:, :bn_ch_l4, :, :]
+    half2_l4 = cv1_l4[:, bn_ch_l4:, :, :]
+    bn0_inter_l4 = conv2d_int8_reference(
+        half2_l4, w_bn0cv1_l4, scale, stride=1, padding=1
+    )
+    bn0_cv2_l4 = conv2d_int8_reference(
+        bn0_inter_l4, w_bn0cv2_l4, scale, stride=1, padding=1
+    )
+    bn0_out_l4 = add_i8_reference(bn0_cv2_l4, half2_l4)
+    bn1_inter_l4 = conv2d_int8_reference(
+        bn0_out_l4, w_bn1cv1_l4, scale, stride=1, padding=1
+    )
+    bn1_cv2_l4 = conv2d_int8_reference(
+        bn1_inter_l4, w_bn1cv2_l4, scale, stride=1, padding=1
+    )
+    bn1_out_l4 = add_i8_reference(bn1_cv2_l4, bn0_out_l4)
+    concat_l4 = torch.cat([half1_l4, half2_l4, bn0_out_l4, bn1_out_l4], dim=1)
+    l4_out = conv2d_int8_reference(concat_l4, w_cv2_l4, scale, stride=1, padding=0)
+    l5_out = conv2d_int8_pade_silu_reference(
+        l4_out, w_l5, b_l5, scale, shift2, stride=2
+    )
+
+    # P3
+    cv1_l6 = conv2d_int8_reference(l5_out, w_cv1_l6, scale, stride=1, padding=0)
+    half1_l6 = cv1_l6[:, :bn_ch_l6, :, :]
+    half2_l6 = cv1_l6[:, bn_ch_l6:, :, :]
+    bn0_inter_l6 = conv2d_int8_reference(
+        half2_l6, w_bn0cv1_l6, scale, stride=1, padding=1
+    )
+    bn0_cv2_l6 = conv2d_int8_reference(
+        bn0_inter_l6, w_bn0cv2_l6, scale, stride=1, padding=1
+    )
+    bn0_out_l6 = add_i8_reference(bn0_cv2_l6, half2_l6)
+    bn1_inter_l6 = conv2d_int8_reference(
+        bn0_out_l6, w_bn1cv1_l6, scale, stride=1, padding=1
+    )
+    bn1_cv2_l6 = conv2d_int8_reference(
+        bn1_inter_l6, w_bn1cv2_l6, scale, stride=1, padding=1
+    )
+    bn1_out_l6 = add_i8_reference(bn1_cv2_l6, bn0_out_l6)
+    concat_l6 = torch.cat([half1_l6, half2_l6, bn0_out_l6, bn1_out_l6], dim=1)
+    l6_out = conv2d_int8_reference(concat_l6, w_cv2_l6, scale, stride=1, padding=0)
+    ref_final = conv2d_int8_pade_silu_reference(
+        l6_out, w_l7, b_l7, scale, shift2, stride=2
+    )
+
+    phase_times = {}
+
+    # ================================================================
+    # PDI 1: P1+P2 combined
+    # ================================================================
+    ctx1 = AIEContext()
+    op = AIEDataflowP1P2Combined(
+        # P1 params
+        l0_height=l0_h,
+        l0_width=l0_w,
+        l0_ic=l0_ic,
+        l0_oc=l0_oc,
+        l0_shift1=scale,
+        l0_shift2=shift2,
+        l1_oc=l1_oc,
+        l1_shift1=scale,
+        l1_shift2=shift2,
+        cv1_shift1=scale,
+        cv1_shift2=shift2,
+        bn_cv1_shift1=scale,
+        bn_cv1_shift2=shift2,
+        bn_cv2_shift1=scale,
+        bn_cv2_shift2=shift2,
+        cv2_shift1=scale,
+        cv2_shift2=shift2,
+        l3_oc=l3_oc,
+        l3_shift1=scale,
+        l3_shift2=shift2,
+        # P2 params
+        l4_cv1_scale=scale,
+        l4_bn0_cv1_scale=scale,
+        l4_bn0_cv2_scale=scale,
+        l4_bn1_cv1_scale=scale,
+        l4_bn1_cv2_scale=scale,
+        l4_cv2_scale=scale,
+        l5_oc=l5_oc,
+        l5_shift1=scale,
+        l5_shift2=shift2,
+        context=ctx1,
+    )
+    op.context.compile_all()
+    op.context.prepare_runtime()
+
+    # Pack input
+    op.write_buffer("input", nchw_to_tiled_int8(x_int8))
+
+    # Pack P1+P2 weights
+    def _pad(data, slot_size):
+        return np.concatenate([data, np.zeros(slot_size - len(data), dtype=np.int8)])
+
+    tg1_wt_slot = op._tg1_wt_slot
+    c2f_wt_slot = op._c2f_wt_slot
+    p1_packed = np.concatenate(
+        [
+            _pad(pack_fused_weights_k3(w0, b0), tg1_wt_slot),
+            _pad(pack_fused_weights_k3(w1, b1), tg1_wt_slot),
+            _pad(_pack_k1_silu_weights(w_cv1_l2, b_cv1_l2), c2f_wt_slot),
+            _pad(pack_fused_weights_k3(w_bn1_l2, b_bn1_l2), c2f_wt_slot),
+            _pad(pack_fused_weights_k3(w_bn2_l2, b_bn2_l2), c2f_wt_slot),
+            _pad(_pack_k1_silu_weights(w_cv2_l2, b_cv2_l2), c2f_wt_slot),
+            pack_fused_weights_k3(w3, b3),
+        ]
+    )
+
+    l4_packed = np.concatenate(
+        [
+            weights_to_tiled_int8(w_cv1_l4),
+            weights_to_tiled_int8_k3(w_bn0cv1_l4),
+            weights_to_tiled_int8_k3(w_bn0cv2_l4),
+            weights_to_tiled_int8_k3(w_bn1cv1_l4),
+            weights_to_tiled_int8_k3(w_bn1cv2_l4),
+            weights_to_tiled_int8(w_cv2_l4),
+        ]
+    )
+    l5_oc_chunk = op._l5_oc_chunk
+    l5_n_oc_groups = op._l5_n_oc_groups
+    l5_chunks = [
+        pack_fused_weights_k3(
+            w_l5[g * l5_oc_chunk : (g + 1) * l5_oc_chunk],
+            b_l5[g * l5_oc_chunk : (g + 1) * l5_oc_chunk],
+        )
+        for g in range(l5_n_oc_groups)
+    ]
+    p2_packed = np.concatenate([l4_packed, np.concatenate(l5_chunks)])
+
+    op.write_buffer("weights", np.concatenate([p1_packed, p2_packed]))
+    op.write_buffer("output", np.zeros(op._total_output_buf, dtype=np.int8))
+
+    t0 = time.perf_counter()
+    op.run_runlist()
+    t1 = time.perf_counter()
+    phase_times["PDI 1 (P1+P2)"] = t1 - t0
+
+    # Extract L5 output from offset 0
+    out_buf = op.read_buffer("output", (op._total_output_buf,), dtype=np.int8)
+    l5_total_output = op._l5_total_output
+    p1p2_output_tiled = out_buf[:l5_total_output].copy()
+
+    # ================================================================
+    # PDI 2: P3 separate (L6+L7)
+    # ================================================================
+    ctx3 = AIEContext()
+    op3 = AIEDataflowL6L7Combined(
+        height=l5_out_h,
+        width=l5_out_w,
+        in_channels=l5_oc,
+        cv1_scale=scale,
+        bn0_cv1_scale=scale,
+        bn0_cv2_scale=scale,
+        bn1_cv1_scale=scale,
+        bn1_cv2_scale=scale,
+        cv2_scale=scale,
+        l7_oc=l7_oc,
+        l7_shift1=scale,
+        l7_shift2=shift2,
+        context=ctx3,
+    )
+    op3.context.compile_all()
+    op3.context.prepare_runtime()
+    op3.write_buffer("input", p1p2_output_tiled)
+
+    l6_packed = np.concatenate(
+        [
+            weights_to_tiled_int8(w_cv1_l6),
+            weights_to_tiled_int8_k3(w_bn0cv1_l6),
+            weights_to_tiled_int8_k3(w_bn0cv2_l6),
+            weights_to_tiled_int8_k3(w_bn1cv1_l6),
+            weights_to_tiled_int8_k3(w_bn1cv2_l6),
+            weights_to_tiled_int8(w_cv2_l6),
+        ]
+    )
+    l7_oc_chunk = op3._l7_oc_chunk
+    l7_n_oc_groups = op3._l7_n_oc_groups
+    l7_chunks = [
+        pack_fused_weights_k3(
+            w_l7[g * l7_oc_chunk : (g + 1) * l7_oc_chunk],
+            b_l7[g * l7_oc_chunk : (g + 1) * l7_oc_chunk],
+        )
+        for g in range(l7_n_oc_groups)
+    ]
+    op3.write_buffer("weights", np.concatenate([l6_packed, np.concatenate(l7_chunks)]))
+    op3.write_buffer("output", np.zeros(op3._output_buf_size, dtype=np.int8))
+
+    t0 = time.perf_counter()
+    op3.run_runlist()
+    t1 = time.perf_counter()
+    phase_times["PDI 2 (P3)"] = t1 - t0
+
+    # ================================================================
+    # Verify final output (L7 at offset 0 of P3's output buffer)
+    # ================================================================
+    l7_total_output = op3._l7_total_output
+    p3_out_buf = op3.read_buffer("output", (op3._output_buf_size,), dtype=np.int8)
+    npu_final = tiled_to_nchw_int8(
+        p3_out_buf[:l7_total_output].copy(), l7_oc, l7_out_h, l7_out_w
+    )
+
+    ref_np = ref_final.numpy().reshape(-1).astype(np.int32)
+    npu_np = npu_final.numpy().reshape(-1).astype(np.int32)
+
+    diff = np.abs(ref_np - npu_np)
+    max_diff = int(np.max(diff)) if len(diff) > 0 else 0
+    errors_gt3 = int(np.sum(diff > 3))
+    errors_gt5 = int(np.sum(diff > 5))
+    exact = int(np.sum(diff == 0))
+    total = len(ref_np)
+
+    print(f"\nP1+P2 combined + P3 test {l0_ic}ic_{l7_oc}oc_{l0_h}h_{l0_w}w:")
+    print(f"  Final dims: {l7_oc}ch x {l7_out_h}h x {l7_out_w}w")
+    print(f"  Exact: {exact}/{total} ({100 * exact / total:.1f}%)")
+    print(f"  Max diff: {max_diff}")
+    print(f"  Errors (>3): {errors_gt3}/{total}")
+    print(f"  Errors (>5): {errors_gt5}/{total}")
+    for phase_name, dt in phase_times.items():
+        print(f"  {phase_name} NPU time: {1000 * dt:.1f} ms")
+    total_time = sum(phase_times.values())
+    print(f"  Total NPU time: {1000 * total_time:.1f} ms")
+
+    # Same tolerances as test_dataflow_p1_through_p3
+    assert (
+        max_diff <= 15
+    ), f"P1+P2 combined + P3 failed: max_diff={max_diff} exceeds threshold 15"
+    error_rate_gt5 = errors_gt5 / total if total > 0 else 0
+    assert error_rate_gt5 < 0.20, (
+        f"P1+P2 combined + P3: {100 * error_rate_gt5:.2f}% errors > 5 "
+        f"exceeds 20% threshold"
     )
