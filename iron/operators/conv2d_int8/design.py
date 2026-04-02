@@ -885,6 +885,8 @@ def my_conv2d_int8_k3_fused(
     shift2,
     stride,
     num_columns=1,
+    trace_size=0,
+    use_memtile=False,
 ):
     """ObjectFIFO design for fused 3x3 int8 conv + bias + SiLU on NPU2.
 
@@ -924,53 +926,90 @@ def my_conv2d_int8_k3_fused(
     k_elems = 9  # 3x3
     output_row_size_per_col = oc_per_col * out_w
 
-    # Total tensor sizes
-    total_input_size = in_channels * height * width
-    total_output_size = out_channels * out_h * out_w
+    _BD_WRAP_MAX = 64
 
-    # --- L1 budget: find oc_chunk that fits ---
-    # Fused weights include bias: oc_chunk * ic * 9 + oc_chunk * 4 (int32 bias)
+    # --- L1 budget: joint tile_height + oc_chunk solver ---
+    tile_height = 1
     n_oc_groups = 1
     oc_chunk = oc_per_col
     input_depth = 4
-    _BD_WRAP_MAX = 64
 
-    found = False
-    for try_depth in [4, 3]:
-        phys_bufs = try_depth + 1
-        input_fbs = phys_bufs * input_row_size
-        avail = 65536 - 1040 - input_fbs
-        if avail <= 0:
-            continue
-        for try_oc in range(oc_per_col, 0, -8):
-            if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
+    if stride == 1:
+        # Stride-1 always uses packed-element tiling.
+        # With use_memtile (join), L1 holds combined 2-tile elements.
+        tiles_per_elem = 2 if use_memtile else 1
+        found_tiled = False
+        for try_t in [8, 4, 2, 1]:
+            if out_h % try_t != 0:
                 continue
-            # Weight bytes + bias bytes (int32 = 4 bytes per OC element)
-            wt_bytes = try_oc * in_channels * k_elems + try_oc * 4
-            out_bytes = 2 * try_oc * out_w
-            if wt_bytes + out_bytes > avail:
+            n_tiles = out_h // try_t
+            if use_memtile:
+                if n_tiles % 2 != 0 or n_tiles // 2 > _BD_WRAP_MAX:
+                    continue
+            else:
+                if n_tiles > _BD_WRAP_MAX:
+                    continue
+            in_elem = tiles_per_elem * (try_t + 2) * input_row_size
+            out_elem = tiles_per_elem * try_t * oc_per_col * out_w
+            wt_sz = oc_per_col * in_channels * k_elems + oc_per_col * 4
+            total = 2 * in_elem + 2 * out_elem + wt_sz + 1040
+            if total <= 65536:
+                tile_height = try_t
+                found_tiled = True
+                break
+        if not found_tiled:
+            raise ValueError(
+                f"k3 fused int8 conv2d infeasible (stride-1): "
+                f"in_channels={in_channels}, out_channels={out_channels}, "
+                f"width={width}. Cannot satisfy L1 budget (64KB)."
+            )
+    else:
+        # Stride-2: per-row sliding window (old interface)
+        found = False
+        for try_depth in [4, 3]:
+            phys_bufs = try_depth + 1
+            input_fbs = phys_bufs * input_row_size
+            avail = 65536 - 1040 - input_fbs
+            if avail <= 0:
                 continue
-            n_oc = oc_per_col // try_oc
-            if n_oc > _BD_WRAP_MAX:
-                continue
-            oc_chunk = try_oc
-            n_oc_groups = n_oc
-            input_depth = try_depth
-            found = True
-            break
-        if found:
-            break
+            for try_oc in range(oc_per_col, 0, -8):
+                if oc_per_col % try_oc != 0 or try_oc % 8 != 0:
+                    continue
+                wt_bytes = try_oc * in_channels * k_elems + try_oc * 4
+                out_bytes = 2 * try_oc * out_w
+                if wt_bytes + out_bytes > avail:
+                    continue
+                n_oc = oc_per_col // try_oc
+                if n_oc > _BD_WRAP_MAX:
+                    continue
+                oc_chunk = try_oc
+                n_oc_groups = n_oc
+                input_depth = try_depth
+                found = True
+                break
+            if found:
+                break
 
-    if not found:
-        raise ValueError(
-            f"k3 fused int8 conv2d infeasible: "
-            f"in_channels={in_channels}, out_channels={out_channels}, "
-            f"width={width}. Cannot satisfy L1 budget (64KB)."
-        )
+        if not found:
+            raise ValueError(
+                f"k3 fused int8 conv2d infeasible: "
+                f"in_channels={in_channels}, out_channels={out_channels}, "
+                f"width={width}. Cannot satisfy L1 budget (64KB)."
+            )
 
     # Per-group sizes (weights + bias packed together)
     wt_chunk_elems = oc_chunk * in_channels * k_elems + oc_chunk * 4
     output_elem_size = oc_chunk * out_w
+
+    # Total tensor sizes
+    if stride == 1:
+        # Stride-1: zero-padded input (1 row above + H rows + 1 row below)
+        total_input_size = in_channels * (height + 2) * width
+        # Output element = T output rows
+        output_elem_size = tile_height * oc_chunk * out_w
+    else:
+        total_input_size = in_channels * height * width
+    total_output_size = out_channels * out_h * out_w
 
     # Per-column weight size and total weight buffer
     weights_per_col = n_oc_groups * wt_chunk_elems
@@ -980,6 +1019,318 @@ def my_conv2d_int8_k3_fused(
         dev_ty = NPU1()
     else:
         dev_ty = NPU2()
+
+    # -------------------------------------------------------------------
+    # Packed-element tiling path (stride-1, all tile_height values)
+    # -------------------------------------------------------------------
+    if stride == 1:
+        n_tiles = out_h // tile_height
+
+        # Type definitions: each element holds multiple rows
+        input_elem_size = (tile_height + 2) * input_row_size
+        output_elem_size_t = tile_height * oc_chunk * out_w
+        input_elem_ty = np.ndarray[(input_elem_size,), np.dtype[xfr_dtype]]
+        output_elem_ty = np.ndarray[(output_elem_size_t,), np.dtype[xfr_dtype]]
+        weights_ty = np.ndarray[(wt_chunk_elems,), np.dtype[xfr_dtype]]
+
+        # L3 (DDR) tensor types
+        input_l3_ty = np.ndarray[(total_input_size,), np.dtype[xfr_dtype]]
+        weights_l3_ty = np.ndarray[(total_weights_size,), np.dtype[xfr_dtype]]
+        output_l3_ty = np.ndarray[(total_output_size,), np.dtype[xfr_dtype]]
+
+        # ObjectFIFOs
+        if use_memtile and num_columns == 1:
+            # MemTile join: 2 shim DMAs → MemTile (join) → 1 core
+            # Doubles DDR bandwidth. Core gets combined [even|odd] element.
+            assert n_tiles % 2 == 0, (
+                f"n_tiles={n_tiles} must be even for MemTile join"
+            )
+            n_pairs = n_tiles // 2
+            tiles_per_elem = 2
+
+            # Combined element types (2 tiles concatenated)
+            combined_in_size = tiles_per_elem * input_elem_size
+            combined_out_size = tiles_per_elem * tile_height * oc_chunk * out_w
+            combined_in_ty = np.ndarray[
+                (combined_in_size,), np.dtype[xfr_dtype]
+            ]
+            combined_out_ty = np.ndarray[
+                (combined_out_size,), np.dtype[xfr_dtype]
+            ]
+
+            # Combined FIFO: MemTile → Core (depth=2 in L1)
+            of_combined = ObjectFifo(
+                combined_in_ty, name="in_combined", depth=2
+            )
+            # Join: 2 sub-FIFOs feed into combined at MemTile
+            of_subs = of_combined.prod().join(
+                [0, input_elem_size],
+                obj_types=[input_elem_ty, input_elem_ty],
+                names=["in_even", "in_odd"],
+                depths=[4, 4],  # deep MemTile buffer
+            )
+
+            # Output: combined (2 tiles worth)
+            out_fifos = [
+                ObjectFifo(combined_out_ty, name="out_0", depth=2)
+            ]
+            wt_fifos = [ObjectFifo(weights_ty, name="wt_0", depth=1)]
+
+            # Kernel declaration: updated with num_tiles arg
+            kernel = Kernel(
+                "conv2dk3_i8_silu",
+                "conv2dk3_i8_silu.o",
+                [
+                    combined_in_ty,   # input (2 tiles concatenated)
+                    weights_ty,       # weights_and_bias
+                    combined_out_ty,  # output (2 tiles concatenated)
+                    np.int32,         # input_width
+                    np.int32,         # input_channels
+                    np.int32,         # output_channels
+                    np.int32,         # tile_height
+                    np.int32,         # num_tiles
+                    np.int32,         # shift1
+                    np.int32,         # shift2
+                ],
+            )
+
+            def core_fn(of_in, of_wt, of_out, kernel_fn):
+                x_dim = width
+                ci = in_channels
+                co = oc_chunk
+                th = tile_height
+                nt = tiles_per_elem
+                s1 = shift1
+                s2 = shift2
+
+                for _ in range_(n_oc_groups):
+                    elem_wt = of_wt.acquire(1)
+                    for _ in range_(n_pairs):
+                        elem_in = of_in.acquire(1)
+                        elem_out = of_out.acquire(1)
+                        kernel_fn(
+                            elem_in, elem_wt, elem_out,
+                            x_dim, ci, co, th, nt, s1, s2,
+                        )
+                        of_in.release(1)
+                        of_out.release(1)
+                    of_wt.release(1)
+
+            workers = [
+                Worker(
+                    core_fn,
+                    [of_combined.cons(), wt_fifos[0].cons(),
+                     out_fifos[0].prod(), kernel],
+                )
+            ]
+            # Store sub-FIFOs for TAP generation below
+            _memtile_sub_fifos = of_subs
+        else:
+            # Standard direct path: shim → core
+            in_fifos = [
+                ObjectFifo(input_elem_ty, name=f"in_{i}", depth=2)
+                for i in range(num_columns)
+            ]
+            wt_fifos = [
+                ObjectFifo(weights_ty, name=f"wt_{i}", depth=1)
+                for i in range(num_columns)
+            ]
+            out_fifos = [
+                ObjectFifo(output_elem_ty, name=f"out_{i}", depth=2)
+                for i in range(num_columns)
+            ]
+
+            # Kernel: 3 buffer args + 7 scalar args (num_tiles=1)
+            kernel = Kernel(
+                "conv2dk3_i8_silu",
+                "conv2dk3_i8_silu.o",
+                [
+                    input_elem_ty,   # input (T+2 rows)
+                    weights_ty,      # weights_and_bias
+                    output_elem_ty,  # output (T rows)
+                    np.int32,        # input_width
+                    np.int32,        # input_channels
+                    np.int32,        # output_channels
+                    np.int32,        # tile_height
+                    np.int32,        # num_tiles (always 1)
+                    np.int32,        # shift1
+                    np.int32,        # shift2
+                ],
+            )
+
+            def core_fn(of_in, of_wt, of_out, kernel_fn):
+                x_dim = width
+                ci = in_channels
+                co = oc_chunk
+                th = tile_height
+                s1 = shift1
+                s2 = shift2
+
+                for _ in range_(n_oc_groups):
+                    elem_wt = of_wt.acquire(1)
+                    for _ in range_(n_tiles):
+                        elem_in = of_in.acquire(1)
+                        elem_out = of_out.acquire(1)
+                        kernel_fn(
+                            elem_in, elem_wt, elem_out,
+                            x_dim, ci, co, th, 1, s1, s2,
+                        )
+                        of_in.release(1)
+                        of_out.release(1)
+                    of_wt.release(1)
+
+            workers = [
+                Worker(
+                    core_fn,
+                    [in_fifos[i].cons(), wt_fifos[i].cons(),
+                     out_fifos[i].prod(), kernel],
+                )
+                for i in range(num_columns)
+            ]
+
+        # Input TAP: overlapping tiles from zero-padded DDR
+        # Each tile reads (T+2) contiguous rows, tiles stride by T rows
+        padded_input_size = total_input_size
+        # Factor row_size into two BD dims
+        d0 = min(input_row_size, 1023)
+        while d0 % 4 != 0:
+            d0 -= 1
+        while d0 >= 4:
+            if input_row_size % d0 == 0:
+                break
+            d0 -= 4
+        d1 = input_row_size // d0
+        assert d1 <= 1023, (
+            f"Cannot factorize input_row_size={input_row_size} for TAP"
+        )
+
+        if use_memtile and num_columns == 1:
+            # Two TAPs for even/odd tiles via join sub-FIFOs
+            n_pairs = n_tiles // 2
+            in_taps = [
+                TensorAccessPattern(
+                    (1, padded_input_size),
+                    offset=0,  # even: starts at tile 0
+                    sizes=[n_pairs, tile_height + 2, d1, d0],
+                    strides=[2 * tile_height * input_row_size,
+                             input_row_size, d0, 1],
+                ),
+                TensorAccessPattern(
+                    (1, padded_input_size),
+                    offset=tile_height * input_row_size,  # odd: starts at tile 1
+                    sizes=[n_pairs, tile_height + 2, d1, d0],
+                    strides=[2 * tile_height * input_row_size,
+                             input_row_size, d0, 1],
+                ),
+            ]
+        else:
+            in_taps = [
+                TensorAccessPattern(
+                    (1, padded_input_size),
+                    offset=0,
+                    sizes=[n_tiles, tile_height + 2, d1, d0],
+                    strides=[tile_height * input_row_size,
+                             input_row_size, d0, 1],
+                )
+                for i in range(num_columns)
+            ]
+
+        # Weight TAPs: each column gets its contiguous weight slice
+        wt_d3, wt_d2, wt_d1, wt_d0 = _factorize_tensor(weights_per_col)
+        wt_taps = [
+            TensorAccessPattern(
+                (1, total_weights_size),
+                offset=i * weights_per_col,
+                sizes=[wt_d3, wt_d2, wt_d1, wt_d0],
+                strides=[wt_d2 * wt_d1 * wt_d0, wt_d1 * wt_d0, wt_d0, 1],
+            )
+            for i in range(num_columns)
+        ]
+
+        # Output TAP: each column writes its OC slice in DDR
+        output_row_total = out_channels * out_w  # full output row in DDR
+        if num_columns == 1:
+            out_d3, out_d2, out_d1, out_d0 = _factorize_tensor(
+                total_output_size
+            )
+            out_taps = [
+                TensorAccessPattern(
+                    (1, total_output_size),
+                    offset=0,
+                    sizes=[out_d3, out_d2, out_d1, out_d0],
+                    strides=[
+                        out_d2 * out_d1 * out_d0,
+                        out_d1 * out_d0,
+                        out_d0,
+                        1,
+                    ],
+                )
+            ]
+        else:
+            # Per tile: T rows of oc_chunk*out_w bytes, strided in DDR
+            # d3=n_tiles, d2=tile_height, d1*d0=oc_chunk*out_w
+            per_row = oc_chunk * out_w
+            pr_d0 = min(per_row, 1023)
+            while pr_d0 % 4 != 0:
+                pr_d0 -= 1
+            while pr_d0 >= 4:
+                if per_row % pr_d0 == 0:
+                    break
+                pr_d0 -= 4
+            pr_d1 = per_row // pr_d0
+            out_taps = [
+                TensorAccessPattern(
+                    (1, total_output_size),
+                    offset=i * oc_per_col * out_w,
+                    sizes=[n_tiles, tile_height, pr_d1, pr_d0],
+                    strides=[
+                        tile_height * output_row_total,
+                        output_row_total,
+                        pr_d0,
+                        1,
+                    ],
+                )
+                for i in range(num_columns)
+            ]
+
+        # Runtime sequence
+        rt = Runtime()
+        with rt.sequence(input_l3_ty, weights_l3_ty, output_l3_ty) as (
+            I, W, O,
+        ):
+            if trace_size > 0:
+                rt.enable_trace(trace_size=trace_size, workers=workers)
+            rt.start(*workers)
+            tg = rt.task_group()
+
+            if use_memtile and num_columns == 1:
+                # Fill join sub-FIFOs: even tiles and odd tiles
+                for i, sub_fifo in enumerate(_memtile_sub_fifos):
+                    rt.fill(
+                        sub_fifo.prod(), I, in_taps[i], task_group=tg
+                    )
+            else:
+                for i in range(num_columns):
+                    rt.fill(
+                        in_fifos[i].prod(), I, in_taps[i], task_group=tg
+                    )
+
+            for i in range(num_columns):
+                rt.fill(wt_fifos[i].prod(), W, wt_taps[i], task_group=tg)
+            for i in range(num_columns):
+                rt.drain(
+                    out_fifos[i].cons(), O, out_taps[i], wait=True,
+                    task_group=tg,
+                )
+            rt.finish_task_group(tg)
+
+        return Program(dev_ty, rt).resolve_program(SequentialPlacer())
+
+    # -------------------------------------------------------------------
+    # Stride-2: per-row sliding window path (3-line-pointer kernel)
+    # -------------------------------------------------------------------
+    assert stride == 2, "stride-1 should have returned from packed path above"
+    total_input_size = in_channels * height * width
 
     # Type definitions for ObjectFIFOs
     input_row_ty = np.ndarray[(input_row_size,), np.dtype[xfr_dtype]]
@@ -991,43 +1342,24 @@ def my_conv2d_int8_k3_fused(
     weights_l3_ty = np.ndarray[(total_weights_size,), np.dtype[xfr_dtype]]
     output_l3_ty = np.ndarray[(total_output_size,), np.dtype[xfr_dtype]]
 
-    # Kernel declaration (packed bias: 5 buffer args + 6 scalar args)
-    if stride == 1:
-        kernel = Kernel(
-            "conv2dk3_i8_silu",
-            "conv2dk3_i8_silu.o",
-            [
-                input_row_ty,
-                input_row_ty,
-                input_row_ty,
-                weights_ty,
-                output_row_ty,
-                np.int32,
-                np.int32,
-                np.int32,
-                np.int32,
-                np.int32,
-                np.int32,
-            ],
-        )
-    else:
-        kernel = Kernel(
-            "conv2dk3s2_i8_silu",
-            "conv2dk3_i8_silu.o",
-            [
-                input_row_ty,
-                input_row_ty,
-                input_row_ty,
-                weights_ty,
-                output_row_ty,
-                np.int32,
-                np.int32,
-                np.int32,
-                np.int32,
-                np.int32,
-                np.int32,
-            ],
-        )
+    # Kernel declaration (3-line-pointer interface: 5 buffer + 6 scalar args)
+    kernel = Kernel(
+        "conv2dk3s2_i8_silu",
+        "conv2dk3_i8_silu.o",
+        [
+            input_row_ty,    # line0 (above)
+            input_row_ty,    # line1 (center)
+            input_row_ty,    # line2 (below)
+            weights_ty,      # weights_and_bias
+            output_row_ty,   # output
+            np.int32,        # input_width
+            np.int32,        # input_channels
+            np.int32,        # output_channels
+            np.int32,        # check (0=TOP, 1=MIDDLE, 2=BOTTOM)
+            np.int32,        # shift1
+            np.int32,        # shift2
+        ],
+    )
 
     # ObjectFIFOs per column
     in_fifos = [
@@ -1043,135 +1375,44 @@ def my_conv2d_int8_k3_fused(
         for i in range(num_columns)
     ]
 
-    # Core function: sliding window with fused activation
-    if stride == 1:
+    # Core function: stride-2 sliding window
+    def core_fn(of_in, of_wt, of_out, kernel_fn):
+        x_dim = width
+        ci = in_channels
+        co = oc_chunk
+        oh = out_h
+        s1 = shift1
+        s2 = shift2
 
-        def core_fn(of_in, of_wt, of_out, kernel_fn):
-            y_dim = height
-            x_dim = width
-            ci = in_channels
-            co = oc_chunk
-            s1 = shift1
-            s2 = shift2
+        for _ in range_(n_oc_groups):
+            elem_wt = of_wt.acquire(1)
 
-            for _ in range_(n_oc_groups):
-                elem_wt = of_wt.acquire(1)
+            # Top row (output row 0): check=0
+            elems = of_in.acquire(2)
+            elem_out = of_out.acquire(1)
+            kernel_fn(
+                elems[0], elems[0], elems[1],
+                elem_wt, elem_out,
+                x_dim, ci, co, 0, s1, s2,
+            )
+            of_in.release(1)
+            of_out.release(1)
 
-                # Top row: check=0
-                elems = of_in.acquire(2)
+            # Middle rows: check=1
+            for _ in range_(oh - 1):
+                elems = of_in.acquire(3)
                 elem_out = of_out.acquire(1)
                 kernel_fn(
-                    elems[0],
-                    elems[0],
-                    elems[1],
-                    elem_wt,
-                    elem_out,
-                    x_dim,
-                    ci,
-                    co,
-                    0,
-                    s1,
-                    s2,
-                )
-                of_out.release(1)
-
-                # Middle rows: check=1
-                for _ in range_(y_dim - 2):
-                    elems = of_in.acquire(3)
-                    elem_out = of_out.acquire(1)
-                    kernel_fn(
-                        elems[0],
-                        elems[1],
-                        elems[2],
-                        elem_wt,
-                        elem_out,
-                        x_dim,
-                        ci,
-                        co,
-                        1,
-                        s1,
-                        s2,
-                    )
-                    of_in.release(1)
-                    of_out.release(1)
-
-                # Bottom row: check=2
-                elems = of_in.acquire(2)
-                elem_out = of_out.acquire(1)
-                kernel_fn(
-                    elems[0],
-                    elems[1],
-                    elems[1],
-                    elem_wt,
-                    elem_out,
-                    x_dim,
-                    ci,
-                    co,
-                    2,
-                    s1,
-                    s2,
+                    elems[0], elems[1], elems[2],
+                    elem_wt, elem_out,
+                    x_dim, ci, co, 1, s1, s2,
                 )
                 of_in.release(2)
                 of_out.release(1)
 
-                of_wt.release(1)
-
-    else:
-        # Stride-2: output height = height // 2
-
-        def core_fn(of_in, of_wt, of_out, kernel_fn):
-            x_dim = width
-            ci = in_channels
-            co = oc_chunk
-            oh = out_h
-            s1 = shift1
-            s2 = shift2
-
-            for _ in range_(n_oc_groups):
-                elem_wt = of_wt.acquire(1)
-
-                # Top row (output row 0): check=0
-                elems = of_in.acquire(2)
-                elem_out = of_out.acquire(1)
-                kernel_fn(
-                    elems[0],
-                    elems[0],
-                    elems[1],
-                    elem_wt,
-                    elem_out,
-                    x_dim,
-                    ci,
-                    co,
-                    0,
-                    s1,
-                    s2,
-                )
-                of_in.release(1)
-                of_out.release(1)
-
-                # Middle rows: check=1
-                for _ in range_(oh - 1):
-                    elems = of_in.acquire(3)
-                    elem_out = of_out.acquire(1)
-                    kernel_fn(
-                        elems[0],
-                        elems[1],
-                        elems[2],
-                        elem_wt,
-                        elem_out,
-                        x_dim,
-                        ci,
-                        co,
-                        1,
-                        s1,
-                        s2,
-                    )
-                    of_in.release(2)
-                    of_out.release(1)
-
-                # Release last held row
-                of_in.release(1)
-                of_wt.release(1)
+            # Release last held row
+            of_in.release(1)
+            of_wt.release(1)
 
     # Workers — one per column
     workers = [

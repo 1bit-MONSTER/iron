@@ -105,20 +105,41 @@ def weights_to_tiled_int8_k3(weight):
 
 
 def _compute_k3_fused_streaming(
-    in_channels, out_channels, width, out_w, num_columns=1
+    in_channels, out_channels, width, out_w, height=None, stride=1,
+    num_columns=1,
 ):
     """Compute OC streaming params for fused k3 conv (bias packed in weights).
 
     Must match the L1 budget logic in my_conv2d_int8_k3_fused() exactly.
     Uses oc_per_col (out_channels // num_columns) for L1 budget.
 
+    For stride-1 with n_oc_groups=1, tries packed-element tiling (T>1)
+    where each ObjectFIFO element contains T+2 input rows / T output rows.
+
     Returns:
-        (n_oc_groups, oc_chunk)
+        (n_oc_groups, oc_chunk, tile_height)
     """
     oc_per_col = out_channels // num_columns
     input_row_size = in_channels * width
     _BD_WRAP_MAX = 64
 
+    # Stride-1 always uses packed-element tiling (including T=1)
+    if stride == 1 and height is not None:
+        out_h = height
+        for try_t in [8, 4, 2, 1]:
+            if out_h % try_t != 0:
+                continue
+            n_tiles = out_h // try_t
+            if n_tiles > _BD_WRAP_MAX:
+                continue
+            in_elem = (try_t + 2) * input_row_size
+            out_elem = try_t * oc_per_col * out_w
+            wt_sz = oc_per_col * in_channels * 9 + oc_per_col * 4
+            total = 2 * in_elem + 2 * out_elem + wt_sz + 1040
+            if total <= 65536:
+                return (1, oc_per_col, try_t)
+
+    # Stride-2 or stride-1 without height: per-row sliding window (tile_height=1)
     for try_depth in [4, 3]:
         phys_bufs = try_depth + 1
         input_fbs = phys_bufs * input_row_size
@@ -135,7 +156,7 @@ def _compute_k3_fused_streaming(
             n_oc = oc_per_col // try_oc
             if n_oc > _BD_WRAP_MAX:
                 continue
-            return (n_oc, try_oc)
+            return (n_oc, try_oc, 1)
 
     raise ValueError(
         f"k3 fused int8 conv2d infeasible: "
@@ -230,6 +251,8 @@ class AIEConv2dInt8(AIEOperatorBase):
         shift2=None,
         num_aie_columns=1,
         silu_variant="split",
+        trace_size=0,
+        use_memtile=False,
         context=None,
         register=True,
     ):
@@ -286,6 +309,8 @@ class AIEConv2dInt8(AIEOperatorBase):
         self.shift2 = shift2
         self.num_aie_columns = num_aie_columns
         self.silu_variant = silu_variant
+        self.trace_size = trace_size
+        self.use_memtile = use_memtile
 
         self.xclbin_artifact = None
         self.insts_artifact = None
@@ -340,6 +365,8 @@ class AIEConv2dInt8(AIEOperatorBase):
                 self.shift2,
                 self.stride,
                 self.num_aie_columns,
+                self.trace_size,
+                self.use_memtile,
             ]
             if self.silu_variant == "poly":
                 kernel_obj_name = "conv2dk3_i8_silu_poly.o"
@@ -524,26 +551,34 @@ class AIEConv2dInt8(AIEOperatorBase):
         self.add_artifacts([xclbin_artifact, insts_artifact])
 
     def set_up_runtime(self):
-        total_input = self.in_channels * self.height * self.width
         out_h = self.out_height
         out_w = self.out_width
 
         if self.fused and self.kernel_size == 3:
             # Packed weight buffer: weights + bias per OC chunk per column
-            n_oc_groups, oc_chunk = _compute_k3_fused_streaming(
+            n_oc_groups, oc_chunk, tile_height = _compute_k3_fused_streaming(
                 self.in_channels, self.out_channels, self.width, out_w,
-                self.num_aie_columns,
+                self.height, self.stride, self.num_aie_columns,
             )
+            # Stride-1 uses packed-element tiling with zero-padded input:
+            # 1 zero row above + H rows + 1 zero row below
+            if self.stride == 1:
+                total_input = self.in_channels * (self.height + 2) * self.width
+            else:
+                total_input = self.in_channels * self.height * self.width
             wt_chunk_elems = oc_chunk * self.in_channels * 9 + oc_chunk * 4
             total_weights = n_oc_groups * wt_chunk_elems * self.num_aie_columns
         elif self.kernel_size == 3:
+            total_input = self.in_channels * self.height * self.width
             total_weights = self.out_channels * self.in_channels * 9
         elif self.fused and self.kernel_size == 1:
+            total_input = self.in_channels * self.height * self.width
             # Packed weight buffer: weights + bias (int32 = 4 bytes per OC)
             total_weights = (
                 self.out_channels * self.in_channels + self.out_channels * 4
             )
         else:
+            total_input = self.in_channels * self.height * self.width
             total_weights = self.out_channels * self.in_channels
 
         total_output = self.out_channels * out_h * out_w
@@ -590,17 +625,26 @@ class AIEConv2dInt8(AIEOperatorBase):
             )
 
         input_tiled = nchw_to_tiled_int8(x)
-        self.write_buffer("input", input_tiled)
 
         out_h = self.out_height
         out_w = self.out_width
 
         if self.fused and self.kernel_size == 3:
             # Pack weights with interleaved bias per OC chunk, per column
-            n_oc_groups, oc_chunk = _compute_k3_fused_streaming(
+            n_oc_groups, oc_chunk, tile_height = _compute_k3_fused_streaming(
                 self.in_channels, self.out_channels, self.width, out_w,
-                self.num_aie_columns,
+                self.height, self.stride, self.num_aie_columns,
             )
+            # Stride-1: zero-pad input for packed-element tiling.
+            # Prepend + append one zero row so all kernel calls are MIDDLE.
+            if self.stride == 1:
+                zero_row = np.zeros(
+                    self.in_channels * self.width, dtype=np.int8
+                )
+                input_tiled = np.concatenate(
+                    [zero_row, input_tiled, zero_row]
+                )
+            self.write_buffer("input", input_tiled)
             oc_per_col = self.out_channels // self.num_aie_columns
             weight_tiled = weights_to_tiled_int8_k3(weight)
             wt_per_chunk = oc_chunk * self.in_channels * 9
@@ -618,9 +662,11 @@ class AIEConv2dInt8(AIEOperatorBase):
             packed = np.concatenate(chunks)
             self.write_buffer("weights", packed)
         elif self.kernel_size == 3:
+            self.write_buffer("input", input_tiled)
             weight_tiled = weights_to_tiled_int8_k3(weight)
             self.write_buffer("weights", weight_tiled)
         elif self.fused and self.kernel_size == 1:
+            self.write_buffer("input", input_tiled)
             # Pack weights with bias per OC chunk, per column
             n_oc_groups, oc_chunk = _compute_k1_silu_streaming(
                 self.in_channels, self.out_channels, self.width,
@@ -643,6 +689,7 @@ class AIEConv2dInt8(AIEOperatorBase):
             packed = np.concatenate(chunks)
             self.write_buffer("weights", packed)
         else:
+            self.write_buffer("input", input_tiled)
             weight_tiled = weights_to_tiled_int8(weight)
             self.write_buffer("weights", weight_tiled)
 

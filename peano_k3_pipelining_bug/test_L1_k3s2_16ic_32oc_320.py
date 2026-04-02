@@ -30,7 +30,7 @@ from iron.operators.conv2d_int8.op import AIEConv2dInt8
 
 BUG_DIR = Path(__file__).parent
 IC, OC, H, W, STRIDE = 16, 32, 320, 320, 2
-SHIFT1, SHIFT2 = 10, 7
+SHIFT1, SHIFT2 = 10, 128
 TIMEOUT = 90
 
 
@@ -50,13 +50,23 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--scalar", action="store_true",
-                        help="Use scalar MAC workaround (IC>16 guard)")
+                        help="Force scalar MAC path for benchmarking")
+    parser.add_argument("--kernel", type=str, default=None,
+                        help="Custom kernel .cc file (relative to bug dir)")
     args = parser.parse_args()
 
-    kernel_cc = ("conv2dk3_i8_silu_scalar_workaround.cc" if args.scalar
-                 else "conv2dk3_i8_silu_bug.cc")
-    tag = "scalar" if args.scalar else "bug"
-    mode = "SCALAR WORKAROUND" if args.scalar else "VECTORIZED (expect hang)"
+    if args.kernel:
+        kernel_cc = args.kernel
+        tag = Path(args.kernel).stem
+        mode = f"CUSTOM: {args.kernel}"
+    elif args.scalar:
+        kernel_cc = "conv2dk3_i8_silu_force_scalar.cc"
+        tag = "scalar"
+        mode = "FORCE SCALAR"
+    else:
+        kernel_cc = "conv2dk3_i8_silu_scalar_workaround.cc"
+        tag = "vec"
+        mode = "VECTORIZED"
 
     torch.manual_seed(42)
     x = torch.randint(-20, 21, (1, IC, H, W), dtype=torch.int8)
@@ -76,17 +86,18 @@ def main():
     xclbin_art, insts_art = op.get_artifacts(prefix=f"L1_{tag}_")
     extra_flags = ["-DINT8_ACT", "-ffunction-sections", "-fdata-sections"]
     mac_obj = KernelObjectArtifact.new(
-        f"conv2dk3_i8_silu_L1_{tag}.o",
+        f"conv2dk3_i8_silu_{tag}_mac.o",
         depends=[SourceArtifact.new(BUG_DIR / kernel_cc)],
         extra_flags=extra_flags,
     )
     silu_obj = KernelObjectArtifact.new(
-        f"silu_postproc_i8_L1_{tag}.o",
+        f"silu_postproc_i8_{tag}.o",
         depends=[SourceArtifact.new(BUG_DIR / "silu_postproc_i8.cc")],
         extra_flags=extra_flags,
     )
+    # Must be named conv2dk3_i8_silu.o — that's what the MLIR design references
     kernel_dep = LinkedKernelObjectArtifact.new(
-        f"conv2dk3_i8_silu_L1_{tag}_linked.o", depends=[mac_obj, silu_obj],
+        "conv2dk3_i8_silu.o", depends=[mac_obj, silu_obj],
     )
     mlir_dep = xclbin_art.depends[0]
     xclbin_art = XclbinArtifact.new(f"L1_{tag}.xclbin", depends=[mlir_dep, kernel_dep])

@@ -34,7 +34,7 @@
 
 #define NOCPP
 
-#include "../aie_kernel_utils.h"
+#include "../aie_kernels/aie_kernel_utils.h"
 
 #include <aie_api/aie.hpp>
 #include <stdint.h>
@@ -823,6 +823,7 @@ void conv2dk3s2_i8_silu_vec_bot_v2(
 
 // ---------------------------------------------------------------------------
 // extern "C" wrappers -- dispatch based on check value and width
+// Force scalar path for benchmarking comparison.
 // ---------------------------------------------------------------------------
 extern "C" {
 
@@ -831,8 +832,7 @@ void conv2dk3_i8_silu(int8_t *input, int8_t *weights_and_bias, int8_t *output,
                       const int32_t output_channels, const int32_t tile_height,
                       const int32_t num_tiles, const int32_t shift1,
                       const int32_t shift2) {
-    // Packed-element tiled interface. When num_tiles > 1 (MemTile join),
-    // the buffer contains num_tiles consecutive tiles.
+    // Packed-element tiled interface. Force scalar path for comparison.
     event0();
     int row_stride = input_channels * input_width;
     int out_stride = output_channels * input_width;
@@ -842,23 +842,13 @@ void conv2dk3_i8_silu(int8_t *input, int8_t *weights_and_bias, int8_t *output,
         int8_t *tile_in = input + t * in_tile_stride;
         int8_t *tile_out = output + t * out_tile_stride;
         for (int r = 0; r < tile_height; r++) {
-            if (input_width >= 8 && input_channels > 16) {
-                conv2dk3_i8_silu_vec_mid_v2(
-                    tile_in + r * row_stride,
-                    tile_in + (r + 1) * row_stride,
-                    tile_in + (r + 2) * row_stride,
-                    weights_and_bias, tile_out + r * out_stride,
-                    input_width, input_channels, output_channels,
-                    shift1, shift2);
-            } else {
-                conv2dk3_i8_silu_scalar(
-                    tile_in + r * row_stride,
-                    tile_in + (r + 1) * row_stride,
-                    tile_in + (r + 2) * row_stride,
-                    weights_and_bias, tile_out + r * out_stride,
-                    input_width, input_channels, output_channels,
-                    CHECK_MIDDLE, shift1, shift2);
-            }
+            conv2dk3_i8_silu_scalar(
+                tile_in + r * row_stride,
+                tile_in + (r + 1) * row_stride,
+                tile_in + (r + 2) * row_stride,
+                weights_and_bias, tile_out + r * out_stride,
+                input_width, input_channels, output_channels,
+                CHECK_MIDDLE, shift1, shift2);
         }
     }
     event1();
@@ -869,36 +859,10 @@ void conv2dk3s2_i8_silu(int8_t *line0, int8_t *line1, int8_t *line2,
                         const int32_t input_width, const int32_t input_channels,
                         const int32_t output_channels, const int32_t check,
                         const int32_t shift1, const int32_t shift2) {
-    if ((input_width / 2) >= 8 && input_channels > 16) {
-        event0();
-        switch (check) {
-        case CHECK_TOP:
-            conv2dk3s2_i8_silu_vec_top_v2(line0, line1, line2, weights_and_bias,
-                                          output, input_width, input_channels,
-                                          output_channels, shift1, shift2);
-            break;
-        case CHECK_MIDDLE:
-            conv2dk3s2_i8_silu_vec_mid_v2(line0, line1, line2, weights_and_bias,
-                                          output, input_width, input_channels,
-                                          output_channels, shift1, shift2);
-            break;
-        case CHECK_BOTTOM:
-            conv2dk3s2_i8_silu_vec_bot_v2(line0, line1, line2, weights_and_bias,
-                                          output, input_width, input_channels,
-                                          output_channels, shift1, shift2);
-            break;
-        default:
-            conv2dk3s2_i8_silu_scalar(line0, line1, line2, weights_and_bias,
-                                      output, input_width, input_channels,
-                                      output_channels, check, shift1, shift2);
-            break;
-        }
-        event1();
-    } else {
-        conv2dk3s2_i8_silu_scalar(line0, line1, line2, weights_and_bias,
-                                  output, input_width, input_channels,
-                                  output_channels, check, shift1, shift2);
-    }
+    // Force scalar path for benchmarking comparison.
+    conv2dk3s2_i8_silu_scalar(line0, line1, line2, weights_and_bias,
+                              output, input_width, input_channels,
+                              output_channels, check, shift1, shift2);
 }
 
 // Aliases for multi-kernel designs where different MLIR types need
