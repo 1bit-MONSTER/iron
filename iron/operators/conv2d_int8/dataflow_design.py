@@ -12551,3 +12551,94 @@ def my_dataflow_l19_l21(
         rt.finish_task_group(tg5)
 
     return Program(dev_ty, rt).resolve_program(SequentialPlacer())  # l19_l21
+
+
+# ---------------------------------------------------------------------------
+# Standalone upsample 2× dataflow design
+# ---------------------------------------------------------------------------
+
+
+def my_dataflow_upsample2x(dev, height, width, channels):
+    """Nearest-neighbor 2× spatial upsample on NPU.
+
+    One core reads input rows (IC×W), duplicates pixels (width 2×) via
+    upsample2x_row_i8 kernel, and writes each upsampled row twice (height 2×).
+
+    Input:  IC × H × W
+    Output: IC × 2H × 2W
+    """
+    xfr_dtype = np.int8
+
+    in_row = channels * width
+    out_row = channels * (width * 2)
+    total_input = channels * height * width
+    total_output = channels * (height * 2) * (width * 2)
+
+    dev_ty = NPU2()
+
+    in_ty = np.ndarray[(in_row,), np.dtype[xfr_dtype]]
+    out_ty = np.ndarray[(out_row,), np.dtype[xfr_dtype]]
+    input_l3_ty = np.ndarray[(total_input,), np.dtype[xfr_dtype]]
+    output_l3_ty = np.ndarray[(total_output,), np.dtype[xfr_dtype]]
+
+    kernel = Kernel(
+        "upsample2x_row_i8",
+        "upsample2x_i8.o",
+        [in_ty, out_ty, np.int32, np.int32],
+    )
+
+    in_fifo = ObjectFifo(in_ty, name="ups_in", depth=2)
+    out_fifo = ObjectFifo(out_ty, name="ups_out", depth=2)
+
+    def core_fn(of_in, of_out, kernel_fn):
+        w = width
+        ic = channels
+        for _ in range_(height):
+            ei = of_in.acquire(1)
+            # Produce 2 identical upsampled rows (height doubling)
+            eo = of_out.acquire(1)
+            kernel_fn(ei, eo, w, ic)
+            of_out.release(1)
+            eo = of_out.acquire(1)
+            kernel_fn(ei, eo, w, ic)
+            of_out.release(1)
+            of_in.release(1)
+
+    worker = Worker(
+        core_fn,
+        [in_fifo.cons(), out_fifo.prod(), kernel],
+        placement=Tile(0, 2),
+    )
+
+    rt = Runtime()
+    with rt.sequence(input_l3_ty, input_l3_ty, output_l3_ty) as (I, _W, O):
+        rt.start(worker)
+        tg = rt.task_group()
+
+        in_dims = _factorize_tensor(total_input)
+        rt.fill(
+            in_fifo.prod(), I,
+            TensorAccessPattern(
+                (1, total_input), offset=0,
+                sizes=list(in_dims),
+                strides=[in_dims[1] * in_dims[2] * in_dims[3],
+                         in_dims[2] * in_dims[3], in_dims[3], 1],
+            ),
+            task_group=tg,
+        )
+
+        out_dims = _factorize_tensor(total_output)
+        rt.drain(
+            out_fifo.cons(), O,
+            TensorAccessPattern(
+                (1, total_output), offset=0,
+                sizes=list(out_dims),
+                strides=[out_dims[1] * out_dims[2] * out_dims[3],
+                         out_dims[2] * out_dims[3], out_dims[3], 1],
+            ),
+            wait=True, task_group=tg,
+        )
+
+        rt.finish_task_group(tg)
+
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())

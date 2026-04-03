@@ -9826,3 +9826,99 @@ def test_dataflow_l19_l21(h, w):
 
     assert max_diff <= 10, f"L19+L21 failed: max_diff={max_diff}"
     assert errors_gt5 / total_elems < 0.10, f"L19+L21: too many errors >5"
+
+
+# ============================================================================
+# Upsample 2× dataflow test
+# ============================================================================
+
+
+class AIEDataflowUpsample2x(AIEOperatorBase):
+    """Nearest-neighbor 2× spatial upsample on NPU."""
+
+    def __init__(self, height, width, channels, context=None):
+        self.height = height
+        self.width = width
+        self.channels = channels
+        self.xclbin_artifact = None
+        self.insts_artifact = None
+        AIEOperatorBase.__init__(self, context=context, register=True)
+
+    def set_up_artifacts(self):
+        operator_dir = Path(__file__).parent
+        base = f"dataflow_ups2x_{self.channels}ch_{self.height}h_{self.width}w"
+        mlir = PythonGeneratedMLIRArtifact.new(
+            f"{base}.mlir",
+            import_path=operator_dir / "dataflow_design.py",
+            callback_fn="my_dataflow_upsample2x",
+            callback_args=[
+                self.context.device_manager.device_type,
+                self.height, self.width, self.channels,
+            ],
+        )
+        k_obj = KernelObjectArtifact.new(
+            "upsample2x_i8.o",
+            depends=[SourceArtifact.new(
+                self.context.base_dir / "aie_kernels" / "aie2p" / "upsample2x_i8.cc"
+            )],
+            extra_flags=["-DINT8_ACT"],
+        )
+        xclbin = XclbinArtifact.new(f"{base}.xclbin", depends=[mlir, k_obj])
+        insts = InstsBinArtifact.new(f"{base}.bin", depends=[mlir])
+        self.xclbin_artifact = xclbin
+        self.insts_artifact = insts
+        self.add_artifacts([xclbin, insts])
+
+    def set_up_runtime(self):
+        total_in = self.channels * self.height * self.width
+        total_out = self.channels * (self.height * 2) * (self.width * 2)
+        self.add_buffer("input", total_in, dtype=np.int8)
+        self.add_buffer("weights", 4, dtype=np.int8)  # dummy, 3-buf interface
+        self.add_buffer("output", total_out, dtype=np.int8)
+        self.add_kernel("ups2x", self.xclbin_artifact,
+                        self.xclbin_artifact.kernel_name, self.insts_artifact)
+        self.add_to_runlist("ups2x", "input", "weights", "output")
+
+
+@pytest.mark.parametrize("h,w,c", [
+    pytest.param(8, 8, 64, id="ups2x_64ch_8x8"),
+    pytest.param(8, 8, 128, id="ups2x_128ch_8x8"),
+    pytest.param(20, 20, 128, id="ups2x_128ch_20x20"),
+    pytest.param(40, 40, 128, id="ups2x_128ch_40x40"),
+])
+def test_dataflow_upsample2x(h, w, c):
+    """Test nearest-neighbor 2× upsample on NPU."""
+    torch.manual_seed(42)
+
+    x_int8 = torch.randint(-128, 127, (1, c, h, w), dtype=torch.int8)
+
+    # CPU reference: repeat_interleave on both spatial dims
+    ref = x_int8.repeat_interleave(2, dim=2).repeat_interleave(2, dim=3)
+
+    ctx = AIEContext()
+    op = AIEDataflowUpsample2x(height=h, width=w, channels=c, context=ctx)
+    ctx.compile_all()
+    ctx.prepare_runtime()
+
+    op.write_buffer("input", nchw_to_tiled_int8(x_int8))
+    op.write_buffer("weights", np.zeros(4, dtype=np.int8))
+    total_out = c * (h * 2) * (w * 2)
+    op.write_buffer("output", np.zeros(total_out, dtype=np.int8))
+
+    t0 = time.perf_counter()
+    op.run_runlist()
+    run_ms = (time.perf_counter() - t0) * 1000
+
+    out_flat = op.read_buffer("output", (total_out,), dtype=np.int8)
+    npu_output = tiled_to_nchw_int8(out_flat, c, h * 2, w * 2)
+
+    ref_np = ref.numpy().astype(np.int8)
+    npu_np = npu_output.numpy().astype(np.int8)
+    diff = np.abs(ref_np.astype(np.int32) - npu_np.astype(np.int32))
+    max_diff = int(diff.max())
+    total_elems = diff.size
+    exact = int(np.sum(diff == 0))
+    print(f"\n  Upsample 2× ({c}ch, {h}×{w} → {h*2}×{w*2}): "
+          f"{run_ms:.1f}ms, max_diff={max_diff}, exact={exact}/{total_elems}")
+
+    assert max_diff == 0, f"Upsample 2× failed: max_diff={max_diff} (expected exact)"
