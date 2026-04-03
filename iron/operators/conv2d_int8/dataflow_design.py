@@ -1463,8 +1463,251 @@ def my_dataflow_l0_l1_l2cv1(
 
         rt.finish_task_group(tg)
 
-    return Program(dev_ty, rt).resolve_program(SequentialPlacer())
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())  # upsample2x
 
+
+# ---------------------------------------------------------------------------
+# Combined L12 C2f + Upsample + L15 C2f (1 PDI, 3 neck PDIs -> 1)
+# ---------------------------------------------------------------------------
+
+
+def my_dataflow_l12_l15(
+    dev, l12_h, l12_w,
+    l12_cv1_s1, l12_cv1_s2, l12_bn_cv1_s1, l12_bn_cv1_s2,
+    l12_bn_cv2_s1, l12_bn_cv2_s2, l12_cv2_s1, l12_cv2_s2,
+    l15_cv1_s1, l15_cv1_s2, l15_bn_cv1_s1, l15_bn_cv1_s2,
+    l15_bn_cv2_s1, l15_bn_cv2_s2, l15_cv2_s1, l15_cv2_s2,
+):
+    """Combined L12 C2f + Upsample 2x + L15 C2f in one PDI.
+
+    I  = L12 input (384ch, l12_h x l12_w)
+    O  = [L15_final | L12_concat | L12_out | L15_concat | L15_c2f_concat]
+         Host pre-fills P3(64ch) into L15_concat[128:192ch per row].
+
+    TG1-3: L12 C2f (384->128) -> L12_out
+    TG4:   Upsample 2x (L12_out -> L15_concat[0:128ch])
+    TG5-7: L15 C2f (192->64) -> L15_final
+
+    9 workers, 4 columns. 7 unique kernel symbols.
+    """
+    xfr_dtype = np.int8
+    t = lambda n: np.ndarray[(n,), np.dtype[xfr_dtype]]
+
+    # L12 params
+    l12_ic, l12_cv1_oc, l12_bn_ch = 384, 128, 64
+    l12_cv2_ic, l12_cv2_oc = 192, 128
+    l12_input_row = l12_ic * l12_w
+    l12_half_row = l12_bn_ch * l12_w
+    l12_cv2_in_row = l12_cv2_ic * l12_w
+
+    # L12 cv1 OC streaming
+    avail = 65536 - 1040 - 2 * l12_input_row
+    l12_cv1_chunk = l12_cv1_oc
+    for try_oc in range(l12_cv1_oc, 0, -8):
+        if l12_cv1_oc % try_oc != 0:
+            continue
+        if try_oc * l12_ic + try_oc * 4 + 2 * try_oc * l12_w <= avail:
+            l12_cv1_chunk = try_oc
+            break
+    l12_cv1_n = l12_cv1_oc // l12_cv1_chunk
+    l12_cv1_wc = l12_cv1_chunk * l12_ic + l12_cv1_chunk * 4
+    l12_cv1_or = l12_cv1_chunk * l12_w
+    l12_bn_wt = l12_bn_ch * l12_bn_ch * 9 + l12_bn_ch * 4
+    l12_cv2_wt = l12_cv2_oc * l12_cv2_ic + l12_cv2_oc * 4
+    l12_bd = 4
+
+    # L15 params
+    l15_h, l15_w = l12_h * 2, l12_w * 2
+    l15_ic, l15_cv1_oc, l15_bn_ch = 192, 64, 32
+    l15_cv2_ic, l15_cv2_oc = 96, 64
+    l15_ir = l15_ic * l15_w
+    l15_hr = l15_bn_ch * l15_w
+    l15_cr = l15_cv2_ic * l15_w
+    l15_c1w = l15_cv1_oc * l15_ic + l15_cv1_oc * 4
+    l15_bw = l15_bn_ch * l15_bn_ch * 9 + l15_bn_ch * 4
+    l15_c2w = l15_cv2_oc * l15_cv2_ic + l15_cv2_oc * 4
+    l15_bd = 4
+    ups_ir = l12_cv2_oc * l12_w
+    ups_or = l12_cv2_oc * l15_w
+
+    # DDR layout
+    s0 = l15_cv2_oc * l15_h * l15_w      # L15 final
+    s1 = l12_cv2_ic * l12_h * l12_w      # L12 concat
+    s2 = l12_cv2_oc * l12_h * l12_w      # L12 out
+    s3 = l15_ic * l15_h * l15_w          # L15 in concat
+    s4 = l15_cv2_ic * l15_h * l15_w      # L15 c2f concat
+    o0, o1, o2, o3, o4 = 0, s0, s0+s1, s0+s1+s2, s0+s1+s2+s3
+    oT = o4 + s4
+    total_input = l12_ic * l12_h * l12_w
+    l12_cv1_tw = l12_cv1_n * l12_cv1_wc
+    l12_tw = l12_cv1_tw + 2 * l12_bn_wt + l12_cv2_wt
+    l15_tw = l15_c1w + 2 * l15_bw + l15_c2w
+    wT = l12_tw + l15_tw
+    dev_ty = NPU2()
+
+    # Kernels (7)
+    k12c1 = Kernel("conv2dk1_i8_silu", "conv2dk1_i8_silu.o",
+        [t(l12_input_row), t(l12_cv1_wc), t(l12_cv1_or)] + [np.int32]*5)
+    k12bn = Kernel("conv2dk3_i8_silu", "conv2dk3_i8_silu.o",
+        [t(l12_half_row)]*3 + [t(l12_bn_wt), t(l12_half_row)] + [np.int32]*6)
+    k12c2 = Kernel("conv2dk1_i8_silu_cv2", "conv2dk1_i8_silu_cv2.o",
+        [t(l12_cv2_in_row), t(l12_cv2_wt), t(l12_cv2_oc*l12_w)] + [np.int32]*5)
+    k15c1 = Kernel("conv2dk1_i8_silu_l15", "conv2dk1_i8_silu_l15.o",
+        [t(l15_ir), t(l15_c1w), t(l15_cv1_oc*l15_w)] + [np.int32]*5)
+    k15bn = Kernel("conv2dk3_i8_silu_l15", "conv2dk3_i8_silu_l15.o",
+        [t(l15_hr)]*3 + [t(l15_bw), t(l15_hr)] + [np.int32]*6)
+    k15c2 = Kernel("conv2dk1_i8_silu_l15cv2", "conv2dk1_i8_silu_l15cv2.o",
+        [t(l15_cr), t(l15_c2w), t(l15_cv2_oc*l15_w)] + [np.int32]*5)
+    kups = Kernel("upsample2x_row_i8", "upsample2x_i8.o",
+        [t(ups_ir), t(ups_or), np.int32, np.int32])
+
+    # FIFOs
+    f = lambda ty, nm, d: ObjectFifo(ty, name=nm, depth=d)
+    f12i=f(t(l12_input_row),"l12i",2); f12cw=f(t(l12_cv1_wc),"l12cw",1)
+    f12co=f(t(l12_cv1_or),"l12co",2)
+    f12bi=f(t(l12_half_row),"l12bi",l12_bd); f12bw1=f(t(l12_bn_wt),"l12bw1",1)
+    f12bw2=f(t(l12_bn_wt),"l12bw2",1)
+    f12bm=f(t(l12_half_row),"l12bm",l12_bd); f12bo=f(t(l12_half_row),"l12bo",2)
+    f12vi=f(t(l12_cv2_in_row),"l12vi",2); f12vw=f(t(l12_cv2_wt),"l12vw",1)
+    f12vo=f(t(l12_cv2_oc*l12_w),"l12vo",2)
+    fui=f(t(ups_ir),"fui",2); fuo=f(t(ups_or),"fuo",2)
+    f15i=f(t(l15_ir),"l15i",2); f15cw=f(t(l15_c1w),"l15cw",1)
+    f15co=f(t(l15_cv1_oc*l15_w),"l15co",2)
+    f15bi=f(t(l15_hr),"l15bi",l15_bd); f15bw1=f(t(l15_bw),"l15bw1",1)
+    f15bw2=f(t(l15_bw),"l15bw2",1)
+    f15bm=f(t(l15_hr),"l15bm",l15_bd); f15bo=f(t(l15_hr),"l15bo",2)
+    f15vi=f(t(l15_cr),"l15vi",2); f15vw=f(t(l15_c2w),"l15vw",1)
+    f15vo=f(t(l15_cv2_oc*l15_w),"l15vo",2)
+
+    # Core fn factories
+    def _k1oc(ci, co, n, s1, s2, h, w):
+        def fn(oi, ow, oo, kf):
+            for _ in range_(n):
+                ww = ow.acquire(1)
+                for _ in range_(h):
+                    ei=oi.acquire(1); eo=oo.acquire(1)
+                    kf(ei, ww, eo, w, ci, co, s1, s2)
+                    oi.release(1); oo.release(1)
+                ow.release(1)
+        return fn
+    def _k1(ci, co, s1, s2, h, w):
+        def fn(oi, ow, oo, kf):
+            ww = ow.acquire(1)
+            for _ in range_(h):
+                ei=oi.acquire(1); eo=oo.acquire(1)
+                kf(ei, ww, eo, w, ci, co, s1, s2)
+                oi.release(1); oo.release(1)
+            ow.release(1)
+        return fn
+    def _k3(ci, co, s1, s2, h, w):
+        def fn(oi, ow, oo, kf):
+            ww = ow.acquire(1)
+            e=oi.acquire(2); o=oo.acquire(1)
+            kf(e[0],e[0],e[1],ww,o,w,ci,co,0,s1,s2); oo.release(1)
+            for _ in range_(h-2):
+                e=oi.acquire(3); o=oo.acquire(1)
+                kf(e[0],e[1],e[2],ww,o,w,ci,co,1,s1,s2)
+                oi.release(1); oo.release(1)
+            e=oi.acquire(2); o=oo.acquire(1)
+            kf(e[0],e[1],e[1],ww,o,w,ci,co,2,s1,s2)
+            oi.release(2); oo.release(1); ow.release(1)
+        return fn
+    def _ups(oi, oo, kf):
+        for _ in range_(l12_h):
+            ei = oi.acquire(1)
+            eo=oo.acquire(1); kf(ei, eo, l12_w, l12_cv2_oc); oo.release(1)
+            eo=oo.acquire(1); kf(ei, eo, l12_w, l12_cv2_oc); oo.release(1)
+            oi.release(1)
+
+    # Workers (9, 4 columns)
+    Worker(_k1oc(l12_ic,l12_cv1_chunk,l12_cv1_n,l12_cv1_s1,l12_cv1_s2,l12_h,l12_w),
+           [f12i.cons(),f12cw.cons(),f12co.prod(),k12c1], placement=Tile(0,2))
+    Worker(_k3(l12_bn_ch,l12_bn_ch,l12_bn_cv1_s1,l12_bn_cv1_s2,l12_h,l12_w),
+           [f12bi.cons(l12_bd),f12bw1.cons(),f12bm.prod(),k12bn], placement=Tile(0,3))
+    Worker(_k3(l12_bn_ch,l12_bn_ch,l12_bn_cv2_s1,l12_bn_cv2_s2,l12_h,l12_w),
+           [f12bm.cons(l12_bd),f12bw2.cons(),f12bo.prod(),k12bn], placement=Tile(1,2))
+    Worker(_k1(l12_cv2_ic,l12_cv2_oc,l12_cv2_s1,l12_cv2_s2,l12_h,l12_w),
+           [f12vi.cons(),f12vw.cons(),f12vo.prod(),k12c2], placement=Tile(1,3))
+    Worker(_ups, [fui.cons(),fuo.prod(),kups], placement=Tile(1,4))
+    Worker(_k1(l15_ic,l15_cv1_oc,l15_cv1_s1,l15_cv1_s2,l15_h,l15_w),
+           [f15i.cons(),f15cw.cons(),f15co.prod(),k15c1], placement=Tile(2,2))
+    Worker(_k3(l15_bn_ch,l15_bn_ch,l15_bn_cv1_s1,l15_bn_cv1_s2,l15_h,l15_w),
+           [f15bi.cons(l15_bd),f15bw1.cons(),f15bm.prod(),k15bn], placement=Tile(2,3))
+    Worker(_k3(l15_bn_ch,l15_bn_ch,l15_bn_cv2_s1,l15_bn_cv2_s2,l15_h,l15_w),
+           [f15bm.cons(l15_bd),f15bw2.cons(),f15bo.prod(),k15bn], placement=Tile(3,2))
+    Worker(_k1(l15_cv2_ic,l15_cv2_oc,l15_cv2_s1,l15_cv2_s2,l15_h,l15_w),
+           [f15vi.cons(),f15vw.cons(),f15vo.prod(),k15c2], placement=Tile(3,3))
+
+    # TAP helpers
+    def _ct(buf, off, tot):
+        d=_factorize_tensor(tot)
+        return TensorAccessPattern((1,buf),offset=off,
+            sizes=list(d),strides=[d[1]*d[2]*d[3],d[2]*d[3],d[3],1])
+    def _sr(buf, off, rows, elem, stride):
+        d0=min(elem,1023)
+        while d0%4!=0: d0-=1
+        while d0>=4 and elem%d0!=0: d0-=4
+        return TensorAccessPattern((1,buf),offset=off,
+            sizes=[1,rows,elem//d0,d0],strides=[0,stride,d0,1])
+    def _od(buf, off, n, cw, rt_, h):
+        d0=min(cw,1023)
+        while d0%4!=0: d0-=1
+        while d0>=4 and cw%d0!=0: d0-=4
+        return TensorAccessPattern((1,buf),offset=off,
+            sizes=[n,h,cw//d0,d0],strides=[cw,rt_,d0,1])
+    def _of(buf, off, n, tot):
+        d2,d1,d0=_factorize_3d(tot)
+        return TensorAccessPattern((1,buf),offset=off,
+            sizes=[n,d2,d1,d0],strides=[0,d1*d0,d0,1])
+
+    wo = 0
+    rt = Runtime()
+    with rt.sequence(t(total_input), t(wT), t(oT)) as (I, W, O):
+        # TG1: L12 cv1
+        tg=rt.task_group()
+        rt.fill(f12i.prod(),I,_of(total_input,0,l12_cv1_n,total_input),task_group=tg)
+        rt.fill(f12cw.prod(),W,_ct(wT,wo,l12_cv1_tw),task_group=tg)
+        rt.drain(f12co.cons(),O,_od(oT,o1,l12_cv1_n,l12_cv1_chunk*l12_w,l12_cv2_in_row,l12_h),wait=True,task_group=tg)
+        rt.finish_task_group(tg); wo+=l12_cv1_tw
+        # TG2: L12 bn0
+        tg=rt.task_group()
+        rt.fill(f12bi.prod(),O,_sr(oT,o1+l12_half_row,l12_h,l12_half_row,l12_cv2_in_row),task_group=tg)
+        rt.fill(f12bw1.prod(),W,_ct(wT,wo,l12_bn_wt),task_group=tg)
+        rt.fill(f12bw2.prod(),W,_ct(wT,wo+l12_bn_wt,l12_bn_wt),task_group=tg)
+        rt.drain(f12bo.cons(),O,_sr(oT,o1+l12_cv1_oc*l12_w,l12_h,l12_half_row,l12_cv2_in_row),wait=True,task_group=tg)
+        rt.finish_task_group(tg); wo+=2*l12_bn_wt
+        # TG3: L12 cv2 → L12_out
+        tg=rt.task_group()
+        rt.fill(f12vi.prod(),O,_ct(oT,o1,s1),task_group=tg)
+        rt.fill(f12vw.prod(),W,_ct(wT,wo,l12_cv2_wt),task_group=tg)
+        rt.drain(f12vo.cons(),O,_sr(oT,o2,l12_h,l12_cv2_oc*l12_w,l12_cv2_oc*l12_w),wait=True,task_group=tg)
+        rt.finish_task_group(tg); wo+=l12_cv2_wt
+        # TG4: Upsample → L15_concat[0:128ch]
+        tg=rt.task_group()
+        rt.fill(fui.prod(),O,_ct(oT,o2,s2),task_group=tg)
+        rt.drain(fuo.cons(),O,_sr(oT,o3,l15_h,ups_or,l15_ir),wait=True,task_group=tg)
+        rt.finish_task_group(tg)
+        # TG5: L15 cv1
+        tg=rt.task_group()
+        rt.fill(f15i.prod(),O,_ct(oT,o3,s3),task_group=tg)
+        rt.fill(f15cw.prod(),W,_ct(wT,wo,l15_c1w),task_group=tg)
+        rt.drain(f15co.cons(),O,_sr(oT,o4,l15_h,l15_cv1_oc*l15_w,l15_cr),wait=True,task_group=tg)
+        rt.finish_task_group(tg); wo+=l15_c1w
+        # TG6: L15 bn0
+        tg=rt.task_group()
+        rt.fill(f15bi.prod(),O,_sr(oT,o4+l15_hr,l15_h,l15_hr,l15_cr),task_group=tg)
+        rt.fill(f15bw1.prod(),W,_ct(wT,wo,l15_bw),task_group=tg)
+        rt.fill(f15bw2.prod(),W,_ct(wT,wo+l15_bw,l15_bw),task_group=tg)
+        rt.drain(f15bo.cons(),O,_sr(oT,o4+l15_cv1_oc*l15_w,l15_h,l15_hr,l15_cr),wait=True,task_group=tg)
+        rt.finish_task_group(tg); wo+=2*l15_bw
+        # TG7: L15 cv2 → final
+        tg=rt.task_group()
+        rt.fill(f15vi.prod(),O,_ct(oT,o4,s4),task_group=tg)
+        rt.fill(f15vw.prod(),W,_ct(wT,wo,l15_c2w),task_group=tg)
+        rt.drain(f15vo.cons(),O,_sr(oT,o0,l15_h,l15_cv2_oc*l15_w,l15_cv2_oc*l15_w),wait=True,task_group=tg)
+        rt.finish_task_group(tg)
+
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())  # l12_l15
 
 # ---------------------------------------------------------------------------
 # Step 4: Three-layer downsample chain -- L0 -> L1 -> L3 (non-fused, all k3s2)

@@ -9922,3 +9922,190 @@ def test_dataflow_upsample2x(h, w, c):
           f"{run_ms:.1f}ms, max_diff={max_diff}, exact={exact}/{total_elems}")
 
     assert max_diff == 0, f"Upsample 2× failed: max_diff={max_diff} (expected exact)"
+
+
+# ============================================================================
+# Combined L12+L15 test
+# ============================================================================
+
+
+class AIEDataflowL12L15(AIEOperatorBase):
+    """Combined L12 C2f + Upsample + L15 C2f in one PDI."""
+
+    def __init__(self, l12_h, l12_w, s1, s2, context=None):
+        self.l12_h, self.l12_w = l12_h, l12_w
+        self.s1, self.s2 = s1, s2
+        self.xclbin_artifact = self.insts_artifact = None
+        AIEOperatorBase.__init__(self, context=context, register=True)
+
+    def set_up_artifacts(self):
+        d = Path(__file__).parent
+        bd = self.context.base_dir / "aie_kernels" / "aie2p"
+        base = f"dataflow_l12_l15_{self.l12_h}h_{self.l12_w}w"
+        s = self.s1
+        mlir = PythonGeneratedMLIRArtifact.new(
+            f"{base}.mlir", import_path=d / "dataflow_design.py",
+            callback_fn="my_dataflow_l12_l15",
+            callback_args=[
+                self.context.device_manager.device_type, self.l12_h, self.l12_w,
+                s, self.s2, s, self.s2, s, self.s2, s, self.s2,
+                s, self.s2, s, self.s2, s, self.s2, s, self.s2,
+            ])
+        def ko(name, src, flags):
+            return KernelObjectArtifact.new(name,
+                depends=[SourceArtifact.new(bd / src)], extra_flags=flags)
+        k_objs = [
+            ko("conv2dk1_i8_silu.o", "conv2dk1_i8_silu.cc", ["-DINT8_ACT"]),
+            ko("conv2dk1_i8_silu_cv2.o", "conv2dk1_i8_silu.cc",
+               ["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"]),
+            ko("conv2dk3_i8_silu.o", "conv2dk3_i8_silu.cc", ["-DINT8_ACT"]),
+            ko("conv2dk1_i8_silu_l15.o", "conv2dk1_i8_silu.cc",
+               ["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_l15"]),
+            ko("conv2dk1_i8_silu_l15cv2.o", "conv2dk1_i8_silu.cc",
+               ["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_l15cv2"]),
+            ko("conv2dk3_i8_silu_l15.o", "conv2dk3_i8_silu.cc",
+               ["-DINT8_ACT", "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_l15",
+                "-Dconv2dk3s2_i8_silu=conv2dk3s2_i8_silu_l15"]),
+            ko("upsample2x_i8.o", "upsample2x_i8.cc", ["-DINT8_ACT"]),
+        ]
+        xclbin = XclbinArtifact.new(f"{base}.xclbin", depends=[mlir]+k_objs)
+        insts = InstsBinArtifact.new(f"{base}.bin", depends=[mlir])
+        self.xclbin_artifact, self.insts_artifact = xclbin, insts
+        self.add_artifacts([xclbin, insts])
+
+    def set_up_runtime(self):
+        h12, w12 = self.l12_h, self.l12_w
+        h15, w15 = h12*2, w12*2
+        total_in = 384 * h12 * w12
+        # Weights
+        avail = 65536 - 1040 - 2*384*w12
+        cv1c = 128
+        for oc in range(128, 0, -8):
+            if 128 % oc != 0: continue
+            if oc*384+oc*4+2*oc*w12 <= avail: cv1c = oc; break
+        l12_cv1_tw = (128//cv1c) * (cv1c*384+cv1c*4)
+        l12_bw = 64*64*9+64*4
+        l12_c2w = 128*192+128*4
+        l15_c1w = 64*192+64*4
+        l15_bw = 32*32*9+32*4
+        l15_c2w = 64*96+64*4
+        tw = l12_cv1_tw+2*l12_bw+l12_c2w+l15_c1w+2*l15_bw+l15_c2w
+        # Output buf
+        s0 = 64*h15*w15; s1 = 192*h12*w12; s2 = 128*h12*w12
+        s3 = 192*h15*w15; s4 = 96*h15*w15
+        oT = s0+s1+s2+s3+s4
+        self.add_buffer("input", total_in, dtype=np.int8)
+        self.add_buffer("weights", tw, dtype=np.int8)
+        self.add_buffer("output", oT, dtype=np.int8)
+        self.add_kernel("l12l15", self.xclbin_artifact,
+                        self.xclbin_artifact.kernel_name, self.insts_artifact)
+        self.add_to_runlist("l12l15", "input", "weights", "output")
+
+
+@pytest.mark.parametrize("h,w", [
+    pytest.param(8, 8, id="l12_l15_8x8"),
+    pytest.param(40, 40, id="l12_l15_40x40"),
+])
+def test_dataflow_l12_l15(h, w):
+    """Combined L12+upsample+L15: 384ch input → 64ch output."""
+    torch.manual_seed(42)
+    s, s2 = 10, 7
+    h15, w15 = h*2, w*2
+
+    # Input + P3 skip
+    x = torch.randint(-20, 21, (1, 384, h, w), dtype=torch.int8)
+    p3 = torch.randint(-20, 21, (1, 64, h15, w15), dtype=torch.int8)
+
+    # L12 weights
+    w12c1 = torch.randint(-50,51,(128,384,1,1),dtype=torch.int8)
+    b12c1 = torch.randint(-500,501,(128,),dtype=torch.int32)
+    w12b1 = torch.randint(-50,51,(64,64,3,3),dtype=torch.int8)
+    b12b1 = torch.randint(-500,501,(64,),dtype=torch.int32)
+    w12b2 = torch.randint(-50,51,(64,64,3,3),dtype=torch.int8)
+    b12b2 = torch.randint(-500,501,(64,),dtype=torch.int32)
+    w12c2 = torch.randint(-50,51,(128,192,1,1),dtype=torch.int8)
+    b12c2 = torch.randint(-500,501,(128,),dtype=torch.int32)
+    # L15 weights
+    w15c1 = torch.randint(-50,51,(64,192,1,1),dtype=torch.int8)
+    b15c1 = torch.randint(-500,501,(64,),dtype=torch.int32)
+    w15b1 = torch.randint(-50,51,(32,32,3,3),dtype=torch.int8)
+    b15b1 = torch.randint(-500,501,(32,),dtype=torch.int32)
+    w15b2 = torch.randint(-50,51,(32,32,3,3),dtype=torch.int8)
+    b15b2 = torch.randint(-500,501,(32,),dtype=torch.int32)
+    w15c2 = torch.randint(-50,51,(64,96,1,1),dtype=torch.int8)
+    b15c2 = torch.randint(-500,501,(64,),dtype=torch.int32)
+
+    # CPU ref: L12
+    rc1 = conv2d_int8_pade_silu_reference(x, w12c1, b12c1, s, s2, stride=1, padding=0)
+    h1, h2_ = rc1[:,:64], rc1[:,64:]
+    rb1 = conv2d_int8_pade_silu_reference(h2_, w12b1, b12b1, s, s2, stride=1, padding=1)
+    rb2 = conv2d_int8_pade_silu_reference(rb1, w12b2, b12b2, s, s2, stride=1, padding=1)
+    rc2 = conv2d_int8_pade_silu_reference(
+        torch.cat([h1,h2_,rb2],dim=1), w12c2, b12c2, s, s2, stride=1, padding=0)
+    # Upsample + concat P3
+    ups = rc2.repeat_interleave(2,dim=2).repeat_interleave(2,dim=3)
+    l15_in = torch.cat([ups, p3], dim=1)
+    # L15
+    rc1_ = conv2d_int8_pade_silu_reference(l15_in, w15c1, b15c1, s, s2, stride=1, padding=0)
+    h1_, h2__ = rc1_[:,:32], rc1_[:,32:]
+    rb1_ = conv2d_int8_pade_silu_reference(h2__, w15b1, b15b1, s, s2, stride=1, padding=1)
+    rb2_ = conv2d_int8_pade_silu_reference(rb1_, w15b2, b15b2, s, s2, stride=1, padding=1)
+    ref = conv2d_int8_pade_silu_reference(
+        torch.cat([h1_,h2__,rb2_],dim=1), w15c2, b15c2, s, s2, stride=1, padding=0)
+
+    # Pack weights
+    avail = 65536 - 1040 - 2*384*w
+    cv1c = 128
+    for oc in range(128,0,-8):
+        if 128%oc!=0: continue
+        if oc*384+oc*4+2*oc*w<=avail: cv1c=oc; break
+    cv1n = 128//cv1c
+    chunks = []
+    for g in range(cv1n):
+        ws=w12c1[g*cv1c:(g+1)*cv1c]; bs=b12c1[g*cv1c:(g+1)*cv1c]
+        chunks.append(np.concatenate([weights_to_tiled_int8(ws),
+                                      bs.numpy().astype(np.int32).view(np.int8)]))
+    pw = np.concatenate(chunks + [
+        pack_fused_weights_k3(w12b1,b12b1), pack_fused_weights_k3(w12b2,b12b2),
+        _pack_k1_silu_weights(w12c2,b12c2),
+        _pack_k1_silu_weights(w15c1,b15c1),
+        pack_fused_weights_k3(w15b1,b15b1), pack_fused_weights_k3(w15b2,b15b2),
+        _pack_k1_silu_weights(w15c2,b15c2),
+    ])
+
+    # Build NPU
+    ctx = AIEContext()
+    op = AIEDataflowL12L15(l12_h=h, l12_w=w, s1=s, s2=s2, context=ctx)
+    ctx.compile_all()
+    ctx.prepare_runtime()
+
+    oT = op.buffers["output"]
+    s0=64*h15*w15; s1_=192*h*w; s2_=128*h*w; s3_=192*h15*w15
+    o3 = s0+s1_+s2_  # L15_concat offset
+
+    # Pre-fill P3 into L15_concat[128:192ch]
+    o_buf = np.zeros(oT, dtype=np.int8)
+    p3t = nchw_to_tiled_int8(p3)
+    for row in range(h15):
+        src = row*64*w15
+        dst = o3 + row*192*w15 + 128*w15
+        o_buf[dst:dst+64*w15] = p3t[src:src+64*w15]
+
+    op.write_buffer("input", nchw_to_tiled_int8(x))
+    op.write_buffer("weights", pw)
+    op.write_buffer("output", o_buf)
+
+    t0 = time.perf_counter()
+    op.run_runlist()
+    ms = (time.perf_counter()-t0)*1000
+    print(f"\n  L12+L15 combined ({h}×{w}): {ms:.1f}ms")
+
+    out = op.read_buffer("output", (oT,), dtype=np.int8)[:s0]
+    npu = tiled_to_nchw_int8(out, 64, h15, w15)
+    diff = np.abs(ref.numpy().astype(np.int32) - npu.numpy().astype(np.int32))
+    md = int(diff.max())
+    e5 = int(np.sum(diff>5))
+    tot = diff.size
+    print(f"  max_diff={md}, errors>5={e5}/{tot}")
+    assert md <= 10, f"L12+L15 failed: max_diff={md}"
+    assert e5/tot < 0.10, f"L12+L15: too many errors >5"
