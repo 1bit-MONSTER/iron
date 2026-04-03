@@ -98,61 +98,13 @@ inline void mac_k1_bias_all_ic(
 }
 
 // ---------------------------------------------------------------------------
-// Apply bias + requant (NO SiLU). Uses the same two-extract int16
-// reconstruction as the SiLU kernel to avoid int8 clipping before bias,
-// then adds bias in bf16 domain and requantizes.
-// ---------------------------------------------------------------------------
-__attribute__((noinline)) static void apply_bias_vec16_k1(
-    int8_t *__restrict lo8_buf,
-    int8_t *__restrict hi8_buf,
-    int32_t *__restrict bias, int32_t oc_g,
-    int8_t *__restrict out_buf, int32_t shift1, int32_t shift2) {
-
-    float dequant = 1.0f / (float)(1 << shift1);
-    float scale_out = (float)shift2 / 256.0f;
-
-    // Pre-compute bias in bf16, replicated for vec-16
-    alignas(64) bfloat16 bias_bf16[16];
-    for (int i = 0; i < 8; i++) {
-        bfloat16 bv = (bfloat16)(float)bias[oc_g * 8 + i];
-        bias_bf16[i] = bv;
-        bias_bf16[i + 8] = bv;
-    }
-    aie::vector<bfloat16, 16> bias_vec = aie::load_v<16>(bias_bf16);
-
-    // Process 64 elements in 4 groups of 16
-    // Use scalar int16 reconstruction (same pattern as silu_postproc_i8.cc)
-    // to avoid aie::mul accumulator tag issues.
-    alignas(64) bfloat16 bf16_tmp[16];
-
-    for (int g = 0; g < 4; g++) {
-        // Reconstruct int16 from two int8 extractions, convert to bf16
-        for (int i = 0; i < 16; i++) {
-            int16_t val16 = (int16_t)hi8_buf[g * 16 + i] * (int16_t)256 +
-                            (int16_t)(uint8_t)lo8_buf[g * 16 + i];
-            bf16_tmp[i] = (bfloat16)((float)val16 * dequant);
-        }
-
-        // Load as vec-16, add bias
-        aie::vector<bfloat16, 16> fval = aie::load_v<16>(bf16_tmp);
-        fval = aie::add(fval, bias_vec);
-
-        // Requant to int8: round(fval * scale_out), NO SiLU
-        fval = aie::mul(fval, (bfloat16)scale_out);
-        aie::store_v(bf16_tmp, fval);
-
-        for (int i = 0; i < 16; i++) {
-            float sval = (float)bf16_tmp[i];
-            int32_t oval = (sval >= 0.0f) ? (int32_t)(sval + 0.5f)
-                                          : (int32_t)(sval - 0.5f);
-            oval = (oval > 127) ? 127 : (oval < -128) ? -128 : oval;
-            out_buf[g * 16 + i] = (int8_t)oval;
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Vectorized: MMUL + bias, no SiLU
+//
+// Extracts accumulator as int32 (not int8 via to_vector<int8>(shift))
+// to avoid a Peano SRS codegen bug where to_vector<int8>(shift1) and
+// to_vector<int8>(shift1+8) produce incorrect results when the outer
+// loop trip count (w_iters) >= 10.  The int32 extraction + scalar
+// post-processing is slower but correct at all widths.
 // ---------------------------------------------------------------------------
 static void conv2dk1_i8_bias_vector_row(
     int8_t *input, int8_t *weights_and_bias, int8_t *output,
@@ -176,29 +128,31 @@ static void conv2dk1_i8_bias_vector_row(
 
     int8_t *input_base = input;
 
-    alignas(64) int8_t lo8_buf[MMUL::size_C];
-    alignas(64) int8_t hi8_buf[MMUL::size_C];
     alignas(64) int8_t out_buf[MMUL::size_C];
 
     for (int oc_g = 0; oc_g < oc_groups; oc_g++) {
         for (int wi = 0; wi < w_iters; wi++) {
             MMUL acc;
             acc = aie::zeros<acc32, MMUL::size_C>();
-
             mac_k1_bias_all_ic(acc, input_base, kernels,
                                oc_g, wi, iw, ic_iters);
 
-            // Two-extract with mode switching
-            ::aie::set_saturation(aie::saturation_mode::none);
-            ::aie::set_rounding(aie::rounding_mode::floor);
-            aie::store_v(lo8_buf, acc.to_vector<int8>(shift1));
-            aie::store_v(hi8_buf, acc.to_vector<int8>(shift1 + 8));
-            ::aie::set_saturation(aie::saturation_mode::saturate);
-            ::aie::set_rounding(aie::rounding_mode::symmetric_inf);
+            // Extract to int32 (avoids Peano SRS bug with int8 extraction)
+            alignas(64) int32_t acc_i32[MMUL::size_C];
+            aie::store_v(acc_i32, acc.to_vector<int32>(0));
 
-            // Apply bias + requant (NO SiLU)
-            apply_bias_vec16_k1(lo8_buf, hi8_buf, bias, oc_g, out_buf,
-                                shift1, shift2);
+            // Scalar bias + requant
+            float dequant = 1.0f / (float)(1 << shift1);
+            float scale_out = (float)shift2 / 256.0f;
+            for (int i = 0; i < MMUL::size_C; i++) {
+                float fval = (float)acc_i32[i] * dequant;
+                fval += (float)bias[oc_g * 8 + (i % 8)];
+                fval *= scale_out;
+                int32_t oval = (fval >= 0.0f) ? (int32_t)(fval + 0.5f)
+                                              : (int32_t)(fval - 0.5f);
+                oval = (oval > 127) ? 127 : (oval < -128) ? -128 : oval;
+                out_buf[i] = (int8_t)oval;
+            }
 
             int8_t *dst = output + oc_g * (iw * 8) + wi * MMUL::size_C;
             aie::store_v(dst, aie::load_v<MMUL::size_C>(out_buf));

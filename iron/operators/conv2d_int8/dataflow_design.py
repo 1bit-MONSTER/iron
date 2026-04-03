@@ -13559,6 +13559,10 @@ def my_dataflow_detect_scale(
 
     # --- Helper: factorize and create strided TAP ---
     def _oc_drain_tap(buf_size, offset, n_oc, oc_chunk_w, row_total, h):
+        # When n_oc == 1, the drain is contiguous — use flat TAP to avoid
+        # unnecessary tiling that can confuse the DMA BD hardware.
+        if n_oc == 1:
+            return _contiguous_tap(buf_size, offset, h * row_total)
         pe_d0 = min(oc_chunk_w, 1023)
         while pe_d0 % 4 != 0:
             pe_d0 -= 1
@@ -13574,6 +13578,9 @@ def my_dataflow_detect_scale(
         )
 
     def _oc_fill_tap(buf_size, offset, n_oc, total_data):
+        # When n_oc == 1, no re-streaming needed — use flat contiguous TAP.
+        if n_oc == 1:
+            return _contiguous_tap(buf_size, offset, total_data)
         d2, d1, d0 = _factorize_3d(total_data)
         return TensorAccessPattern(
             (1, buf_size), offset=offset,

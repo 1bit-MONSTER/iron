@@ -10397,13 +10397,13 @@ class AIEDataflowDetectScale(AIEOperatorBase):
                 depends=[k3_src],
                 extra_flags=["-DINT8_ACT",
                              "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_ccv2"]),
-            # 5. reg.cv3 k1+bias
+            # 5. reg.cv3 k1+bias (-O1 to avoid Peano codegen bug at w_iters>=10)
             KernelObjectArtifact.new("conv2dk1_i8_bias.o",
                 depends=[k1_bias_src], extra_flags=["-DINT8_ACT"]),
-            # 6. cls.cv3 k1+bias (renamed symbol)
+            # 6. cls.cv3 k1+bias (renamed, -O1 for same codegen bug)
             KernelObjectArtifact.new("conv2dk1_i8_bias_cls.o",
                 depends=[k1_bias_src],
-                extra_flags=["-DINT8_ACT",
+                extra_flags=["-DINT8_ACT", "-O1",
                              "-Dconv2dk1_i8_bias=conv2dk1_i8_bias_cls"]),
         ]
 
@@ -10464,11 +10464,7 @@ class AIEDataflowDetectScale(AIEOperatorBase):
         pytest.param(256, 20, 20, id="detect_p5_20x20",
                      marks=pytest.mark.extensive),
         pytest.param(64, 80, 80, id="detect_p3_80x80",
-                     marks=[pytest.mark.extensive,
-                            pytest.mark.xfail(reason=(
-                                "conv2dk1_i8_bias Peano codegen bug at "
-                                "width=80 (w_iters=10, same pipelining "
-                                "issue as MAX_VI=9 workaround)"))]),
+                     marks=pytest.mark.extensive),
     ],
 )
 def test_dataflow_detect_scale(det_ic, det_h, det_w):
