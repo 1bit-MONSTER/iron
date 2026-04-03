@@ -10365,7 +10365,7 @@ class AIEDataflowDetectScale(AIEOperatorBase):
         self._rcv2_oc_chunk, self._rcv2_n_oc, _ = _compute_oc_streaming_params(
             reg_mid, reg_mid, self.width, 1)
         self._rcv3_oc_chunk, self._rcv3_n_oc = _compute_oc_streaming_params_k1(
-            reg_mid, reg_mid, self.width)
+            reg_mid, 64, self.width)  # reg_mid -> reg_out (64)
 
         self._ccv1_oc_chunk, self._ccv1_n_oc, _ = _compute_oc_streaming_params(
             self.in_channels, cls_mid, self.width, 1)

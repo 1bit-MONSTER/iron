@@ -13234,7 +13234,7 @@ def my_dataflow_detect_scale(
 ):
     """Detection head: one PDI per scale (reg + cls branches).
 
-    6 workers (2 columns), 6 task groups, 5 kernel symbols.
+    6 workers (2 columns), 6 task groups, 6 kernel symbols.
     Each branch: cv1(k3+SiLU) -> cv2(k3+SiLU) -> cv3(k1+bias, no activation).
 
     Col 0: reg_cv1(0,2), reg_cv2(0,3), reg_cv3(0,4)
