@@ -61,8 +61,15 @@ The pipeline is being built layer-by-layer with hardware verification after each
 | `my_dataflow_c2f_l2_full` | C2f L2 (48ch concat) | 5 | Yes | 160×160 ✅ |
 | `my_dataflow_fused_oc_streaming` | Single layer OC stream | 1 | Yes | 80×80 ✅ |
 | `my_dataflow_c2f_l4` | C2f L4 (n=2, 128ch) | 8 | No | 80×80 ✅ |
-| `my_dataflow_c2f_l6` | C2f L6 (n=2, 128ch) | 8 | No | 40×40 (in progress) |
+| `my_dataflow_c2f_l6` | C2f L6 (n=2, 128ch) | 8 | No | 40×40 ✅ |
 | `my_dataflow_backbone_phase1` | L0→L1→L2→L3 | 8 | Mixed | 640×640 ✅ (10.8s) |
+
+### Multi-Phase Chained Tests
+
+| Test | Phases | Layers | Status |
+|------|--------|--------|--------|
+| `test_dataflow_backbone_p1_p2` | P1→P2 | L0→L3 + C2f L4 | 64×64 ✅ |
+| `test_dataflow_backbone_p1_through_p5` | P1→P5 | L0→L7 (full backbone) | 64×64 (new) |
 
 ### Key Techniques Proven
 
@@ -79,6 +86,7 @@ The pipeline is being built layer-by-layer with hardware verification after each
 | Strided output drain | ✅ Working | OC chunk interleaving |
 | Residual add (int8) | ✅ Working | C2f bottleneck skip |
 | Phase-based execution | ✅ Working | Backbone Phase 1 |
+| Multi-phase DDR chaining | ✅ Working | P1→P2, P1→P5 |
 
 ---
 
@@ -96,28 +104,47 @@ L2.cv2  CBS k1   48→32   160×160   conv2dk1_silu    Phase 1 ✅ (vectorized)
 L3      CBS k3s2 32→64   160→80    conv2dk3s2_silu  Phase 1 ✅ (vectorized, w=80≤96)
 ─── Phase 1 complete: 8 cores, 2 columns, 10.8s at 640×640 ───
 
-L4.cv1  CBS k1   64→64   80×80     conv2dk1         Phase 2 design ready
-L4.bn0  Bottleneck 32ch  80×80     conv2dk3+add     Phase 2 design ready
-L4.bn1  Bottleneck 32ch  80×80     conv2dk3+add     Phase 2 design ready
-L4.cv2  CBS k1  128→64   80×80     conv2dk1         Phase 2 design ready
-─── Phase 2: L4 C2f n=2, 8 cores ───
+L4.cv1  CBS k1   64→64   80×80     conv2dk1         Phase 2 ✅ (my_dataflow_c2f_l4)
+L4.bn0  Bottleneck 32ch  80×80     conv2dk3+add     Phase 2 ✅
+L4.bn1  Bottleneck 32ch  80×80     conv2dk3+add     Phase 2 ✅
+L4.cv2  CBS k1  128→64   80×80     conv2dk1         Phase 2 ✅
+─── Phase 2: L4 C2f n=2, 7 cores, 2 columns ───
 
 L5      CBS k3s2 64→128  80→40     conv2dk3s2_silu  Phase 3 ✅ (OC streaming, oc_chunk=32)
-L7      CBS k3s2 128→256 40→20     conv2dk3s2_silu  Phase 3 ✅ (OC streaming, oc_chunk=32)
-─── Phase 3: spine L5→L7, 2 cores ───
+─── Phase 3: L5 downsample, 1 core, OC streaming ───
 
-L6.cv1  CBS k1  128→128  40×40     conv2dk1         Phase 4 design in progress
-L6.bn0  Bottleneck 64ch  40×40     conv2dk3+add     Phase 4 design in progress
-L6.bn1  Bottleneck 64ch  40×40     conv2dk3+add     Phase 4 design in progress
-L6.cv2  CBS k1  256→128  40×40     conv2dk1         Phase 4 design in progress
-─── Phase 4: L6 C2f n=2, 8 cores ───
+L6.cv1  CBS k1  128→128  40×40     conv2dk1         Phase 4 ✅ (my_dataflow_c2f_l6)
+L6.bn0  Bottleneck 64ch  40×40     conv2dk3+add     Phase 4 ✅
+L6.bn1  Bottleneck 64ch  40×40     conv2dk3+add     Phase 4 ✅
+L6.cv2  CBS k1  256→128  40×40     conv2dk1         Phase 4 ✅
+─── Phase 4: L6 C2f n=2, 8 cores, 2 columns ───
 
-L8.cv1  CBS k1  256→256  20×20     conv2dk1         Phase 5 TODO
-L8.bn0  Bottleneck 128ch 20×20     conv2dk3+add     Phase 5 TODO
-L8.cv2  CBS k1  384→256  20×20     conv2dk1         Phase 5 TODO
-L9.cv1  CBS k1  256→128  20×20     conv2dk1         Phase 5 TODO
-L9.cv2  CBS k1  512→256  20×20     conv2dk1         Phase 5 TODO
-─── Phase 5: L8 C2f + SPPF ───
+L7      CBS k3s2 128→256 40→20     conv2dk3s2_silu  Phase 5 ✅ (OC streaming, oc_chunk=32)
+─── Phase 5: L7 downsample, 1 core, OC streaming ───
+
+L8.cv1  CBS k1  256→256  20×20     conv2dk1         Phase 6 TODO
+L8.bn0  Bottleneck 128ch 20×20     conv2dk3+add     Phase 6 TODO
+L8.cv2  CBS k1  384→256  20×20     conv2dk1         Phase 6 TODO
+L9.cv1  CBS k1  256→128  20×20     conv2dk1         Phase 6 TODO
+L9.cv2  CBS k1  512→256  20×20     conv2dk1         Phase 6 TODO
+─── Phase 6: L8 C2f + SPPF (future) ───
+
+NECK (all verified with fused SiLU, per-layer NPU context):
+L12.cv1 CBS k1  384→128  40×40     conv2dk1_silu    Fused ✅ 16ms (1 col)
+L12.bn0 Bottleneck 64ch  40×40     conv2dk3_silu    Fused ✅ 18ms (1 col)
+L12.cv2 CBS k1  192→128  40×40     conv2dk1_silu    Fused ✅ 16ms (1 col)
+L15.cv1 CBS k1  192→64   80×80     conv2dk1_silu    Fused ✅ 32ms (1 col)
+L15.bn0 Bottleneck 32ch  80×80     conv2dk3_silu    Fused ✅ 34ms (1 col)
+L15.cv2 CBS k1   96→64   80×80     conv2dk1_silu    Fused ✅ 31ms (1 col)
+L16     CBS k3s2 64→64   80→40     conv2dk3s2_silu  Fused ✅ 9ms  (1 col)
+L18.cv1 CBS k1  192→128  40×40     conv2dk1_silu    Fused ✅ 16ms (1 col)
+L18.bn0 Bottleneck 64ch  40×40     conv2dk3_silu    Fused ✅ 18ms (1 col)
+L18.cv2 CBS k1  192→128  40×40     conv2dk1_silu    Fused ✅ 16ms (1 col)
+L19     CBS k3s2 128→128 40→20     conv2dk3s2_silu  Fused ✅ 155ms (2 col)
+L21.cv1 CBS k1  384→256  20×20     conv2dk1_silu    Fused ✅ 39ms (1 col)
+L21.bn0 Bottleneck 128ch 20×20     conv2dk3_silu    Fused ✅ 302ms (2 col, 151ms×2)
+L21.cv2 CBS k1  384→256  20×20     conv2dk1_silu    Fused ✅ 39ms (1 col)
+─── Neck: all layers verified, 740ms total (was 854ms) ───
 ```
 
 ### SiLU Vectorization Coverage
@@ -164,13 +191,13 @@ Extending the vec threshold to width≤320 would make L1/L2/L3 vectorized.
 | Task | Agent | Status |
 |------|-------|--------|
 | Extend vec threshold to width≤320 | kernel-vectorizer | In progress |
-| L6 C2f design (128ch, n=2) | c2f-expert | In progress |
-| Phase 2 integration (L4 C2f) | integrator | In progress |
+| Wire Phase 1→5 backbone test | backbone-designer | ✅ Done |
+| L6 C2f design (128ch, n=2) | c2f-expert | ✅ Done |
 
 ### Short-term (this week)
 
-1. **Wire Phase 1→2→3→4→5** with DDR scratch buffers
-2. **L8 C2f + L9 SPPF** designs
+1. ~~**Wire Phase 1→2→3→4→5** with DDR scratch buffers~~ ✅ Done
+2. **L8 C2f + L9 SPPF** designs (Phase 6)
 3. **End-to-end backbone test** with real YOLOv8n weights
 4. **Neck + detect head** (upsample, concat, 6 detect branches)
 
