@@ -10856,14 +10856,18 @@ def my_dataflow_p1_p2_combined(
 
 
 # ---------------------------------------------------------------------------
-# Neck C2f L12 dataflow block
+# Neck C2f dataflow block (parameterized for L12, L15, L18)
 # ---------------------------------------------------------------------------
 
 
-def my_dataflow_c2f_l12(
+def my_dataflow_c2f_neck(
     dev,
     height,
     width,
+    in_channels,
+    cv1_oc,
+    bn_ch,
+    cv2_oc,
     cv1_shift1,
     cv1_shift2,
     bn0_cv1_shift1,
@@ -10873,42 +10877,42 @@ def my_dataflow_c2f_l12(
     cv2_shift1,
     cv2_shift2,
 ):
-    """C2f block for neck L12: 384ch input, n=1 bottleneck, no residual add.
+    """Generic C2f block for neck layers: n=1 bottleneck, no residual add.
 
     All sub-layers use fused conv+bias+SiLU (int8 in, int8 out).
 
     Multi-phase execution building concat in-place:
 
-    DDR output buffer: [final_output(128ch*H*W) | concat(192ch*H*W)]
+    DDR output buffer: [final_output(cv2_oc*H*W) | concat(cv2_ic*H*W)]
 
-    Phase A: cv1(384->128, k1 fused SiLU) with OC streaming (2 groups of 64)
-             -> strided drain to concat[0:128ch] within 192ch rows
-    Phase B: Read half2(64ch) from concat[64:128ch]
-             -> bn0.cv1(64->64, k3 fused SiLU) -> bn0.cv2(64->64, k3 fused SiLU)
-             -> drain bn0_out to concat[128:192ch]
-             bn0.cv1 and bn0.cv2 are core-to-core chained (no DDR between them).
-    Phase C: Read concat(192ch) linearly -> cv2(192->128, k1 fused SiLU) -> output
+    Phase A: cv1(IC->cv1_oc, k1 fused SiLU), with OC streaming if needed
+             -> strided drain to concat[0:cv1_oc*W]
+    Phase B: Read half2(bn_ch) from concat -> bn0.cv1 -> bn0.cv2 (k3 fused SiLU)
+             -> drain bn0_out to concat[cv1_oc*W:]
+    Phase C: Read full concat linearly -> cv2(cv2_ic->cv2_oc, k1 fused SiLU) -> output
 
-    Core mapping (4 cores, 2 columns):
-      Phase A: cv1(0,2)
-      Phase B: bn0.cv1(0,3), bn0.cv2(1,2) — separate columns to avoid
-               shared-memory overflow (37KB weight each + FIFOs > 64KB)
-      Phase C: cv2(1,3)
+    Automatically determines:
+    - Whether cv1 needs OC streaming based on L1 budget.
+    - Whether bn0 cores can share adjacent tiles (same column) based on
+      combined shared-memory budget, or need separate columns.
+
+    Supported configurations:
+      L12: IC=384, cv1_oc=128, bn_ch=64, cv2_oc=128, 40x40
+      L15: IC=192, cv1_oc=64,  bn_ch=32, cv2_oc=64,  80x80
+      L18: IC=192, cv1_oc=128, bn_ch=64, cv2_oc=128, 40x40
 
     Args:
         dev: Device type string.
-        height: Spatial height (40 for L12).
-        width: Spatial width (40 for L12).
+        height, width: Spatial dims.
+        in_channels: Input channels (384 for L12, 192 for L15/L18).
+        cv1_oc: cv1 output channels (= 2 * bn_ch).
+        bn_ch: Bottleneck channel count (half of cv1_oc).
+        cv2_oc: cv2 output channels.
         cv1_shift1..cv2_shift2: Per-layer fused SiLU shift params.
     """
     xfr_dtype = np.int8
 
-    # Fixed channel dimensions for L12 C2f
-    in_channels = 384
-    cv1_oc = 128
-    bn_ch = 64  # half of cv1_oc
-    cv2_ic = 192  # half1(64) + half2(64) + bn0_out(64)
-    cv2_oc = 128
+    cv2_ic = cv1_oc + bn_ch  # half1 + half2 + bn0_out
 
     # --- Row sizes ---
     input_row = in_channels * width
@@ -10916,15 +10920,35 @@ def my_dataflow_c2f_l12(
     cv2_in_row = cv2_ic * width
     cv2_out_row = cv2_oc * width
 
-    # --- OC streaming for cv1 (384->128, k1) ---
-    # L1 budget: avail = 65536 - 1040 - 2*384*40 = 33776
-    # oc_chunk=64: wt=64*384+256=24832, out=2*64*40=5120 -> 29952 fits
-    cv1_oc_chunk = 64
-    cv1_n_oc = cv1_oc // cv1_oc_chunk  # 2
+    # --- OC streaming for cv1 (IC->cv1_oc, k1) ---
+    # Determine if cv1 weights fit in L1 without chunking
+    cv1_input_bufs = 2 * in_channels * width
+    cv1_avail = 65536 - 1040 - cv1_input_bufs
+    cv1_full_wt = cv1_oc * in_channels + cv1_oc * 4
+    cv1_full_out = 2 * cv1_oc * width
+
+    if cv1_full_wt + cv1_full_out <= cv1_avail:
+        cv1_oc_chunk = cv1_oc
+        cv1_n_oc = 1
+    else:
+        # Find largest OC chunk that fits
+        cv1_oc_chunk = None
+        for try_oc in range(cv1_oc, 0, -8):
+            if cv1_oc % try_oc != 0 or try_oc % 8 != 0:
+                continue
+            wt = try_oc * in_channels + try_oc * 4
+            out = 2 * try_oc * width
+            if wt + out <= cv1_avail:
+                cv1_oc_chunk = try_oc
+                break
+        assert cv1_oc_chunk is not None, (
+            f"cv1 infeasible: IC={in_channels}, OC={cv1_oc}, W={width}"
+        )
+        cv1_n_oc = cv1_oc // cv1_oc_chunk
+
     cv1_out_row = cv1_oc_chunk * width
     cv1_wt_chunk = cv1_oc_chunk * in_channels + cv1_oc_chunk * 4  # weights + bias
 
-    # cv2 fits in single group (192->128, k1)
     cv2_wt_size = cv2_oc * cv2_ic + cv2_oc * 4  # weights + bias
 
     # bn k3 weights (fused: weights + bias)
@@ -10953,6 +10977,12 @@ def my_dataflow_c2f_l12(
 
     core_cv2_l1 = 1040 + 2 * cv2_in_row + cv2_wt_size + 2 * cv2_out_row
     assert core_cv2_l1 <= 65536, f"cv2 L1: {core_cv2_l1}B"
+
+    # --- Column layout ---
+    # Always use 2 columns: even when bn0 weights fit in shared memory,
+    # the k3 fused SiLU kernel can exceed 16KB program memory on some
+    # channel configurations when placed in the same column.
+    bn0_same_column = False
 
     dev_ty = NPU2()
 
@@ -11080,10 +11110,18 @@ def my_dataflow_c2f_l12(
             of_out.release(1)
         of_wt.release(1)
 
-    # --- Workers (2 columns: separate bn0 cores to avoid shared-memory overflow) ---
-    # Adjacent tiles in the same column share 64KB. Two k3 weights (37KB each)
-    # + activation FIFOs exceed 64KB combined, so bn0.cv1 and bn0.cv2 must be
-    # in different columns. The bn0_inter FIFO routes through MemTile.
+    # --- Workers: column layout depends on bn0 shared-memory budget ---
+    if bn0_same_column:
+        # 1 column: all 4 cores stacked vertically (bn0 cores adjacent)
+        bn0cv1_tile = Tile(0, 3)
+        bn0cv2_tile = Tile(0, 4)
+        cv2_tile = Tile(0, 5)
+    else:
+        # 2 columns: bn0.cv2 and cv2 on column 1 to avoid shared-memory overflow
+        bn0cv1_tile = Tile(0, 3)
+        bn0cv2_tile = Tile(1, 2)
+        cv2_tile = Tile(1, 3)
+
     worker_cv1 = Worker(
         core_fn_cv1,
         [in_fifo.cons(), cv1_wt_fifo.cons(), cv1_out_fifo.prod(), k1_silu_kernel],
@@ -11093,19 +11131,19 @@ def my_dataflow_c2f_l12(
         _make_k3_core_fn(bn0_cv1_shift1, bn0_cv1_shift2),
         [bn0_in_fifo.cons(bn_depth), bn0_cv1_wt_fifo.cons(), bn0_inter.prod(),
          k3_silu_kernel],
-        placement=Tile(0, 3),
+        placement=bn0cv1_tile,
     )
     worker_bn0cv2 = Worker(
         _make_k3_core_fn(bn0_cv2_shift1, bn0_cv2_shift2),
         [bn0_inter.cons(bn_depth), bn0_cv2_wt_fifo.cons(), bn0_out_fifo.prod(),
          k3_silu_kernel],
-        placement=Tile(1, 2),
+        placement=bn0cv2_tile,
     )
     worker_cv2 = Worker(
         core_fn_cv2,
         [cv2_in_fifo.cons(), cv2_wt_fifo.cons(), cv2_out_fifo.prod(),
          k1_cv2_kernel],
-        placement=Tile(1, 3),
+        placement=cv2_tile,
     )
 
     # ===== Runtime sequence =====
@@ -11300,4 +11338,13 @@ def my_dataflow_c2f_l12(
 
     return Program(dev_ty, rt).resolve_program(
         SequentialPlacer()
-    )  # c2f_l12 neck
+    )  # c2f_neck
+
+
+def my_dataflow_c2f_l12(dev, height, width, cv1_s1, cv1_s2, bn_cv1_s1, bn_cv1_s2,
+                         bn_cv2_s1, bn_cv2_s2, cv2_s1, cv2_s2):
+    """L12 C2f: 384->128, bn_ch=64, 40x40."""
+    return my_dataflow_c2f_neck(
+        dev, height, width, 384, 128, 64, 128,
+        cv1_s1, cv1_s2, bn_cv1_s1, bn_cv1_s2, bn_cv2_s1, bn_cv2_s2, cv2_s1, cv2_s2,
+    )
