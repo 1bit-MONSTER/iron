@@ -114,75 +114,102 @@ corruption. k1 has a separate vectorization path unaffected by this bug.
   L21 now completes fully (all 4 sub-layers).
 - **Total improvement**: 854ms → 740ms (13.4% reduction), all layers complete.
 
-### Remaining Bottleneck
+---
 
-L21.bn0 (128→128 k3 at 20×20) dominates at 151ms × 2 = 302ms. Even with
-2 columns, the OC streaming overhead is significant for 128ch k3 convs.
-Further optimization paths:
-- 4 columns would halve again → ~75ms per sub-layer
-- Dataflow pipeline (core-to-core) would eliminate per-layer DDR round-trips
+## Dataflow Pipeline Results
+
+*All designs hardware-verified with exact or near-exact match vs CPU reference.*
+
+### Final Pipeline: 3 PDIs, 657ms
+
+| PDI | Layers | Design | Workers | Cols | TGs | Runtime |
+|-----|--------|--------|---------|------|-----|---------|
+| 1 | L12 + upsample + L15 | `my_dataflow_l12_l15` | 9 | 4 | 7 | 113ms |
+| 2 | L16 + L18 | `my_dataflow_l16_l18` | 5 | 2 | 4 | 46ms |
+| 3 | L19 + L21 (2-col) | `my_dataflow_l19_l21_2col` | 8 | 4 | 5 | 498ms |
+| **Total** | | | **22** | | **16** | **657ms** |
+
+### Progression
+
+| Stage | PDIs | Runtime | Notes |
+|-------|------|---------|-------|
+| Layer-by-layer sequential | 18 | 740ms | Baseline per-layer AIEContext |
+| Per-block dataflow | 6 | 1110ms | C2f blocks fused, but L21 slow (single-core OC) |
+| Combined blocks | 4 | 1110ms | L16+L18 and L19+L21 paired |
+| Combined + upsample on NPU | 3 | 1110ms | L12+L15 fused via NPU upsample |
+| 2-column k3 parallelism | 3 | **657ms** | L19+L21 k3 layers use 2-col OC streaming |
+
+### Key Techniques Used
+
+| Technique | Where | Effect |
+|-----------|-------|--------|
+| C2f dataflow (cv1→bn0→cv2 in 1 PDI) | L12, L15, L18 | 3 DDR round-trips eliminated per block |
+| OC streaming (weight chunking) | L12.cv1, L19, L21 (all layers) | Large weights fit in 64KB L1 |
+| 2-column OC parallelism | L19, L21.bn0 k3 layers | 2× speedup (951→498ms) |
+| NPU upsample kernel | L12→L15 boundary | CPU upsample eliminated |
+| DDR concat via strided DMA | All C2f blocks | Channel split/join without MemTile |
+| Skip connection pre-fill | L12→L18, P5→L21, P3→L15 | Host loads skip data into O buffer |
+| Kernel symbol rename (-D) | cv2, L15 kernels | Multiple k1/k3 variants in one PDI |
+
+### Designs Built
+
+| Design Function | File | Lines | Verified |
+|----------------|------|-------|----------|
+| `my_dataflow_c2f_neck` | `dataflow_design.py` | ~300 | L12(40×40), L15(80×80), L18(40×40) ✅ |
+| `my_dataflow_c2f_l21` | `dataflow_design.py` | ~250 | L21(20×20) ✅ |
+| `my_dataflow_l16_l18` | `dataflow_design.py` | ~250 | 80×80 ✅ |
+| `my_dataflow_l19_l21_2col` | `dataflow_design.py` | ~250 | 40×40 ✅ |
+| `my_dataflow_l12_l15` | `dataflow_design.py` | ~300 | 40×40 ✅ |
+| `my_dataflow_upsample2x` | `dataflow_design.py` | ~60 | 40×40→80×80 ✅ |
 
 ---
 
-## Vectorization Status
+## Further Optimization Opportunities
 
-### All Neck Layers Verified with Fused SiLU
+### High Impact
 
-Benchmark results show that **all neck layers run successfully with fused
-conv+bias+SiLU on NPU**, including the previously-untested 80×80 layers.
+1. **4-column k3 parallelism for L21.bn0** (~150ms → ~75ms each, saves ~150ms)
+   - L21.bn0.cv1 and bn0.cv2 currently use 2-col with n_oc_per_col=2
+   - 4-col would give n_oc_per_col=1 (no OC loop) — pure streaming
+   - Requires FIFO sharing via MemTile broadcast to stay within shim limits
 
-| Width | vec_iters | Layers | Fused SiLU | Notes |
-|-------|-----------|--------|-----------|-------|
-| 80 | 10 | L15.bn0 (32→32, k3) | ✅ Works | IC=32 small enough — no pipelining issue |
-| 80 | 10 | L15.cv1/cv2 (k1) | ✅ Works | k1 has independent vectorization path |
-| 40 | 5 | L12, L18, L16 | ✅ Works | Well within safe threshold |
-| 20 | 2 | L21, L19 | ✅ Works | Minimal vec_iters |
+2. **MemTile weight pre-loading** (saves ~5-10ms per PDI)
+   - Static weight buffers loaded once, reused across frames
+   - Eliminates per-frame weight DMA for repeated inference
 
-**Key finding**: The vec_iters ≥ 10 Peano bug only manifests when the
-inner MMUL loop has many iterations AND float SiLU interaction. For L15's
-bottleneck (IC=32, OC=32), the loop count is small enough that the
-pipelining bug doesn't trigger.
+3. **Runlist chaining** (saves 3 PDI submission overheads)
+   - Batch all 3 neck PDIs into a single runlist submission
+   - Reduces host-NPU round-trip latency
+
+### Medium Impact
+
+4. **Core-to-core chaining within L21** (saves DDR round-trips)
+   - Currently L21 uses 4 serial task groups (each layer through DDR)
+   - cv1→bn0.cv1 could stream if bn0 didn't need OC streaming
+   - Would need weight streaming via MemTile to avoid OC re-read
+
+5. **Pipeline L16 output directly into L18.cv1** (saves 1 DDR trip)
+   - Currently L16 drains to DDR concat, L18 reads it back
+   - Could stream L16→L18.cv1 core-to-core if concat is done at MemTile
+
+### Low Impact (diminishing returns)
+
+6. **2-column for L21.cv1/cv2** (saves ~20ms each = ~40ms)
+   - Currently single-core at 39ms each — already fast
+   - Hit shim DMA exhaustion with 10 workers; needs FIFO sharing
+
+7. **Fuse all 3 PDIs into 1** (saves 2 PDI overheads)
+   - Would need ~22 workers across all 4 columns
+   - Shim DMA exhaustion makes this impractical without FIFO sharing
 
 ---
 
-## Known Blockers
+## Known Constraints
 
-| Issue | Affected Layers | Severity | Workaround | Status |
-|-------|----------------|----------|------------|--------|
-| OC streaming slow for 128ch k3 | L19, L21.bn0 | Medium | 2 columns halves time (309→155ms, 300→151ms) | Mitigated ✅ |
-| NPU hw_context exhaustion | L21 (14th context) | Low | Context cleanup between blocks | Fixed ✅ |
-| Multi-PDI xclbin timeout | All (in pipeline) | Medium | Use per-layer AIEContext for now | Open |
-
----
-
-## Dataflow Roadmap
-
-### Current State
-All neck layers run sequentially via `Int8YOLOv8nPipeline` with per-layer
-PDIs. Each layer does: host→NPU transfer, compute, NPU→host transfer,
-CPU post-processing (dequant/bias/SiLU for non-fused layers).
-
-### Phase 1: Individual Verification (this document)
-Verify each neck layer works on NPU, benchmark scalar vs fused, document
-which layers can be vectorized.
-
-### Phase 2: Neck Dataflow Blocks
-Design multi-core dataflow blocks for neck sub-sections:
-- **L12 C2f block** (40×40): 4 cores, cv1→bn0→cv2, core-to-core chaining
-- **L18 C2f block** (40×40): Same structure as L12
-- **L21 C2f block** (20×20): Same structure, smaller spatial
-
-### Phase 3: Neck Phase Fusion
-Fuse neck blocks into multi-phase pipelines:
-- Phase A: L12 C2f (needs P5 upsample + P4 concat — CPU or MemTile?)
-- Phase B: L15 C2f (needs L12 upsample + P3 concat)
-- Phase C: L16 + L18 (L16 output feeds directly to L18 after concat)
-- Phase D: L19 + L21 (L19 output feeds directly to L21 after concat)
-
-### Key Challenges
-1. **Upsample on NPU**: `repeat_interleave(2)` — possible via strided DMA
-   or a dedicated upsample kernel. Currently done on CPU.
-2. **Concat on NPU**: Channel concatenation at MemTile via multi-source
-   ObjectFIFO join. Already proven in C2f designs.
-3. **DDR round-trips**: Each upsample/concat forces a DDR round-trip.
-   Minimizing these is the key optimization for neck dataflow.
+| Constraint | Impact | Workaround |
+|-----------|--------|------------|
+| Adjacent tiles share 64KB data memory | bn0 k3 weights (37KB each) can't coexist | Place bn0 cores in separate columns |
+| AIE2P program memory ~16KB | k3 fused SiLU kernel is 16.4KB on some configs | Always use 2-col for k3 layers |
+| Shim DMA channels limited (~24 total) | 10+ workers exhaust available channels | Keep k1 layers single-column |
+| `_factorize_tensor()` repeat_count bug | `d3=64` produces `repeat_count=63` on drains | Use `_sr()` helper for drains |
+| IRON `Worker()` without `rt.start()` | Workers silently omitted from MLIR | Always call `rt.start(*workers)` |

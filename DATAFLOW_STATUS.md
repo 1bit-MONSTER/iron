@@ -129,22 +129,13 @@ L9.cv1  CBS k1  256→128  20×20     conv2dk1         Phase 6 TODO
 L9.cv2  CBS k1  512→256  20×20     conv2dk1         Phase 6 TODO
 ─── Phase 6: L8 C2f + SPPF (future) ───
 
-NECK (all verified with fused SiLU, per-layer NPU context):
-L12.cv1 CBS k1  384→128  40×40     conv2dk1_silu    Fused ✅ 16ms (1 col)
-L12.bn0 Bottleneck 64ch  40×40     conv2dk3_silu    Fused ✅ 18ms (1 col)
-L12.cv2 CBS k1  192→128  40×40     conv2dk1_silu    Fused ✅ 16ms (1 col)
-L15.cv1 CBS k1  192→64   80×80     conv2dk1_silu    Fused ✅ 32ms (1 col)
-L15.bn0 Bottleneck 32ch  80×80     conv2dk3_silu    Fused ✅ 34ms (1 col)
-L15.cv2 CBS k1   96→64   80×80     conv2dk1_silu    Fused ✅ 31ms (1 col)
-L16     CBS k3s2 64→64   80→40     conv2dk3s2_silu  Fused ✅ 9ms  (1 col)
-L18.cv1 CBS k1  192→128  40×40     conv2dk1_silu    Fused ✅ 16ms (1 col)
-L18.bn0 Bottleneck 64ch  40×40     conv2dk3_silu    Fused ✅ 18ms (1 col)
-L18.cv2 CBS k1  192→128  40×40     conv2dk1_silu    Fused ✅ 16ms (1 col)
-L19     CBS k3s2 128→128 40→20     conv2dk3s2_silu  Fused ✅ 155ms (2 col)
-L21.cv1 CBS k1  384→256  20×20     conv2dk1_silu    Fused ✅ 39ms (1 col)
-L21.bn0 Bottleneck 128ch 20×20     conv2dk3_silu    Fused ✅ 302ms (2 col, 151ms×2)
-L21.cv2 CBS k1  384→256  20×20     conv2dk1_silu    Fused ✅ 39ms (1 col)
-─── Neck: all layers verified, 740ms total (was 854ms) ───
+NECK DATAFLOW (3 PDIs, 657ms — was 740ms sequential in 18 PDIs):
+PDI 1: L12 C2f + upsample2x + L15 C2f         113ms  9 workers, 4 cols, 7 TGs
+PDI 2: L16 CBS + L18 C2f                        46ms  5 workers, 2 cols, 4 TGs
+PDI 3: L19 CBS + L21 C2f (2-col k3)            498ms  8 workers, 4 cols, 5 TGs
+─── Neck dataflow complete: 657ms, 3 PDIs ───
+─── Bottleneck: L21 bn0 128ch k3 OC streaming ───
+─── Next: 4-col k3 or MemTile weight streaming ───
 ```
 
 ### SiLU Vectorization Coverage
