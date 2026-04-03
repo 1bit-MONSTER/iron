@@ -9409,3 +9409,420 @@ def test_dataflow_c2f_l21(l21_h, l21_w):
         f"C2f L21 dataflow: {100 * error_rate:.2f}% errors > 5 "
         f"exceeds 10% threshold"
     )
+
+
+# ============================================================================
+# Combined L16+L18 and L19+L21 tests
+# ============================================================================
+
+
+class AIEDataflowL16L18(AIEOperatorBase):
+    """Combined L16 CBS + L18 C2f in one PDI."""
+
+    def __init__(self, l16_h, l16_w, s1, s2, context=None):
+        self.l16_h = l16_h
+        self.l16_w = l16_w
+        self.s1 = s1
+        self.s2 = s2
+        self.xclbin_artifact = None
+        self.insts_artifact = None
+        AIEOperatorBase.__init__(self, context=context, register=True)
+
+    def set_up_artifacts(self):
+        from iron.operators.conv2d_int8.dataflow_design import (
+            _compute_oc_streaming_params,
+        )
+
+        operator_dir = Path(__file__).parent
+        base = f"dataflow_l16_l18_{self.l16_h}h_{self.l16_w}w"
+        mlir = PythonGeneratedMLIRArtifact.new(
+            f"{base}.mlir",
+            import_path=operator_dir / "dataflow_design.py",
+            callback_fn="my_dataflow_l16_l18",
+            callback_args=[
+                self.context.device_manager.device_type,
+                self.l16_h, self.l16_w,
+                self.s1, self.s2, self.s1, self.s2, self.s1, self.s2,
+                self.s1, self.s2, self.s1, self.s2,
+            ],
+        )
+        k_objs = self._make_kernel_objs()
+        xclbin = XclbinArtifact.new(f"{base}.xclbin", depends=[mlir] + k_objs)
+        insts = InstsBinArtifact.new(f"{base}.bin", depends=[mlir])
+        self.xclbin_artifact = xclbin
+        self.insts_artifact = insts
+        self.add_artifacts([xclbin, insts])
+
+        oc_chunk, n_oc, _ = _compute_oc_streaming_params(64, 64, self.l16_w, 2)
+        self._l16_oc_chunk = oc_chunk
+        self._l16_n_oc = n_oc
+
+    def _make_kernel_objs(self):
+        base_dir = self.context.base_dir / "aie_kernels" / "aie2p"
+        return [
+            KernelObjectArtifact.new("conv2dk3_i8_silu.o",
+                depends=[SourceArtifact.new(base_dir / "conv2dk3_i8_silu.cc")],
+                extra_flags=["-DINT8_ACT"]),
+            KernelObjectArtifact.new("conv2dk1_i8_silu.o",
+                depends=[SourceArtifact.new(base_dir / "conv2dk1_i8_silu.cc")],
+                extra_flags=["-DINT8_ACT"]),
+            KernelObjectArtifact.new("conv2dk1_i8_silu_cv2.o",
+                depends=[SourceArtifact.new(base_dir / "conv2dk1_i8_silu.cc")],
+                extra_flags=["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"]),
+        ]
+
+    def set_up_runtime(self):
+        l18_h = self.l16_h // 2
+        l18_w = self.l16_w // 2
+        l16_input = 64 * self.l16_h * self.l16_w
+        l16_wt = self._l16_n_oc * (self._l16_oc_chunk * 64 * 9 + self._l16_oc_chunk * 4)
+        l18_cv1_wt = 128 * 192 + 128 * 4
+        l18_bn_wt = 64 * 64 * 9 + 64 * 4
+        l18_cv2_wt = 128 * 192 + 128 * 4
+        total_wt = l16_wt + l18_cv1_wt + 2 * l18_bn_wt + l18_cv2_wt
+        l18_output = 128 * l18_h * l18_w
+        l18_concat = 192 * l18_h * l18_w
+        output_buf = l18_output + l18_concat
+        self.add_buffer("input", l16_input, dtype=np.int8)
+        self.add_buffer("weights", total_wt, dtype=np.int8)
+        self.add_buffer("output", output_buf, dtype=np.int8)
+        self.add_kernel("l16_l18", self.xclbin_artifact,
+                        self.xclbin_artifact.kernel_name, self.insts_artifact)
+        self.add_to_runlist("l16_l18", "input", "weights", "output")
+
+
+@pytest.mark.parametrize("h,w", [
+    pytest.param(16, 16, id="l16_l18_16x16"),
+    pytest.param(80, 80, id="l16_l18_80x80"),
+])
+def test_dataflow_l16_l18(h, w):
+    """Combined L16 CBS + L18 C2f: L15_out(64ch) -> L16(k3s2) -> L18(C2f) -> 128ch."""
+    from iron.operators.conv2d_int8.dataflow_design import _compute_oc_streaming_params
+
+    torch.manual_seed(42)
+    scale = 10
+    shift2 = 7
+    l18_h, l18_w = h // 2, w // 2
+
+    # Generate input + skip + weights
+    x_l15 = torch.randint(-20, 21, (1, 64, h, w), dtype=torch.int8)
+    x_l12_skip = torch.randint(-20, 21, (1, 128, l18_h, l18_w), dtype=torch.int8)
+
+    w_l16 = torch.randint(-50, 51, (64, 64, 3, 3), dtype=torch.int8)
+    b_l16 = torch.randint(-500, 501, (64,), dtype=torch.int32)
+    w_cv1 = torch.randint(-50, 51, (128, 192, 1, 1), dtype=torch.int8)
+    b_cv1 = torch.randint(-500, 501, (128,), dtype=torch.int32)
+    w_bn0cv1 = torch.randint(-50, 51, (64, 64, 3, 3), dtype=torch.int8)
+    b_bn0cv1 = torch.randint(-500, 501, (64,), dtype=torch.int32)
+    w_bn0cv2 = torch.randint(-50, 51, (64, 64, 3, 3), dtype=torch.int8)
+    b_bn0cv2 = torch.randint(-500, 501, (64,), dtype=torch.int32)
+    w_cv2 = torch.randint(-50, 51, (128, 192, 1, 1), dtype=torch.int8)
+    b_cv2 = torch.randint(-500, 501, (128,), dtype=torch.int32)
+
+    # CPU reference: L16 -> concat(L16_out, L12_skip) -> L18
+    ref_l16 = conv2d_int8_pade_silu_reference(
+        x_l15, w_l16, b_l16, scale, shift2, stride=2
+    )
+    ref_concat = torch.cat([ref_l16, x_l12_skip], dim=1)  # 192ch
+    ref_cv1 = conv2d_int8_pade_silu_reference(
+        ref_concat, w_cv1, b_cv1, scale, shift2, stride=1, padding=0
+    )
+    half1 = ref_cv1[:, :64, :, :]
+    half2 = ref_cv1[:, 64:, :, :]
+    ref_bn0_inter = conv2d_int8_pade_silu_reference(
+        half2, w_bn0cv1, b_bn0cv1, scale, shift2, stride=1, padding=1
+    )
+    ref_bn0_out = conv2d_int8_pade_silu_reference(
+        ref_bn0_inter, w_bn0cv2, b_bn0cv2, scale, shift2, stride=1, padding=1
+    )
+    ref_concat2 = torch.cat([half1, half2, ref_bn0_out], dim=1)
+    ref_output = conv2d_int8_pade_silu_reference(
+        ref_concat2, w_cv2, b_cv2, scale, shift2, stride=1, padding=0
+    )
+
+    # Pack weights
+    oc_chunk, n_oc, _ = _compute_oc_streaming_params(64, 64, w, 2)
+    l16_chunks = []
+    for g in range(n_oc):
+        ws = w_l16[g * oc_chunk : (g + 1) * oc_chunk]
+        bs = b_l16[g * oc_chunk : (g + 1) * oc_chunk]
+        l16_chunks.append(np.concatenate([
+            weights_to_tiled_int8_k3(ws),
+            bs.numpy().astype(np.int32).view(np.int8),
+        ]))
+    packed_l16 = np.concatenate(l16_chunks)
+    packed_cv1 = _pack_k1_silu_weights(w_cv1, b_cv1)
+    packed_bn0cv1 = pack_fused_weights_k3(w_bn0cv1, b_bn0cv1)
+    packed_bn0cv2 = pack_fused_weights_k3(w_bn0cv2, b_bn0cv2)
+    packed_cv2 = _pack_k1_silu_weights(w_cv2, b_cv2)
+    packed_weights = np.concatenate(
+        [packed_l16, packed_cv1, packed_bn0cv1, packed_bn0cv2, packed_cv2]
+    )
+
+    # Build NPU
+    ctx = AIEContext()
+    op = AIEDataflowL16L18(l16_h=h, l16_w=w, s1=scale, s2=shift2, context=ctx)
+    ctx.compile_all()
+    ctx.prepare_runtime()
+
+    output_buf_size = op.buffers["output"]
+    l18_output_size = 128 * l18_h * l18_w
+    concat_offset = l18_output_size
+
+    # Pre-fill O with L12_skip in concat[64:192ch] (strided)
+    o_buf = np.zeros(output_buf_size, dtype=np.int8)
+    skip_tiled = nchw_to_tiled_int8(x_l12_skip)  # flat 128ch*H*W
+    # Place skip into concat rows: each concat row = 192*W, skip at offset 64*W
+    for row in range(l18_h):
+        src_start = row * 128 * l18_w
+        dst_start = concat_offset + row * 192 * l18_w + 64 * l18_w
+        o_buf[dst_start:dst_start + 128 * l18_w] = skip_tiled[src_start:src_start + 128 * l18_w]
+
+    op.write_buffer("input", nchw_to_tiled_int8(x_l15))
+    op.write_buffer("weights", packed_weights)
+    op.write_buffer("output", o_buf)
+
+    t0 = time.perf_counter()
+    op.run_runlist()
+    run_ms = (time.perf_counter() - t0) * 1000
+    print(f"\n  L16+L18 combined ({h}x{w}): {run_ms:.1f}ms")
+
+    out_flat = op.read_buffer("output", (output_buf_size,), dtype=np.int8)
+    npu_output = tiled_to_nchw_int8(out_flat[:l18_output_size], 128, l18_h, l18_w)
+
+    ref_np = ref_output.numpy().astype(np.int8)
+    npu_np = npu_output.numpy().astype(np.int8)
+    diff = np.abs(ref_np.astype(np.int32) - npu_np.astype(np.int32))
+    max_diff = int(diff.max())
+    total_elems = diff.size
+    errors_gt5 = int(np.sum(diff > 5))
+    print(f"  max_diff={max_diff}, errors>5={errors_gt5}/{total_elems}")
+
+    assert max_diff <= 10, f"L16+L18 failed: max_diff={max_diff}"
+    assert errors_gt5 / total_elems < 0.10, f"L16+L18: too many errors >5"
+
+
+class AIEDataflowL19L21(AIEOperatorBase):
+    """Combined L19 CBS + L21 C2f in one PDI."""
+
+    def __init__(self, l19_h, l19_w, s1, s2, context=None):
+        self.l19_h = l19_h
+        self.l19_w = l19_w
+        self.s1 = s1
+        self.s2 = s2
+        self.xclbin_artifact = None
+        self.insts_artifact = None
+        AIEOperatorBase.__init__(self, context=context, register=True)
+
+    def set_up_artifacts(self):
+        from iron.operators.conv2d_int8.dataflow_design import (
+            _compute_oc_streaming_params,
+        )
+
+        operator_dir = Path(__file__).parent
+        base = f"dataflow_l19_l21_{self.l19_h}h_{self.l19_w}w"
+        mlir = PythonGeneratedMLIRArtifact.new(
+            f"{base}.mlir",
+            import_path=operator_dir / "dataflow_design.py",
+            callback_fn="my_dataflow_l19_l21",
+            callback_args=[
+                self.context.device_manager.device_type,
+                self.l19_h, self.l19_w,
+                self.s1, self.s2, self.s1, self.s2, self.s1, self.s2,
+                self.s1, self.s2, self.s1, self.s2,
+            ],
+        )
+        k_objs = self._make_kernel_objs()
+        xclbin = XclbinArtifact.new(f"{base}.xclbin", depends=[mlir] + k_objs)
+        insts = InstsBinArtifact.new(f"{base}.bin", depends=[mlir])
+        self.xclbin_artifact = xclbin
+        self.insts_artifact = insts
+        self.add_artifacts([xclbin, insts])
+
+        oc_chunk, n_oc, _ = _compute_oc_streaming_params(128, 128, self.l19_w, 2)
+        self._l19_oc_chunk = oc_chunk
+        self._l19_n_oc = n_oc
+        l21_w = self.l19_w // 2
+        bn_oc, bn_n, _ = _compute_oc_streaming_params(128, 128, l21_w, 1)
+        self._bn_oc_chunk = bn_oc
+        self._bn_n_oc = bn_n
+
+    def _make_kernel_objs(self):
+        base_dir = self.context.base_dir / "aie_kernels" / "aie2p"
+        return [
+            KernelObjectArtifact.new("conv2dk3_i8_silu.o",
+                depends=[SourceArtifact.new(base_dir / "conv2dk3_i8_silu.cc")],
+                extra_flags=["-DINT8_ACT"]),
+            KernelObjectArtifact.new("conv2dk1_i8_silu.o",
+                depends=[SourceArtifact.new(base_dir / "conv2dk1_i8_silu.cc")],
+                extra_flags=["-DINT8_ACT"]),
+            KernelObjectArtifact.new("conv2dk1_i8_silu_cv2.o",
+                depends=[SourceArtifact.new(base_dir / "conv2dk1_i8_silu.cc")],
+                extra_flags=["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"]),
+        ]
+
+    def set_up_runtime(self):
+        l21_h = self.l19_h // 2
+        l21_w = self.l19_w // 2
+        l19_input = 128 * self.l19_h * self.l19_w
+        l19_wt = self._l19_n_oc * (self._l19_oc_chunk * 128 * 9 + self._l19_oc_chunk * 4)
+        cv1_wt_chunk = 64 * 384 + 64 * 4
+        cv1_total_wt = 4 * cv1_wt_chunk
+        bn_wt_chunk = self._bn_oc_chunk * 128 * 9 + self._bn_oc_chunk * 4
+        bn_total_wt = self._bn_n_oc * bn_wt_chunk
+        cv2_wt_chunk = 64 * 384 + 64 * 4
+        cv2_total_wt = 4 * cv2_wt_chunk
+        total_wt = l19_wt + cv1_total_wt + 2 * bn_total_wt + cv2_total_wt
+        l21_output = 256 * l21_h * l21_w
+        l21_concat = 384 * l21_h * l21_w
+        bn_scratch = 128 * l21_h * l21_w
+        output_buf = l21_output + l21_concat + bn_scratch
+        self.add_buffer("input", l19_input, dtype=np.int8)
+        self.add_buffer("weights", total_wt, dtype=np.int8)
+        self.add_buffer("output", output_buf, dtype=np.int8)
+        self.add_kernel("l19_l21", self.xclbin_artifact,
+                        self.xclbin_artifact.kernel_name, self.insts_artifact)
+        self.add_to_runlist("l19_l21", "input", "weights", "output")
+
+
+@pytest.mark.parametrize("h,w", [
+    pytest.param(16, 16, id="l19_l21_16x16"),
+    pytest.param(40, 40, id="l19_l21_40x40"),
+])
+def test_dataflow_l19_l21(h, w):
+    """Combined L19 CBS + L21 C2f: L18_out(128ch) -> L19(k3s2) -> L21(C2f) -> 256ch."""
+    from iron.operators.conv2d_int8.dataflow_design import _compute_oc_streaming_params
+
+    torch.manual_seed(42)
+    scale = 10
+    shift2 = 7
+    l21_h, l21_w = h // 2, w // 2
+
+    # Generate input + skip + weights
+    x_l18 = torch.randint(-20, 21, (1, 128, h, w), dtype=torch.int8)
+    x_p5_skip = torch.randint(-20, 21, (1, 256, l21_h, l21_w), dtype=torch.int8)
+
+    w_l19 = torch.randint(-50, 51, (128, 128, 3, 3), dtype=torch.int8)
+    b_l19 = torch.randint(-500, 501, (128,), dtype=torch.int32)
+    w_cv1 = torch.randint(-50, 51, (256, 384, 1, 1), dtype=torch.int8)
+    b_cv1 = torch.randint(-500, 501, (256,), dtype=torch.int32)
+    w_bn0cv1 = torch.randint(-50, 51, (128, 128, 3, 3), dtype=torch.int8)
+    b_bn0cv1 = torch.randint(-500, 501, (128,), dtype=torch.int32)
+    w_bn0cv2 = torch.randint(-50, 51, (128, 128, 3, 3), dtype=torch.int8)
+    b_bn0cv2 = torch.randint(-500, 501, (128,), dtype=torch.int32)
+    w_cv2 = torch.randint(-50, 51, (256, 384, 1, 1), dtype=torch.int8)
+    b_cv2 = torch.randint(-500, 501, (256,), dtype=torch.int32)
+
+    # CPU reference
+    ref_l19 = conv2d_int8_pade_silu_reference(
+        x_l18, w_l19, b_l19, scale, shift2, stride=2
+    )
+    ref_concat = torch.cat([ref_l19, x_p5_skip], dim=1)  # 384ch
+    ref_cv1 = conv2d_int8_pade_silu_reference(
+        ref_concat, w_cv1, b_cv1, scale, shift2, stride=1, padding=0
+    )
+    half1 = ref_cv1[:, :128, :, :]
+    half2 = ref_cv1[:, 128:, :, :]
+    ref_bn0_inter = conv2d_int8_pade_silu_reference(
+        half2, w_bn0cv1, b_bn0cv1, scale, shift2, stride=1, padding=1
+    )
+    ref_bn0_out = conv2d_int8_pade_silu_reference(
+        ref_bn0_inter, w_bn0cv2, b_bn0cv2, scale, shift2, stride=1, padding=1
+    )
+    ref_concat2 = torch.cat([half1, half2, ref_bn0_out], dim=1)
+    ref_output = conv2d_int8_pade_silu_reference(
+        ref_concat2, w_cv2, b_cv2, scale, shift2, stride=1, padding=0
+    )
+
+    # Pack weights
+    l19_oc_chunk, l19_n_oc, _ = _compute_oc_streaming_params(128, 128, w, 2)
+    l19_chunks = []
+    for g in range(l19_n_oc):
+        ws = w_l19[g * l19_oc_chunk : (g + 1) * l19_oc_chunk]
+        bs = b_l19[g * l19_oc_chunk : (g + 1) * l19_oc_chunk]
+        l19_chunks.append(np.concatenate([
+            weights_to_tiled_int8_k3(ws),
+            bs.numpy().astype(np.int32).view(np.int8),
+        ]))
+    packed_l19 = np.concatenate(l19_chunks)
+
+    cv1_oc_chunk, cv1_n_oc = 64, 4
+    cv1_chunks = []
+    for g in range(cv1_n_oc):
+        ws = w_cv1[g * cv1_oc_chunk : (g + 1) * cv1_oc_chunk]
+        bs = b_cv1[g * cv1_oc_chunk : (g + 1) * cv1_oc_chunk]
+        cv1_chunks.append(np.concatenate([
+            weights_to_tiled_int8(ws),
+            bs.numpy().astype(np.int32).view(np.int8),
+        ]))
+    packed_cv1 = np.concatenate(cv1_chunks)
+
+    bn_oc_chunk, bn_n_oc, _ = _compute_oc_streaming_params(128, 128, l21_w, 1)
+    def _pack_k3_oc(wt, b, oc_c, n):
+        chunks = []
+        for g in range(n):
+            ws = wt[g * oc_c : (g + 1) * oc_c]
+            bs = b[g * oc_c : (g + 1) * oc_c]
+            chunks.append(np.concatenate([
+                weights_to_tiled_int8_k3(ws),
+                bs.numpy().astype(np.int32).view(np.int8),
+            ]))
+        return np.concatenate(chunks)
+    packed_bn0cv1 = _pack_k3_oc(w_bn0cv1, b_bn0cv1, bn_oc_chunk, bn_n_oc)
+    packed_bn0cv2 = _pack_k3_oc(w_bn0cv2, b_bn0cv2, bn_oc_chunk, bn_n_oc)
+
+    cv2_chunks = []
+    for g in range(4):
+        ws = w_cv2[g * 64 : (g + 1) * 64]
+        bs = b_cv2[g * 64 : (g + 1) * 64]
+        cv2_chunks.append(np.concatenate([
+            weights_to_tiled_int8(ws),
+            bs.numpy().astype(np.int32).view(np.int8),
+        ]))
+    packed_cv2 = np.concatenate(cv2_chunks)
+
+    packed_weights = np.concatenate(
+        [packed_l19, packed_cv1, packed_bn0cv1, packed_bn0cv2, packed_cv2]
+    )
+
+    # Build NPU
+    ctx = AIEContext()
+    op = AIEDataflowL19L21(l19_h=h, l19_w=w, s1=scale, s2=shift2, context=ctx)
+    ctx.compile_all()
+    ctx.prepare_runtime()
+
+    output_buf_size = op.buffers["output"]
+    l21_output_size = 256 * l21_h * l21_w
+    l21_concat_size = 384 * l21_h * l21_w
+    concat_offset = l21_output_size
+
+    # Pre-fill O with P5_skip in concat[128:384ch] (strided)
+    o_buf = np.zeros(output_buf_size, dtype=np.int8)
+    skip_tiled = nchw_to_tiled_int8(x_p5_skip)
+    for row in range(l21_h):
+        src_start = row * 256 * l21_w
+        dst_start = concat_offset + row * 384 * l21_w + 128 * l21_w
+        o_buf[dst_start:dst_start + 256 * l21_w] = skip_tiled[src_start:src_start + 256 * l21_w]
+
+    op.write_buffer("input", nchw_to_tiled_int8(x_l18))
+    op.write_buffer("weights", packed_weights)
+    op.write_buffer("output", o_buf)
+
+    t0 = time.perf_counter()
+    op.run_runlist()
+    run_ms = (time.perf_counter() - t0) * 1000
+    print(f"\n  L19+L21 combined ({h}x{w}): {run_ms:.1f}ms")
+
+    out_flat = op.read_buffer("output", (output_buf_size,), dtype=np.int8)
+    npu_output = tiled_to_nchw_int8(out_flat[:l21_output_size], 256, l21_h, l21_w)
+
+    ref_np = ref_output.numpy().astype(np.int8)
+    npu_np = npu_output.numpy().astype(np.int8)
+    diff = np.abs(ref_np.astype(np.int32) - npu_np.astype(np.int32))
+    max_diff = int(diff.max())
+    total_elems = diff.size
+    errors_gt5 = int(np.sum(diff > 5))
+    print(f"  max_diff={max_diff}, errors>5={errors_gt5}/{total_elems}")
+
+    assert max_diff <= 10, f"L19+L21 failed: max_diff={max_diff}"
+    assert errors_gt5 / total_elems < 0.10, f"L19+L21: too many errors >5"
