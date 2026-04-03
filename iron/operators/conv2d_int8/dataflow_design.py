@@ -11682,12 +11682,10 @@ def my_dataflow_c2f_l21(
 
         # Drain to concat[256:384ch] with strided write + OC interleave
         rt.drain(bn_cv2_out_fifo.cons(), O,
-                 TensorAccessPattern(
-                     (1, output_buf_size),
-                     offset=concat_offset + cv1_oc * width,
-                     sizes=[bn_n_oc, height, half_d1, half_d0],
-                     strides=[bn_oc_chunk * width, cv2_in_row, half_d0, 1],
-                 ),
+                 _oc_drain_tap(output_buf_size,
+                               concat_offset + cv1_oc * width,
+                               bn_n_oc, bn_oc_chunk * width,
+                               cv2_in_row, height),
                  wait=True, task_group=tg_b2)
         rt.finish_task_group(tg_b2)
 
