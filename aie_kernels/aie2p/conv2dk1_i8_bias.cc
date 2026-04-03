@@ -121,34 +121,33 @@ __attribute__((noinline)) static void apply_bias_vec16_k1(
     aie::vector<bfloat16, 16> bias_vec = aie::load_v<16>(bias_bf16);
 
     // Process 64 elements in 4 groups of 16
+    // Use scalar int16 reconstruction (same pattern as silu_postproc_i8.cc)
+    // to avoid aie::mul accumulator tag issues.
+    alignas(64) bfloat16 bf16_tmp[16];
+
     for (int g = 0; g < 4; g++) {
-        // Reconstruct int16 from two int8 extracts
-        aie::vector<int8, 16> lo =
-            aie::load_v<16>(lo8_buf + g * 16);
-        aie::vector<int8, 16> hi =
-            aie::load_v<16>(hi8_buf + g * 16);
+        // Reconstruct int16 from two int8 extractions, convert to bf16
+        for (int i = 0; i < 16; i++) {
+            int16_t val16 = (int16_t)hi8_buf[g * 16 + i] * (int16_t)256 +
+                            (int16_t)(uint8_t)lo8_buf[g * 16 + i];
+            bf16_tmp[i] = (bfloat16)((float)val16 * dequant);
+        }
 
-        // Cast to int16 and reconstruct: val = hi*256 + (uint8)lo
-        aie::vector<int16, 16> lo16 = aie::unpack(lo);
-        aie::vector<int16, 16> hi16 = aie::unpack(hi);
-        lo16 = aie::bit_and(lo16, aie::broadcast<int16, 16>(0x00FF));
-        aie::vector<int16, 16> val16 =
-            aie::add(aie::mul<int16>(hi16, 256).to_vector<int16>(0), lo16);
-
-        // Convert to bf16, multiply by dequant, add bias
-        aie::vector<bfloat16, 16> fval =
-            aie::to_float<bfloat16>(val16, 0);
-        fval = aie::mul(fval, (bfloat16)dequant);
+        // Load as vec-16, add bias
+        aie::vector<bfloat16, 16> fval = aie::load_v<16>(bf16_tmp);
         fval = aie::add(fval, bias_vec);
 
         // Requant to int8: round(fval * scale_out), NO SiLU
         fval = aie::mul(fval, (bfloat16)scale_out);
-        aie::vector<int16, 16> ival =
-            aie::to_fixed<int16>(fval, 0);
-        aie::vector<int8, 16> result =
-            aie::pack(ival);
+        aie::store_v(bf16_tmp, fval);
 
-        aie::store_v(out_buf + g * 16, result);
+        for (int i = 0; i < 16; i++) {
+            float sval = (float)bf16_tmp[i];
+            int32_t oval = (sval >= 0.0f) ? (int32_t)(sval + 0.5f)
+                                          : (int32_t)(sval - 0.5f);
+            oval = (oval > 127) ? 127 : (oval < -128) ? -128 : oval;
+            out_buf[g * 16 + i] = (int8_t)oval;
+        }
     }
 }
 

@@ -13175,3 +13175,520 @@ def my_dataflow_upsample2x(dev, height, width, channels):
         rt.finish_task_group(tg)
 
     return Program(dev_ty, rt).resolve_program(SequentialPlacer())
+
+
+# ---------------------------------------------------------------------------
+# Detection head: one PDI per scale (reg + cls branches)
+# ---------------------------------------------------------------------------
+
+
+def _compute_oc_streaming_params_k1(in_channels, out_channels, width, l1_limit=65536):
+    """Find the best oc_chunk for k1 OC streaming that fits in L1.
+
+    For a k1 fused conv (stride-1, no spatial kernel), calculates the largest
+    oc_chunk (multiple of 8) where all buffers fit within l1_limit.
+
+    Returns (oc_chunk, n_oc_groups).
+    Raises ValueError if no feasible configuration exists.
+    """
+    _BD_WRAP_MAX = 64
+    in_row = in_channels * width
+
+    for try_oc in range(out_channels, 0, -8):
+        if out_channels % try_oc != 0 or try_oc % 8 != 0:
+            continue
+        wt_bytes = try_oc * in_channels + try_oc * 4  # weights + bias
+        out_bytes = 2 * try_oc * width  # double-buffered output row
+        total = 1040 + 2 * in_row + wt_bytes + out_bytes
+        if total > l1_limit:
+            continue
+        n_oc = out_channels // try_oc
+        if n_oc > _BD_WRAP_MAX:
+            continue
+        return (try_oc, n_oc)
+
+    raise ValueError(
+        f"k1 OC streaming infeasible: "
+        f"in_channels={in_channels}, out_channels={out_channels}, "
+        f"width={width}. Cannot satisfy L1 budget ({l1_limit}B)."
+    )
+
+
+def my_dataflow_detect_scale(
+    dev,
+    height,
+    width,
+    in_channels,
+    reg_cv1_s1,
+    reg_cv1_s2,
+    reg_cv2_s1,
+    reg_cv2_s2,
+    reg_cv3_s1,
+    reg_cv3_s2,
+    cls_cv1_s1,
+    cls_cv1_s2,
+    cls_cv2_s1,
+    cls_cv2_s2,
+    cls_cv3_s1,
+    cls_cv3_s2,
+):
+    """Detection head: one PDI per scale (reg + cls branches).
+
+    6 workers (2 columns), 6 task groups, 5 kernel symbols.
+    Each branch: cv1(k3+SiLU) -> cv2(k3+SiLU) -> cv3(k1+bias, no activation).
+
+    Col 0: reg_cv1(0,2), reg_cv2(0,3), reg_cv3(0,4)
+    Col 1: cls_cv1(1,2), cls_cv2(1,3), cls_cv3(1,4)
+
+    DDR layout:
+      I = input (IC × H × W)
+      W = [reg_cv1_wts | reg_cv2_wts | reg_cv3_wts |
+           cls_cv1_wts | cls_cv2_wts | cls_cv3_wts]
+      O = [reg_output | cls_output |
+           reg_scratch_A | reg_scratch_B | cls_scratch_A | cls_scratch_B]
+    """
+    xfr_dtype = np.int8
+
+    reg_mid = 64  # reg intermediate channels
+    reg_out = 64  # reg output channels
+    cls_mid = 80  # cls intermediate channels
+    cls_out = 80  # cls output channels
+
+    # --- OC streaming params ---
+    # cv1: k3s1, IC->reg_mid / IC->cls_mid
+    rcv1_oc_chunk, rcv1_n_oc, rcv1_depth = _compute_oc_streaming_params(
+        in_channels, reg_mid, width, 1
+    )
+    ccv1_oc_chunk, ccv1_n_oc, ccv1_depth = _compute_oc_streaming_params(
+        in_channels, cls_mid, width, 1
+    )
+
+    # cv2: k3s1, reg_mid->reg_mid / cls_mid->cls_mid
+    rcv2_oc_chunk, rcv2_n_oc, rcv2_depth = _compute_oc_streaming_params(
+        reg_mid, reg_mid, width, 1
+    )
+    ccv2_oc_chunk, ccv2_n_oc, ccv2_depth = _compute_oc_streaming_params(
+        cls_mid, cls_mid, width, 1
+    )
+
+    # cv3: k1, reg_mid->reg_out / cls_mid->cls_out
+    rcv3_oc_chunk, rcv3_n_oc = _compute_oc_streaming_params_k1(
+        reg_mid, reg_out, width
+    )
+    ccv3_oc_chunk, ccv3_n_oc = _compute_oc_streaming_params_k1(
+        cls_mid, cls_out, width
+    )
+
+    # --- Weight chunk sizes ---
+    rcv1_wt_chunk = rcv1_oc_chunk * in_channels * 9 + rcv1_oc_chunk * 4
+    rcv2_wt_chunk = rcv2_oc_chunk * reg_mid * 9 + rcv2_oc_chunk * 4
+    rcv3_wt_chunk = rcv3_oc_chunk * reg_mid + rcv3_oc_chunk * 4
+
+    ccv1_wt_chunk = ccv1_oc_chunk * in_channels * 9 + ccv1_oc_chunk * 4
+    ccv2_wt_chunk = ccv2_oc_chunk * cls_mid * 9 + ccv2_oc_chunk * 4
+    ccv3_wt_chunk = ccv3_oc_chunk * cls_mid + ccv3_oc_chunk * 4
+
+    # --- Output row sizes ---
+    rcv1_out_row = rcv1_oc_chunk * width
+    rcv2_out_row = rcv2_oc_chunk * width
+    rcv3_out_row = rcv3_oc_chunk * width
+
+    ccv1_out_row = ccv1_oc_chunk * width
+    ccv2_out_row = ccv2_oc_chunk * width
+    ccv3_out_row = ccv3_oc_chunk * width
+
+    # --- Input row sizes ---
+    rcv1_in_row = in_channels * width
+    rcv2_in_row = reg_mid * width
+    rcv3_in_row = reg_mid * width
+
+    ccv1_in_row = in_channels * width
+    ccv2_in_row = cls_mid * width
+    ccv3_in_row = cls_mid * width
+
+    # --- Totals ---
+    total_input = in_channels * height * width
+    reg_output_size = reg_out * height * width
+    cls_output_size = cls_out * height * width
+    reg_scratch_a = reg_mid * height * width  # cv1 output
+    reg_scratch_b = reg_mid * height * width  # cv2 output (could reuse A)
+    cls_scratch_a = cls_mid * height * width
+    cls_scratch_b = cls_mid * height * width
+
+    # DDR output buffer layout
+    reg_out_offset = 0
+    cls_out_offset = reg_output_size
+    reg_sa_offset = cls_out_offset + cls_output_size
+    reg_sb_offset = reg_sa_offset + reg_scratch_a
+    cls_sa_offset = reg_sb_offset + reg_scratch_b
+    cls_sb_offset = cls_sa_offset + cls_scratch_a
+    output_buf_size = cls_sb_offset + cls_scratch_b
+
+    # Weight layout
+    rcv1_total_wt = rcv1_n_oc * rcv1_wt_chunk
+    rcv2_total_wt = rcv2_n_oc * rcv2_wt_chunk
+    rcv3_total_wt = rcv3_n_oc * rcv3_wt_chunk
+    ccv1_total_wt = ccv1_n_oc * ccv1_wt_chunk
+    ccv2_total_wt = ccv2_n_oc * ccv2_wt_chunk
+    ccv3_total_wt = ccv3_n_oc * ccv3_wt_chunk
+
+    wt_off_rcv1 = 0
+    wt_off_rcv2 = rcv1_total_wt
+    wt_off_rcv3 = wt_off_rcv2 + rcv2_total_wt
+    wt_off_ccv1 = wt_off_rcv3 + rcv3_total_wt
+    wt_off_ccv2 = wt_off_ccv1 + ccv1_total_wt
+    wt_off_ccv3 = wt_off_ccv2 + ccv2_total_wt
+    total_wt = wt_off_ccv3 + ccv3_total_wt
+
+    # --- L1 budget checks ---
+    def _check_k3_l1(name, ic, oc_chunk, depth, w):
+        in_row = ic * w
+        wt = oc_chunk * ic * 9 + oc_chunk * 4
+        out = 2 * oc_chunk * w
+        total = 1040 + (depth + 1) * in_row + wt + out
+        assert total <= 65536, f"{name} L1: {total}B"
+
+    def _check_k1_l1(name, ic, oc_chunk, w):
+        in_row = ic * w
+        wt = oc_chunk * ic + oc_chunk * 4
+        out = 2 * oc_chunk * w
+        total = 1040 + 2 * in_row + wt + out
+        assert total <= 65536, f"{name} L1: {total}B"
+
+    _check_k3_l1("rcv1", in_channels, rcv1_oc_chunk, rcv1_depth, width)
+    _check_k3_l1("rcv2", reg_mid, rcv2_oc_chunk, rcv2_depth, width)
+    _check_k1_l1("rcv3", reg_mid, rcv3_oc_chunk, width)
+    _check_k3_l1("ccv1", in_channels, ccv1_oc_chunk, ccv1_depth, width)
+    _check_k3_l1("ccv2", cls_mid, ccv2_oc_chunk, ccv2_depth, width)
+    _check_k1_l1("ccv3", cls_mid, ccv3_oc_chunk, width)
+
+    dev_ty = NPU2()
+
+    # --- Types ---
+    rcv1_in_ty = np.ndarray[(rcv1_in_row,), np.dtype[xfr_dtype]]
+    rcv1_wt_ty = np.ndarray[(rcv1_wt_chunk,), np.dtype[xfr_dtype]]
+    rcv1_out_ty = np.ndarray[(rcv1_out_row,), np.dtype[xfr_dtype]]
+
+    rcv2_in_ty = np.ndarray[(rcv2_in_row,), np.dtype[xfr_dtype]]
+    rcv2_wt_ty = np.ndarray[(rcv2_wt_chunk,), np.dtype[xfr_dtype]]
+    rcv2_out_ty = np.ndarray[(rcv2_out_row,), np.dtype[xfr_dtype]]
+
+    rcv3_in_ty = np.ndarray[(rcv3_in_row,), np.dtype[xfr_dtype]]
+    rcv3_wt_ty = np.ndarray[(rcv3_wt_chunk,), np.dtype[xfr_dtype]]
+    rcv3_out_ty = np.ndarray[(rcv3_out_row,), np.dtype[xfr_dtype]]
+
+    ccv1_in_ty = np.ndarray[(ccv1_in_row,), np.dtype[xfr_dtype]]
+    ccv1_wt_ty = np.ndarray[(ccv1_wt_chunk,), np.dtype[xfr_dtype]]
+    ccv1_out_ty = np.ndarray[(ccv1_out_row,), np.dtype[xfr_dtype]]
+
+    ccv2_in_ty = np.ndarray[(ccv2_in_row,), np.dtype[xfr_dtype]]
+    ccv2_wt_ty = np.ndarray[(ccv2_wt_chunk,), np.dtype[xfr_dtype]]
+    ccv2_out_ty = np.ndarray[(ccv2_out_row,), np.dtype[xfr_dtype]]
+
+    ccv3_in_ty = np.ndarray[(ccv3_in_row,), np.dtype[xfr_dtype]]
+    ccv3_wt_ty = np.ndarray[(ccv3_wt_chunk,), np.dtype[xfr_dtype]]
+    ccv3_out_ty = np.ndarray[(ccv3_out_row,), np.dtype[xfr_dtype]]
+
+    input_l3_ty = np.ndarray[(total_input,), np.dtype[xfr_dtype]]
+    wts_l3_ty = np.ndarray[(total_wt,), np.dtype[xfr_dtype]]
+    output_l3_ty = np.ndarray[(output_buf_size,), np.dtype[xfr_dtype]]
+
+    # --- Kernels (6 distinct symbols — each worker gets its own) ---
+    # 1. k3+SiLU for reg.cv1
+    k3_rcv1_kernel = Kernel(
+        "conv2dk3_i8_silu", "conv2dk3_i8_silu.o",
+        [rcv1_in_ty, rcv1_in_ty, rcv1_in_ty, rcv1_wt_ty, rcv1_out_ty,
+         np.int32, np.int32, np.int32, np.int32, np.int32, np.int32],
+    )
+    # 2. k3+SiLU for reg.cv2
+    k3_rcv2_kernel = Kernel(
+        "conv2dk3_i8_silu_rcv2", "conv2dk3_i8_silu_rcv2.o",
+        [rcv2_in_ty, rcv2_in_ty, rcv2_in_ty, rcv2_wt_ty, rcv2_out_ty,
+         np.int32, np.int32, np.int32, np.int32, np.int32, np.int32],
+    )
+    # 3. k3+SiLU for cls.cv1
+    k3_ccv1_kernel = Kernel(
+        "conv2dk3_i8_silu_ccv1", "conv2dk3_i8_silu_ccv1.o",
+        [ccv1_in_ty, ccv1_in_ty, ccv1_in_ty, ccv1_wt_ty, ccv1_out_ty,
+         np.int32, np.int32, np.int32, np.int32, np.int32, np.int32],
+    )
+    # 4. k3+SiLU for cls.cv2
+    k3_ccv2_kernel = Kernel(
+        "conv2dk3_i8_silu_ccv2", "conv2dk3_i8_silu_ccv2.o",
+        [ccv2_in_ty, ccv2_in_ty, ccv2_in_ty, ccv2_wt_ty, ccv2_out_ty,
+         np.int32, np.int32, np.int32, np.int32, np.int32, np.int32],
+    )
+    # 5. k1+bias for reg.cv3
+    k1_rcv3_kernel = Kernel(
+        "conv2dk1_i8_bias", "conv2dk1_i8_bias.o",
+        [rcv3_in_ty, rcv3_wt_ty, rcv3_out_ty,
+         np.int32, np.int32, np.int32, np.int32, np.int32],
+    )
+    # 6. k1+bias for cls.cv3
+    k1_ccv3_kernel = Kernel(
+        "conv2dk1_i8_bias_cls", "conv2dk1_i8_bias_cls.o",
+        [ccv3_in_ty, ccv3_wt_ty, ccv3_out_ty,
+         np.int32, np.int32, np.int32, np.int32, np.int32],
+    )
+
+    # --- FIFOs (all DDR-backed, one set per layer) ---
+    # reg branch
+    rcv1_in_fifo = ObjectFifo(rcv1_in_ty, name="det_rcv1_in", depth=rcv1_depth)
+    rcv1_wt_fifo = ObjectFifo(rcv1_wt_ty, name="det_rcv1_wt", depth=1)
+    rcv1_out_fifo = ObjectFifo(rcv1_out_ty, name="det_rcv1_out", depth=2)
+
+    rcv2_in_fifo = ObjectFifo(rcv2_in_ty, name="det_rcv2_in", depth=rcv2_depth)
+    rcv2_wt_fifo = ObjectFifo(rcv2_wt_ty, name="det_rcv2_wt", depth=1)
+    rcv2_out_fifo = ObjectFifo(rcv2_out_ty, name="det_rcv2_out", depth=2)
+
+    rcv3_in_fifo = ObjectFifo(rcv3_in_ty, name="det_rcv3_in", depth=2)
+    rcv3_wt_fifo = ObjectFifo(rcv3_wt_ty, name="det_rcv3_wt", depth=1)
+    rcv3_out_fifo = ObjectFifo(rcv3_out_ty, name="det_rcv3_out", depth=2)
+
+    # cls branch
+    ccv1_in_fifo = ObjectFifo(ccv1_in_ty, name="det_ccv1_in", depth=ccv1_depth)
+    ccv1_wt_fifo = ObjectFifo(ccv1_wt_ty, name="det_ccv1_wt", depth=1)
+    ccv1_out_fifo = ObjectFifo(ccv1_out_ty, name="det_ccv1_out", depth=2)
+
+    ccv2_in_fifo = ObjectFifo(ccv2_in_ty, name="det_ccv2_in", depth=ccv2_depth)
+    ccv2_wt_fifo = ObjectFifo(ccv2_wt_ty, name="det_ccv2_wt", depth=1)
+    ccv2_out_fifo = ObjectFifo(ccv2_out_ty, name="det_ccv2_out", depth=2)
+
+    ccv3_in_fifo = ObjectFifo(ccv3_in_ty, name="det_ccv3_in", depth=2)
+    ccv3_wt_fifo = ObjectFifo(ccv3_wt_ty, name="det_ccv3_wt", depth=1)
+    ccv3_out_fifo = ObjectFifo(ccv3_out_ty, name="det_ccv3_out", depth=2)
+
+    # --- Core functions ---
+
+    def _make_k3_oc_fn(ci_val, co_val, n_oc_val, s1_val, s2_val):
+        def core_fn(of_in, of_wt, of_out, kernel_fn):
+            w = width
+            h = height
+            ci = ci_val
+            co = co_val
+            s1 = s1_val
+            s2 = s2_val
+            for _ in range_(n_oc_val):
+                elem_wt = of_wt.acquire(1)
+                # top (check=0)
+                elems = of_in.acquire(2)
+                eo = of_out.acquire(1)
+                kernel_fn(elems[0], elems[0], elems[1], elem_wt, eo,
+                          w, ci, co, 0, s1, s2)
+                of_out.release(1)
+                # middle (check=1)
+                for _ in range_(h - 2):
+                    elems = of_in.acquire(3)
+                    eo = of_out.acquire(1)
+                    kernel_fn(elems[0], elems[1], elems[2], elem_wt, eo,
+                              w, ci, co, 1, s1, s2)
+                    of_in.release(1)
+                    of_out.release(1)
+                # bottom (check=2)
+                elems = of_in.acquire(2)
+                eo = of_out.acquire(1)
+                kernel_fn(elems[0], elems[1], elems[1], elem_wt, eo,
+                          w, ci, co, 2, s1, s2)
+                of_in.release(2)
+                of_out.release(1)
+                of_wt.release(1)
+        return core_fn
+
+    def _make_k1_oc_fn(ci_val, co_val, n_oc_val, s1_val, s2_val):
+        def core_fn(of_in, of_wt, of_out, kernel_fn):
+            w = width
+            ci = ci_val
+            co = co_val
+            s1 = s1_val
+            s2 = s2_val
+            for _ in range_(n_oc_val):
+                wt = of_wt.acquire(1)
+                for _ in range_(height):
+                    ei = of_in.acquire(1)
+                    eo = of_out.acquire(1)
+                    kernel_fn(ei, wt, eo, w, ci, co, s1, s2)
+                    of_in.release(1)
+                    of_out.release(1)
+                of_wt.release(1)
+        return core_fn
+
+    # --- Workers (2 columns, 3 per column) ---
+    worker_rcv1 = Worker(
+        _make_k3_oc_fn(in_channels, rcv1_oc_chunk, rcv1_n_oc,
+                        reg_cv1_s1, reg_cv1_s2),
+        [rcv1_in_fifo.cons(rcv1_depth), rcv1_wt_fifo.cons(),
+         rcv1_out_fifo.prod(), k3_rcv1_kernel],
+        placement=Tile(0, 2),
+    )
+    worker_rcv2 = Worker(
+        _make_k3_oc_fn(reg_mid, rcv2_oc_chunk, rcv2_n_oc,
+                        reg_cv2_s1, reg_cv2_s2),
+        [rcv2_in_fifo.cons(rcv2_depth), rcv2_wt_fifo.cons(),
+         rcv2_out_fifo.prod(), k3_rcv2_kernel],
+        placement=Tile(0, 3),
+    )
+    worker_rcv3 = Worker(
+        _make_k1_oc_fn(reg_mid, rcv3_oc_chunk, rcv3_n_oc,
+                        reg_cv3_s1, reg_cv3_s2),
+        [rcv3_in_fifo.cons(), rcv3_wt_fifo.cons(),
+         rcv3_out_fifo.prod(), k1_rcv3_kernel],
+        placement=Tile(0, 4),
+    )
+
+    worker_ccv1 = Worker(
+        _make_k3_oc_fn(in_channels, ccv1_oc_chunk, ccv1_n_oc,
+                        cls_cv1_s1, cls_cv1_s2),
+        [ccv1_in_fifo.cons(ccv1_depth), ccv1_wt_fifo.cons(),
+         ccv1_out_fifo.prod(), k3_ccv1_kernel],
+        placement=Tile(1, 2),
+    )
+    worker_ccv2 = Worker(
+        _make_k3_oc_fn(cls_mid, ccv2_oc_chunk, ccv2_n_oc,
+                        cls_cv2_s1, cls_cv2_s2),
+        [ccv2_in_fifo.cons(ccv2_depth), ccv2_wt_fifo.cons(),
+         ccv2_out_fifo.prod(), k3_ccv2_kernel],
+        placement=Tile(1, 3),
+    )
+    worker_ccv3 = Worker(
+        _make_k1_oc_fn(cls_mid, ccv3_oc_chunk, ccv3_n_oc,
+                        cls_cv3_s1, cls_cv3_s2),
+        [ccv3_in_fifo.cons(), ccv3_wt_fifo.cons(),
+         ccv3_out_fifo.prod(), k1_ccv3_kernel],
+        placement=Tile(1, 4),
+    )
+
+    # --- Helper: factorize and create strided TAP ---
+    def _oc_drain_tap(buf_size, offset, n_oc, oc_chunk_w, row_total, h):
+        pe_d0 = min(oc_chunk_w, 1023)
+        while pe_d0 % 4 != 0:
+            pe_d0 -= 1
+        while pe_d0 >= 4:
+            if oc_chunk_w % pe_d0 == 0:
+                break
+            pe_d0 -= 4
+        pe_d1 = oc_chunk_w // pe_d0
+        return TensorAccessPattern(
+            (1, buf_size), offset=offset,
+            sizes=[n_oc, h, pe_d1, pe_d0],
+            strides=[oc_chunk_w, row_total, pe_d0, 1],
+        )
+
+    def _oc_fill_tap(buf_size, offset, n_oc, total_data):
+        d2, d1, d0 = _factorize_3d(total_data)
+        return TensorAccessPattern(
+            (1, buf_size), offset=offset,
+            sizes=[n_oc, d2, d1, d0],
+            strides=[0, d1 * d0, d0, 1],
+        )
+
+    def _contiguous_tap(buf_size, offset, total_data):
+        d3, d2, d1, d0 = _factorize_tensor(total_data)
+        return TensorAccessPattern(
+            (1, buf_size), offset=offset,
+            sizes=[d3, d2, d1, d0],
+            strides=[d2 * d1 * d0, d1 * d0, d0, 1],
+        )
+
+    # ===== Runtime sequence =====
+    rt = Runtime()
+    with rt.sequence(input_l3_ty, wts_l3_ty, output_l3_ty) as (I, W, O):
+        rt.start(
+            worker_rcv1, worker_rcv2, worker_rcv3,
+            worker_ccv1, worker_ccv2, worker_ccv3,
+        )
+
+        # ===== TG1: reg.cv1 OC streaming -> reg_scratch_A =====
+        tg1 = rt.task_group()
+        rt.fill(rcv1_in_fifo.prod(), I,
+                _oc_fill_tap(total_input, 0, rcv1_n_oc, total_input),
+                task_group=tg1)
+        rt.fill(rcv1_wt_fifo.prod(), W,
+                _contiguous_tap(total_wt, wt_off_rcv1, rcv1_total_wt),
+                task_group=tg1)
+        rt.drain(rcv1_out_fifo.cons(), O,
+                 _oc_drain_tap(output_buf_size, reg_sa_offset,
+                               rcv1_n_oc, rcv1_oc_chunk * width,
+                               reg_mid * width, height),
+                 wait=True, task_group=tg1)
+        rt.finish_task_group(tg1)
+
+        # ===== TG2: reg.cv2 OC streaming -> reg_scratch_B =====
+        tg2 = rt.task_group()
+        rt.fill(rcv2_in_fifo.prod(), O,
+                _oc_fill_tap(output_buf_size, reg_sa_offset,
+                             rcv2_n_oc, reg_scratch_a),
+                task_group=tg2)
+        rt.fill(rcv2_wt_fifo.prod(), W,
+                _contiguous_tap(total_wt, wt_off_rcv2, rcv2_total_wt),
+                task_group=tg2)
+        rt.drain(rcv2_out_fifo.cons(), O,
+                 _oc_drain_tap(output_buf_size, reg_sb_offset,
+                               rcv2_n_oc, rcv2_oc_chunk * width,
+                               reg_mid * width, height),
+                 wait=True, task_group=tg2)
+        rt.finish_task_group(tg2)
+
+        # ===== TG3: reg.cv3 k1+bias -> reg_output =====
+        tg3 = rt.task_group()
+        rt.fill(rcv3_in_fifo.prod(), O,
+                _oc_fill_tap(output_buf_size, reg_sb_offset,
+                             rcv3_n_oc, reg_scratch_b),
+                task_group=tg3)
+        rt.fill(rcv3_wt_fifo.prod(), W,
+                _contiguous_tap(total_wt, wt_off_rcv3, rcv3_total_wt),
+                task_group=tg3)
+        rt.drain(rcv3_out_fifo.cons(), O,
+                 _oc_drain_tap(output_buf_size, reg_out_offset,
+                               rcv3_n_oc, rcv3_oc_chunk * width,
+                               reg_out * width, height),
+                 wait=True, task_group=tg3)
+        rt.finish_task_group(tg3)
+
+        # ===== TG4: cls.cv1 OC streaming -> cls_scratch_A =====
+        tg4 = rt.task_group()
+        rt.fill(ccv1_in_fifo.prod(), I,
+                _oc_fill_tap(total_input, 0, ccv1_n_oc, total_input),
+                task_group=tg4)
+        rt.fill(ccv1_wt_fifo.prod(), W,
+                _contiguous_tap(total_wt, wt_off_ccv1, ccv1_total_wt),
+                task_group=tg4)
+        rt.drain(ccv1_out_fifo.cons(), O,
+                 _oc_drain_tap(output_buf_size, cls_sa_offset,
+                               ccv1_n_oc, ccv1_oc_chunk * width,
+                               cls_mid * width, height),
+                 wait=True, task_group=tg4)
+        rt.finish_task_group(tg4)
+
+        # ===== TG5: cls.cv2 OC streaming -> cls_scratch_B =====
+        tg5 = rt.task_group()
+        rt.fill(ccv2_in_fifo.prod(), O,
+                _oc_fill_tap(output_buf_size, cls_sa_offset,
+                             ccv2_n_oc, cls_scratch_a),
+                task_group=tg5)
+        rt.fill(ccv2_wt_fifo.prod(), W,
+                _contiguous_tap(total_wt, wt_off_ccv2, ccv2_total_wt),
+                task_group=tg5)
+        rt.drain(ccv2_out_fifo.cons(), O,
+                 _oc_drain_tap(output_buf_size, cls_sb_offset,
+                               ccv2_n_oc, ccv2_oc_chunk * width,
+                               cls_mid * width, height),
+                 wait=True, task_group=tg5)
+        rt.finish_task_group(tg5)
+
+        # ===== TG6: cls.cv3 k1+bias -> cls_output =====
+        tg6 = rt.task_group()
+        rt.fill(ccv3_in_fifo.prod(), O,
+                _oc_fill_tap(output_buf_size, cls_sb_offset,
+                             ccv3_n_oc, cls_scratch_b),
+                task_group=tg6)
+        rt.fill(ccv3_wt_fifo.prod(), W,
+                _contiguous_tap(total_wt, wt_off_ccv3, ccv3_total_wt),
+                task_group=tg6)
+        rt.drain(ccv3_out_fifo.cons(), O,
+                 _oc_drain_tap(output_buf_size, cls_out_offset,
+                               ccv3_n_oc, ccv3_oc_chunk * width,
+                               cls_out * width, height),
+                 wait=True, task_group=tg6)
+        rt.finish_task_group(tg6)
+
+    return Program(dev_ty, rt).resolve_program(SequentialPlacer())

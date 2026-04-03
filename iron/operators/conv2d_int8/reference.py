@@ -209,6 +209,47 @@ def conv2d_int8_pade_silu_reference(
     return out_i8.to(torch.int8)
 
 
+def conv2d_int8_bias_reference(
+    x_int8, weight_int8, bias_int32, shift1, shift2, stride=1, padding=0
+):
+    """CPU reference for int8 conv + bias, NO activation.
+
+    Matches the pipeline of conv2dk1_i8_bias:
+      1. int8 x int8 -> int32 convolution
+      2. Dequantize: float_val = acc / 2^shift1
+      3. Add bias (in bf16 domain)
+      4. Requantize: int8 out = clamp(round(val * shift2/256), -128, 127)
+
+    Args:
+        x_int8: Input [N, C_in, H, W] int8.
+        weight_int8: Weights [C_out, C_in, K, K] int8.
+        bias_int32: Bias [C_out] int32, pre-scaled.
+        shift1: Dequantization shift (acc / 2^shift1).
+        shift2: Requantization shift (fixed-point 8.8: scale = shift2/256).
+        stride: Convolution stride (default 1).
+        padding: Convolution padding (default 0).
+
+    Returns:
+        Output [N, C_out, H_out, W_out] int8.
+    """
+    # 1. int8 conv -> int32
+    out_int32 = F.conv2d(
+        x_int8.int(), weight_int8.int(), stride=stride, padding=padding
+    )
+
+    # 2. Dequantize to float
+    out_float = out_int32.float() / float(1 << shift1)
+
+    # 3. Add bias
+    out_float = out_float + bias_int32.view(1, -1, 1, 1).float()
+
+    # 4. Requantize to int8 (no SiLU)
+    scale_out = float(shift2) / 256.0
+    out_i8 = torch.clamp(torch.round(out_float * scale_out), -128, 127)
+
+    return out_i8.to(torch.int8)
+
+
 def conv2d_int8_split_silu_reference(
     x_int8, weight_int8, bias_int32, conv_scale, shift1, shift2,
     stride=1, padding=1

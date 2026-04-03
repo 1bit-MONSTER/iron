@@ -10285,3 +10285,364 @@ def test_dataflow_l12_l15(h, w):
     print(f"  max_diff={md}, errors>5={e5}/{tot}")
     assert md <= 10, f"L12+L15 failed: max_diff={md}"
     assert e5/tot < 0.10, f"L12+L15: too many errors >5"
+
+
+# ============================================================================
+# Detection head: one PDI per scale (reg + cls branches)
+# ============================================================================
+
+
+class AIEDataflowDetectScale(AIEOperatorBase):
+    """Detection head: one PDI per scale (reg + cls branches).
+
+    6 workers (2 columns), 6 task groups, 6 kernel symbols.
+    Each branch: cv1(k3+SiLU) -> cv2(k3+SiLU) -> cv3(k1+bias, no activation).
+    """
+
+    def __init__(
+        self, height, width, in_channels,
+        reg_cv1_s1, reg_cv1_s2, reg_cv2_s1, reg_cv2_s2,
+        reg_cv3_s1, reg_cv3_s2,
+        cls_cv1_s1, cls_cv1_s2, cls_cv2_s1, cls_cv2_s2,
+        cls_cv3_s1, cls_cv3_s2,
+        context=None,
+    ):
+        self.height = height
+        self.width = width
+        self.in_channels = in_channels
+        self.reg_cv1_s1 = reg_cv1_s1
+        self.reg_cv1_s2 = reg_cv1_s2
+        self.reg_cv2_s1 = reg_cv2_s1
+        self.reg_cv2_s2 = reg_cv2_s2
+        self.reg_cv3_s1 = reg_cv3_s1
+        self.reg_cv3_s2 = reg_cv3_s2
+        self.cls_cv1_s1 = cls_cv1_s1
+        self.cls_cv1_s2 = cls_cv1_s2
+        self.cls_cv2_s1 = cls_cv2_s1
+        self.cls_cv2_s2 = cls_cv2_s2
+        self.cls_cv3_s1 = cls_cv3_s1
+        self.cls_cv3_s2 = cls_cv3_s2
+        self.xclbin_artifact = None
+        self.insts_artifact = None
+        AIEOperatorBase.__init__(self, context=context, register=True)
+
+    def set_up_artifacts(self):
+        from iron.operators.conv2d_int8.dataflow_design import (
+            _compute_oc_streaming_params,
+            _compute_oc_streaming_params_k1,
+        )
+
+        operator_dir = Path(__file__).parent
+        base = (f"dataflow_detect_{self.in_channels}ic_"
+                f"{self.height}h_{self.width}w")
+        mlir = PythonGeneratedMLIRArtifact.new(
+            f"{base}.mlir",
+            import_path=operator_dir / "dataflow_design.py",
+            callback_fn="my_dataflow_detect_scale",
+            callback_args=[
+                self.context.device_manager.device_type,
+                self.height, self.width, self.in_channels,
+                self.reg_cv1_s1, self.reg_cv1_s2,
+                self.reg_cv2_s1, self.reg_cv2_s2,
+                self.reg_cv3_s1, self.reg_cv3_s2,
+                self.cls_cv1_s1, self.cls_cv1_s2,
+                self.cls_cv2_s1, self.cls_cv2_s2,
+                self.cls_cv3_s1, self.cls_cv3_s2,
+            ],
+        )
+        k_objs = self._make_kernel_objs()
+        xclbin = XclbinArtifact.new(f"{base}.xclbin", depends=[mlir] + k_objs)
+        insts = InstsBinArtifact.new(f"{base}.bin", depends=[mlir])
+        self.xclbin_artifact = xclbin
+        self.insts_artifact = insts
+        self.add_artifacts([xclbin, insts])
+
+        # Store OC streaming params for weight packing
+        reg_mid = 64
+        cls_mid = 80
+        self._rcv1_oc_chunk, self._rcv1_n_oc, _ = _compute_oc_streaming_params(
+            self.in_channels, reg_mid, self.width, 1)
+        self._rcv2_oc_chunk, self._rcv2_n_oc, _ = _compute_oc_streaming_params(
+            reg_mid, reg_mid, self.width, 1)
+        self._rcv3_oc_chunk, self._rcv3_n_oc = _compute_oc_streaming_params_k1(
+            reg_mid, reg_mid, self.width)
+
+        self._ccv1_oc_chunk, self._ccv1_n_oc, _ = _compute_oc_streaming_params(
+            self.in_channels, cls_mid, self.width, 1)
+        self._ccv2_oc_chunk, self._ccv2_n_oc, _ = _compute_oc_streaming_params(
+            cls_mid, cls_mid, self.width, 1)
+        self._ccv3_oc_chunk, self._ccv3_n_oc = _compute_oc_streaming_params_k1(
+            cls_mid, cls_mid, self.width)
+
+    def _make_kernel_objs(self):
+        base_dir = self.context.base_dir / "aie_kernels" / "aie2p"
+        k3_src = SourceArtifact.new(base_dir / "conv2dk3_i8_silu.cc")
+        k1_bias_src = SourceArtifact.new(base_dir / "conv2dk1_i8_bias.cc")
+        return [
+            # 1. reg.cv1 k3+SiLU
+            KernelObjectArtifact.new("conv2dk3_i8_silu.o",
+                depends=[k3_src], extra_flags=["-DINT8_ACT"]),
+            # 2. reg.cv2 k3+SiLU (renamed symbol)
+            KernelObjectArtifact.new("conv2dk3_i8_silu_rcv2.o",
+                depends=[k3_src],
+                extra_flags=["-DINT8_ACT",
+                             "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_rcv2"]),
+            # 3. cls.cv1 k3+SiLU (renamed symbol)
+            KernelObjectArtifact.new("conv2dk3_i8_silu_ccv1.o",
+                depends=[k3_src],
+                extra_flags=["-DINT8_ACT",
+                             "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_ccv1"]),
+            # 4. cls.cv2 k3+SiLU (renamed symbol)
+            KernelObjectArtifact.new("conv2dk3_i8_silu_ccv2.o",
+                depends=[k3_src],
+                extra_flags=["-DINT8_ACT",
+                             "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_ccv2"]),
+            # 5. reg.cv3 k1+bias
+            KernelObjectArtifact.new("conv2dk1_i8_bias.o",
+                depends=[k1_bias_src], extra_flags=["-DINT8_ACT"]),
+            # 6. cls.cv3 k1+bias (renamed symbol)
+            KernelObjectArtifact.new("conv2dk1_i8_bias_cls.o",
+                depends=[k1_bias_src],
+                extra_flags=["-DINT8_ACT",
+                             "-Dconv2dk1_i8_bias=conv2dk1_i8_bias_cls"]),
+        ]
+
+    def set_up_runtime(self):
+        ic = self.in_channels
+        reg_mid = 64
+        reg_out = 64
+        cls_mid = 80
+        cls_out = 80
+        h, w = self.height, self.width
+
+        total_input = ic * h * w
+
+        # Weight sizes
+        def _k3_wt(oc_chunk, n_oc, ic_):
+            chunk = oc_chunk * ic_ * 9 + oc_chunk * 4
+            return n_oc * chunk
+
+        def _k1_wt(oc_chunk, n_oc, ic_):
+            chunk = oc_chunk * ic_ + oc_chunk * 4
+            return n_oc * chunk
+
+        rcv1_wt = _k3_wt(self._rcv1_oc_chunk, self._rcv1_n_oc, ic)
+        rcv2_wt = _k3_wt(self._rcv2_oc_chunk, self._rcv2_n_oc, reg_mid)
+        rcv3_wt = _k1_wt(self._rcv3_oc_chunk, self._rcv3_n_oc, reg_mid)
+        ccv1_wt = _k3_wt(self._ccv1_oc_chunk, self._ccv1_n_oc, ic)
+        ccv2_wt = _k3_wt(self._ccv2_oc_chunk, self._ccv2_n_oc, cls_mid)
+        ccv3_wt = _k1_wt(self._ccv3_oc_chunk, self._ccv3_n_oc, cls_mid)
+        total_wt = rcv1_wt + rcv2_wt + rcv3_wt + ccv1_wt + ccv2_wt + ccv3_wt
+
+        reg_output_size = reg_out * h * w
+        cls_output_size = cls_out * h * w
+        reg_scratch_a = reg_mid * h * w
+        reg_scratch_b = reg_mid * h * w
+        cls_scratch_a = cls_mid * h * w
+        cls_scratch_b = cls_mid * h * w
+        output_buf_size = (reg_output_size + cls_output_size
+                           + reg_scratch_a + reg_scratch_b
+                           + cls_scratch_a + cls_scratch_b)
+
+        self.add_buffer("input", total_input, dtype=np.int8)
+        self.add_buffer("weights", total_wt, dtype=np.int8)
+        self.add_buffer("output", output_buf_size, dtype=np.int8)
+        self.add_kernel(
+            "detect", self.xclbin_artifact,
+            self.xclbin_artifact.kernel_name, self.insts_artifact,
+        )
+        self.add_to_runlist("detect", "input", "weights", "output")
+
+
+@pytest.mark.parametrize(
+    "det_ic,det_h,det_w",
+    [
+        pytest.param(128, 16, 16, id="detect_p4_16x16"),
+        pytest.param(128, 40, 40, id="detect_p4_40x40"),
+        pytest.param(64, 16, 16, id="detect_p3_16x16"),
+        pytest.param(256, 16, 16, id="detect_p5_16x16"),
+        pytest.param(256, 20, 20, id="detect_p5_20x20",
+                     marks=pytest.mark.extensive),
+        pytest.param(64, 80, 80, id="detect_p3_80x80",
+                     marks=[pytest.mark.extensive,
+                            pytest.mark.xfail(reason=(
+                                "conv2dk1_i8_bias Peano codegen bug at "
+                                "width=80 (w_iters=10, same pipelining "
+                                "issue as MAX_VI=9 workaround)"))]),
+    ],
+)
+def test_dataflow_detect_scale(det_ic, det_h, det_w):
+    """Detection head: one PDI per scale with reg + cls branches."""
+    from iron.operators.conv2d_int8.dataflow_design import (
+        _compute_oc_streaming_params,
+        _compute_oc_streaming_params_k1,
+    )
+    from iron.operators.conv2d_int8.reference import conv2d_int8_bias_reference
+
+    torch.manual_seed(42)
+    scale = 10
+    shift2 = 7
+
+    reg_mid = 64
+    reg_out = 64
+    cls_mid = 80
+    cls_out = 80
+
+    # Generate input
+    x_int8 = torch.randint(
+        -20, 21, (1, det_ic, det_h, det_w), dtype=torch.int8
+    )
+
+    # reg branch weights
+    w_rcv1 = torch.randint(-50, 51, (reg_mid, det_ic, 3, 3), dtype=torch.int8)
+    b_rcv1 = torch.randint(-500, 501, (reg_mid,), dtype=torch.int32)
+    w_rcv2 = torch.randint(-50, 51, (reg_mid, reg_mid, 3, 3), dtype=torch.int8)
+    b_rcv2 = torch.randint(-500, 501, (reg_mid,), dtype=torch.int32)
+    w_rcv3 = torch.randint(-50, 51, (reg_out, reg_mid, 1, 1), dtype=torch.int8)
+    b_rcv3 = torch.randint(-500, 501, (reg_out,), dtype=torch.int32)
+
+    # cls branch weights
+    w_ccv1 = torch.randint(-50, 51, (cls_mid, det_ic, 3, 3), dtype=torch.int8)
+    b_ccv1 = torch.randint(-500, 501, (cls_mid,), dtype=torch.int32)
+    w_ccv2 = torch.randint(-50, 51, (cls_mid, cls_mid, 3, 3), dtype=torch.int8)
+    b_ccv2 = torch.randint(-500, 501, (cls_mid,), dtype=torch.int32)
+    w_ccv3 = torch.randint(-50, 51, (cls_out, cls_mid, 1, 1), dtype=torch.int8)
+    b_ccv3 = torch.randint(-500, 501, (cls_out,), dtype=torch.int32)
+
+    # CPU reference — reg branch
+    ref_rcv1 = conv2d_int8_pade_silu_reference(
+        x_int8, w_rcv1, b_rcv1, scale, shift2, stride=1, padding=1
+    )
+    ref_rcv2 = conv2d_int8_pade_silu_reference(
+        ref_rcv1, w_rcv2, b_rcv2, scale, shift2, stride=1, padding=1
+    )
+    ref_reg = conv2d_int8_bias_reference(
+        ref_rcv2, w_rcv3, b_rcv3, scale, shift2, stride=1, padding=0
+    )
+
+    # CPU reference — cls branch
+    ref_ccv1 = conv2d_int8_pade_silu_reference(
+        x_int8, w_ccv1, b_ccv1, scale, shift2, stride=1, padding=1
+    )
+    ref_ccv2 = conv2d_int8_pade_silu_reference(
+        ref_ccv1, w_ccv2, b_ccv2, scale, shift2, stride=1, padding=1
+    )
+    ref_cls = conv2d_int8_bias_reference(
+        ref_ccv2, w_ccv3, b_ccv3, scale, shift2, stride=1, padding=0
+    )
+
+    # Pack weights — OC streaming chunks for each layer
+    # k3 weight packing
+    def _pack_k3_oc(w, b, oc_chunk, n_oc):
+        chunks = []
+        for g in range(n_oc):
+            w_s = w[g * oc_chunk : (g + 1) * oc_chunk]
+            b_s = b[g * oc_chunk : (g + 1) * oc_chunk]
+            chunks.append(np.concatenate([
+                weights_to_tiled_int8_k3(w_s),
+                b_s.numpy().astype(np.int32).view(np.int8),
+            ]))
+        return np.concatenate(chunks)
+
+    # k1 weight packing
+    def _pack_k1_oc(w, b, oc_chunk, n_oc):
+        chunks = []
+        for g in range(n_oc):
+            w_s = w[g * oc_chunk : (g + 1) * oc_chunk]
+            b_s = b[g * oc_chunk : (g + 1) * oc_chunk]
+            chunks.append(np.concatenate([
+                weights_to_tiled_int8(w_s),
+                b_s.numpy().astype(np.int32).view(np.int8),
+            ]))
+        return np.concatenate(chunks)
+
+    # OC streaming params
+    rcv1_oc, rcv1_n, _ = _compute_oc_streaming_params(det_ic, reg_mid, det_w, 1)
+    rcv2_oc, rcv2_n, _ = _compute_oc_streaming_params(reg_mid, reg_mid, det_w, 1)
+    rcv3_oc, rcv3_n = _compute_oc_streaming_params_k1(reg_mid, reg_out, det_w)
+    ccv1_oc, ccv1_n, _ = _compute_oc_streaming_params(det_ic, cls_mid, det_w, 1)
+    ccv2_oc, ccv2_n, _ = _compute_oc_streaming_params(cls_mid, cls_mid, det_w, 1)
+    ccv3_oc, ccv3_n = _compute_oc_streaming_params_k1(cls_mid, cls_out, det_w)
+
+    packed_rcv1 = _pack_k3_oc(w_rcv1, b_rcv1, rcv1_oc, rcv1_n)
+    packed_rcv2 = _pack_k3_oc(w_rcv2, b_rcv2, rcv2_oc, rcv2_n)
+    packed_rcv3 = _pack_k1_oc(w_rcv3, b_rcv3, rcv3_oc, rcv3_n)
+    packed_ccv1 = _pack_k3_oc(w_ccv1, b_ccv1, ccv1_oc, ccv1_n)
+    packed_ccv2 = _pack_k3_oc(w_ccv2, b_ccv2, ccv2_oc, ccv2_n)
+    packed_ccv3 = _pack_k1_oc(w_ccv3, b_ccv3, ccv3_oc, ccv3_n)
+
+    packed_weights = np.concatenate([
+        packed_rcv1, packed_rcv2, packed_rcv3,
+        packed_ccv1, packed_ccv2, packed_ccv3,
+    ])
+
+    # Build NPU design
+    ctx = AIEContext()
+    op = AIEDataflowDetectScale(
+        height=det_h, width=det_w, in_channels=det_ic,
+        reg_cv1_s1=scale, reg_cv1_s2=shift2,
+        reg_cv2_s1=scale, reg_cv2_s2=shift2,
+        reg_cv3_s1=scale, reg_cv3_s2=shift2,
+        cls_cv1_s1=scale, cls_cv1_s2=shift2,
+        cls_cv2_s1=scale, cls_cv2_s2=shift2,
+        cls_cv3_s1=scale, cls_cv3_s2=shift2,
+        context=ctx,
+    )
+    ctx.compile_all()
+    ctx.prepare_runtime()
+
+    reg_output_size = reg_out * det_h * det_w
+    cls_output_size = cls_out * det_h * det_w
+    output_buf_size = op.buffers["output"]
+
+    op.write_buffer("input", nchw_to_tiled_int8(x_int8))
+    op.write_buffer("weights", packed_weights)
+    op.write_buffer("output", np.zeros(output_buf_size, dtype=np.int8))
+
+    t0 = time.perf_counter()
+    op.run_runlist()
+    run_ms = (time.perf_counter() - t0) * 1000
+    print(f"\n  Detect scale IC={det_ic} ({det_h}x{det_w}): {run_ms:.1f}ms")
+
+    out_flat = op.read_buffer("output", (output_buf_size,), dtype=np.int8)
+
+    # Verify reg output
+    reg_flat = out_flat[:reg_output_size]
+    npu_reg = tiled_to_nchw_int8(reg_flat, reg_out, det_h, det_w)
+    ref_reg_np = ref_reg.numpy().astype(np.int8)
+    npu_reg_np = npu_reg.numpy().astype(np.int8)
+    diff_reg = np.abs(ref_reg_np.astype(np.int32) - npu_reg_np.astype(np.int32))
+    max_diff_reg = int(diff_reg.max())
+    e5_reg = int(np.sum(diff_reg > 5))
+    tot_reg = diff_reg.size
+    print(f"  reg: max_diff={max_diff_reg}, errors>5={e5_reg}/{tot_reg}")
+
+    # Verify cls output
+    cls_flat = out_flat[reg_output_size : reg_output_size + cls_output_size]
+    npu_cls = tiled_to_nchw_int8(cls_flat, cls_out, det_h, det_w)
+    ref_cls_np = ref_cls.numpy().astype(np.int8)
+    npu_cls_np = npu_cls.numpy().astype(np.int8)
+    diff_cls = np.abs(ref_cls_np.astype(np.int32) - npu_cls_np.astype(np.int32))
+    max_diff_cls = int(diff_cls.max())
+    e5_cls = int(np.sum(diff_cls > 5))
+    tot_cls = diff_cls.size
+    print(f"  cls: max_diff={max_diff_cls}, errors>5={e5_cls}/{tot_cls}")
+
+    # Assert correctness (tolerance ladder for 3-layer pipeline)
+    # Large IC (256) accumulates more bf16 rounding error through 3 layers
+    max_diff_thresh = 30 if det_ic >= 256 else 15
+    e5_rate_thresh = 0.25 if det_ic >= 256 else 0.10
+    assert max_diff_reg <= max_diff_thresh, (
+        f"Detect reg failed: max_diff={max_diff_reg} exceeds threshold {max_diff_thresh}"
+    )
+    assert e5_reg / tot_reg < e5_rate_thresh, (
+        f"Detect reg: {100 * e5_reg / tot_reg:.2f}% errors > 5 "
+        f"exceeds {100 * e5_rate_thresh:.0f}%"
+    )
+    assert max_diff_cls <= max_diff_thresh, (
+        f"Detect cls failed: max_diff={max_diff_cls} exceeds threshold {max_diff_thresh}"
+    )
+    assert e5_cls / tot_cls < e5_rate_thresh, (
+        f"Detect cls: {100 * e5_cls / tot_cls:.2f}% errors > 5 "
+        f"exceeds {100 * e5_rate_thresh:.0f}%"
+    )
