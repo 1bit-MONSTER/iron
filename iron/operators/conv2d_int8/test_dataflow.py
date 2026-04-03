@@ -9956,10 +9956,8 @@ def test_dataflow_l19_l21_2col(h, w):
     half = l19_npc * l19_oc_chunk
     pw_l19 = np.concatenate([_pk3(w_l19[:half],b_l19[:half],l19_oc_chunk,l19_npc),
                               _pk3(w_l19[half:],b_l19[half:],l19_oc_chunk,l19_npc)])
-    cv1_c, cv1_npc = 64, 2
-    cv1_half = cv1_npc * cv1_c
-    pw_cv1 = np.concatenate([_pk1(w_cv1[:cv1_half],b_cv1[:cv1_half],cv1_c,cv1_npc),
-                              _pk1(w_cv1[cv1_half:],b_cv1[cv1_half:],cv1_c,cv1_npc)])
+    cv1_c = 64
+    pw_cv1 = _pk1(w_cv1, b_cv1, cv1_c, 4)  # single-col, all 4 groups
     bn_oc_chunk, bn_n, _ = _compute_oc_streaming_params(128,128,l21_w,1)
     bn_npc = bn_n // NC
     bn_half = bn_npc * bn_oc_chunk
@@ -9967,8 +9965,7 @@ def test_dataflow_l19_l21_2col(h, w):
                               _pk3(w_bn1[bn_half:],b_bn1[bn_half:],bn_oc_chunk,bn_npc)])
     pw_bn2 = np.concatenate([_pk3(w_bn2[:bn_half],b_bn2[:bn_half],bn_oc_chunk,bn_npc),
                               _pk3(w_bn2[bn_half:],b_bn2[bn_half:],bn_oc_chunk,bn_npc)])
-    pw_cv2 = np.concatenate([_pk1(w_cv2[:cv1_half],b_cv2[:cv1_half],cv1_c,cv1_npc),
-                              _pk1(w_cv2[cv1_half:],b_cv2[cv1_half:],cv1_c,cv1_npc)])
+    pw_cv2 = _pk1(w_cv2, b_cv2, cv1_c, 4)  # single-col, all 4 groups
     pw = np.concatenate([pw_l19, pw_cv1, pw_bn1, pw_bn2, pw_cv2])
 
     # Build NPU

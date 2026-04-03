@@ -12807,10 +12807,11 @@ def my_dataflow_l19_l21_2col(
     l19_s1, l19_s2, cv1_s1, cv1_s2, bn_cv1_s1, bn_cv1_s2,
     bn_cv2_s1, bn_cv2_s2, cv2_s1, cv2_s2,
 ):
-    """Combined L19+L21 with 2-column parallelism. ~2× speedup on k3 layers.
+    """Combined L19+L21 with 2-column parallelism for k3 layers.
 
-    Each layer uses 2 parallel cores, each processing half the OC groups.
-    10 workers across 4 columns, 5 task groups.
+    k3 layers (L19, bn0.cv1, bn0.cv2) use 2 parallel cores each.
+    k1 layers (cv1, cv2) stay single-core (fast enough at ~20ms each).
+    8 workers across 4 columns, 5 task groups.
     """
     xfr_dtype = np.int8
     NC = 2  # columns per layer
@@ -12866,11 +12867,11 @@ def my_dataflow_l19_l21_2col(
     oT = l21_out_sz + l21_concat_sz + bn_scratch_size
     l21_concat_row = l21_cv2_ic * l21_w
 
-    # Weight layout (all contiguous, 2 columns interleaved per layer)
+    # Weight layout: k3 layers split across 2 cols, k1 layers single
     l19_tw = NC * l19_tw_per_col
-    cv1_tw = NC * cv1_tw_per_col
+    cv1_tw = cv1_n * cv1_wc  # single col, all groups
     bn_tw = NC * bn_tw_per_col
-    cv2_tw = NC * cv2_tw_per_col
+    cv2_tw = cv2_n * cv2_wc  # single col, all groups
     wT = l19_tw + cv1_tw + 2 * bn_tw + cv2_tw
 
     dev_ty = NPU2()
@@ -12885,28 +12886,28 @@ def my_dataflow_l19_l21_2col(
     kcv2 = Kernel("conv2dk1_i8_silu_cv2", "conv2dk1_i8_silu_cv2.o",
         [t(l21_cv2_ic*l21_w), t(cv2_wc), t(cv2_or)] + [np.int32]*5)
 
-    # FIFOs: 2 per layer per IO direction
+    # FIFOs: 2-col for k3 layers (L19, bn1, bn2), 1-col for k1 (cv1, cv2)
     def ff(ty, nm, d): return ObjectFifo(ty, name=nm, depth=d)
-    # L19
+    # L19 (2-col)
     f19i = [ff(t(l19_ir), f"l19i{c}", l19_depth) for c in range(NC)]
     f19w = [ff(t(l19_wc), f"l19w{c}", 1) for c in range(NC)]
     f19o = [ff(t(l19_or), f"l19o{c}", 2) for c in range(NC)]
-    # L21 cv1
-    fcv1i = [ff(t(l21_ic*l21_w), f"cv1i{c}", 2) for c in range(NC)]
-    fcv1w = [ff(t(cv1_wc), f"cv1w{c}", 1) for c in range(NC)]
-    fcv1o = [ff(t(cv1_or), f"cv1o{c}", 2) for c in range(NC)]
-    # L21 bn0cv1
+    # L21 cv1 (1-col)
+    fcv1i = ff(t(l21_ic*l21_w), "cv1i", 2)
+    fcv1w = ff(t(cv1_wc), "cv1w", 1)
+    fcv1o = ff(t(cv1_or), "cv1o", 2)
+    # L21 bn0cv1 (2-col)
     fbn1i = [ff(t(bn_ir), f"bn1i{c}", bn_depth) for c in range(NC)]
     fbn1w = [ff(t(bn_wc), f"bn1w{c}", 1) for c in range(NC)]
     fbn1o = [ff(t(bn_or), f"bn1o{c}", 2) for c in range(NC)]
-    # L21 bn0cv2
+    # L21 bn0cv2 (2-col)
     fbn2i = [ff(t(bn_ir), f"bn2i{c}", bn_depth) for c in range(NC)]
     fbn2w = [ff(t(bn_wc), f"bn2w{c}", 1) for c in range(NC)]
     fbn2o = [ff(t(bn_or), f"bn2o{c}", 2) for c in range(NC)]
-    # L21 cv2
-    fcv2i = [ff(t(l21_cv2_ic*l21_w), f"cv2i{c}", 2) for c in range(NC)]
-    fcv2w = [ff(t(cv2_wc), f"cv2w{c}", 1) for c in range(NC)]
-    fcv2o = [ff(t(cv2_or), f"cv2o{c}", 2) for c in range(NC)]
+    # L21 cv2 (1-col)
+    fcv2i = ff(t(l21_cv2_ic*l21_w), "cv2i", 2)
+    fcv2w = ff(t(cv2_wc), "cv2w", 1)
+    fcv2o = ff(t(cv2_or), "cv2o", 2)
 
     # Core functions
     def _k3s2_oc(ci, co, n, s1, s2, oh, w):
@@ -12947,44 +12948,35 @@ def my_dataflow_l19_l21_2col(
                 oi.release(2); oo.release(1); ow_.release(1)
         return fn
 
-    # Workers: 10 total, 4 columns
-    # Col 0: L19[0](0,2), cv1[0](0,3), bn1[0](0,4)
-    # Col 1: L19[1](1,2), cv1[1](1,3), bn1[1](1,4)
-    # Col 2: bn2[0](2,2), cv2[0](2,3)
-    # Col 3: bn2[1](3,2), cv2[1](3,3)
-    tiles = [
-        [(0,2),(1,2)],  # L19
-        [(0,3),(1,3)],  # cv1
-        [(0,4),(1,4)],  # bn1
-        [(2,2),(3,2)],  # bn2
-        [(2,3),(3,3)],  # cv2
-    ]
+    # Workers: 8 total, 4 columns
+    # Col 0: L19[0](0,2), cv1(0,3), bn1[0](0,4)
+    # Col 1: L19[1](1,2), bn1[1](1,3)
+    # Col 2: bn2[0](2,2), cv2(2,3)
+    # Col 3: bn2[1](3,2)
     ws = []
     for c in range(NC):
         ws.append(Worker(
             _k3s2_oc(l19_ic,l19_oc_chunk,l19_n_per_col,l19_s1,l19_s2,l19_oh,l19_width),
             [f19i[c].cons(),f19w[c].cons(),f19o[c].prod(),k19],
-            placement=Tile(*tiles[0][c])))
-    for c in range(NC):
-        ws.append(Worker(
-            _k1_oc(l21_ic,cv1_oc_chunk,cv1_n_per_col,cv1_s1,cv1_s2,l21_h,l21_w),
-            [fcv1i[c].cons(),fcv1w[c].cons(),fcv1o[c].prod(),kcv1],
-            placement=Tile(*tiles[1][c])))
+            placement=Tile(c,2)))
+    ws.append(Worker(
+        _k1_oc(l21_ic,cv1_oc_chunk,cv1_n,cv1_s1,cv1_s2,l21_h,l21_w),
+        [fcv1i.cons(),fcv1w.cons(),fcv1o.prod(),kcv1],
+        placement=Tile(0,3)))
     for c in range(NC):
         ws.append(Worker(
             _k3s1_oc(l21_bn_ch,bn_oc_chunk,bn_n_per_col,bn_cv1_s1,bn_cv1_s2,l21_h,l21_w),
             [fbn1i[c].cons(bn_depth),fbn1w[c].cons(),fbn1o[c].prod(),kbn],
-            placement=Tile(*tiles[2][c])))
+            placement=Tile(0,4) if c==0 else Tile(1,3)))
     for c in range(NC):
         ws.append(Worker(
             _k3s1_oc(l21_bn_ch,bn_oc_chunk,bn_n_per_col,bn_cv2_s1,bn_cv2_s2,l21_h,l21_w),
             [fbn2i[c].cons(bn_depth),fbn2w[c].cons(),fbn2o[c].prod(),kbn],
-            placement=Tile(*tiles[3][c])))
-    for c in range(NC):
-        ws.append(Worker(
-            _k1_oc(l21_cv2_ic,cv2_oc_chunk,cv2_n_per_col,cv2_s1,cv2_s2,l21_h,l21_w),
-            [fcv2i[c].cons(),fcv2w[c].cons(),fcv2o[c].prod(),kcv2],
-            placement=Tile(*tiles[4][c])))
+            placement=Tile(2+c,2)))
+    ws.append(Worker(
+        _k1_oc(l21_cv2_ic,cv2_oc_chunk,cv2_n,cv2_s1,cv2_s2,l21_h,l21_w),
+        [fcv2i.cons(),fcv2w.cons(),fcv2o.prod(),kcv2],
+        placement=Tile(2,3)))
 
     # TAP helpers
     def _ct(buf, off, tot):
@@ -13024,20 +13016,17 @@ def my_dataflow_l19_l21_2col(
                      wait=(c==NC-1), task_group=tg)
         rt.finish_task_group(tg); wo += l19_tw
 
-        # TG2: L21.cv1 (2-col)
+        # TG2: L21.cv1 (single-col, full n_oc)
         tg = rt.task_group()
         cv1_total_in = l21_ic * l21_h * l21_w
-        for c in range(NC):
-            rt.fill(fcv1i[c].prod(), O,
-                    _ocf(oT, concat_off, cv1_n_per_col, cv1_total_in), task_group=tg)
-            rt.fill(fcv1w[c].prod(), W,
-                    _ct(wT, wo + c*cv1_tw_per_col, cv1_tw_per_col), task_group=tg)
-        for c in range(NC):
-            rt.drain(fcv1o[c].cons(), O,
-                     _ocd(oT, concat_off + c*l21_cv1_oc_per_col*l21_w,
-                          cv1_n_per_col, cv1_oc_chunk*l21_w,
-                          l21_concat_row, l21_h),
-                     wait=(c==NC-1), task_group=tg)
+        rt.fill(fcv1i.prod(), O,
+                _ocf(oT, concat_off, cv1_n, cv1_total_in), task_group=tg)
+        rt.fill(fcv1w.prod(), W,
+                _ct(wT, wo, cv1_tw), task_group=tg)
+        rt.drain(fcv1o.cons(), O,
+                 _ocd(oT, concat_off, cv1_n, cv1_oc_chunk*l21_w,
+                      l21_concat_row, l21_h),
+                 wait=True, task_group=tg)
         rt.finish_task_group(tg); wo += cv1_tw
 
         # TG3: L21.bn0.cv1 (2-col) → bn0_scratch
@@ -13080,21 +13069,18 @@ def my_dataflow_l19_l21_2col(
                      wait=(c==NC-1), task_group=tg)
         rt.finish_task_group(tg); wo += bn_tw
 
-        # TG5: L21.cv2 (2-col) → final output
+        # TG5: L21.cv2 (single-col, full n_oc) → final output
         tg = rt.task_group()
         cv2_total_in = l21_cv2_ic * l21_h * l21_w
-        for c in range(NC):
-            rt.fill(fcv2i[c].prod(), O,
-                    _ocf(oT, concat_off, cv2_n_per_col, cv2_total_in), task_group=tg)
-            rt.fill(fcv2w[c].prod(), W,
-                    _ct(wT, wo + c*cv2_tw_per_col, cv2_tw_per_col), task_group=tg)
         cv2_full_row = l21_cv2_oc * l21_w
-        for c in range(NC):
-            rt.drain(fcv2o[c].cons(), O,
-                     _ocd(oT, c*l21_cv2_oc//NC*l21_w,
-                          cv2_n_per_col, cv2_oc_chunk*l21_w,
-                          cv2_full_row, l21_h),
-                     wait=(c==NC-1), task_group=tg)
+        rt.fill(fcv2i.prod(), O,
+                _ocf(oT, concat_off, cv2_n, cv2_total_in), task_group=tg)
+        rt.fill(fcv2w.prod(), W,
+                _ct(wT, wo, cv2_tw), task_group=tg)
+        rt.drain(fcv2o.cons(), O,
+                 _ocd(oT, 0, cv2_n, cv2_oc_chunk*l21_w,
+                      cv2_full_row, l21_h),
+                 wait=True, task_group=tg)
         rt.finish_task_group(tg)
 
     return Program(dev_ty, rt).resolve_program(SequentialPlacer())  # l19_l21_2col
