@@ -8867,3 +8867,300 @@ def test_dataflow_p1p2_fused_p3(l0_h, l0_w):
         f"P1+P2 combined + P3: {100 * error_rate_gt5:.2f}% errors > 5 "
         f"exceeds 20% threshold"
     )
+
+
+# ============================================================================
+# Neck C2f L12 dataflow block
+# ============================================================================
+
+
+class AIEDataflowC2fL12(AIEOperatorBase):
+    """C2f block for neck L12: 384->128, n=1 bottleneck, fused SiLU.
+
+    cv1(384->128, k1 fused SiLU, OC streaming 2x64) -> split
+    -> bn0.cv1(64->64, k3 fused SiLU) -> bn0.cv2(64->64, k3 fused SiLU)
+    -> concat[half1|half2|bn0_out]=192ch -> cv2(192->128, k1 fused SiLU)
+    """
+
+    def __init__(
+        self,
+        height,
+        width,
+        cv1_shift1,
+        cv1_shift2,
+        bn0_cv1_shift1,
+        bn0_cv1_shift2,
+        bn0_cv2_shift1,
+        bn0_cv2_shift2,
+        cv2_shift1,
+        cv2_shift2,
+        context=None,
+    ):
+        self.height = height
+        self.width = width
+        self.cv1_shift1 = cv1_shift1
+        self.cv1_shift2 = cv1_shift2
+        self.bn0_cv1_shift1 = bn0_cv1_shift1
+        self.bn0_cv1_shift2 = bn0_cv1_shift2
+        self.bn0_cv2_shift1 = bn0_cv2_shift1
+        self.bn0_cv2_shift2 = bn0_cv2_shift2
+        self.cv2_shift1 = cv2_shift1
+        self.cv2_shift2 = cv2_shift2
+
+        self.in_channels = 384
+        self.cv1_oc = 128
+        self.bn_ch = 64
+        self.cv2_ic = 192
+        self.cv2_oc = 128
+
+        self.xclbin_artifact = None
+        self.insts_artifact = None
+
+        AIEOperatorBase.__init__(self, context=context, register=True)
+
+    def set_up_artifacts(self):
+        operator_dir = Path(__file__).parent
+        file_name_base = f"dataflow_c2f_l12_{self.height}h_{self.width}w"
+
+        mlir_artifact = PythonGeneratedMLIRArtifact.new(
+            f"{file_name_base}.mlir",
+            import_path=operator_dir / "dataflow_design.py",
+            callback_fn="my_dataflow_c2f_l12",
+            callback_args=[
+                self.context.device_manager.device_type,
+                self.height,
+                self.width,
+                self.cv1_shift1,
+                self.cv1_shift2,
+                self.bn0_cv1_shift1,
+                self.bn0_cv1_shift2,
+                self.bn0_cv2_shift1,
+                self.bn0_cv2_shift2,
+                self.cv2_shift1,
+                self.cv2_shift2,
+            ],
+        )
+
+        k1_silu_obj = KernelObjectArtifact.new(
+            "conv2dk1_i8_silu.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk1_i8_silu.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT"],
+        )
+
+        k1_silu_cv2_obj = KernelObjectArtifact.new(
+            "conv2dk1_i8_silu_cv2.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk1_i8_silu.cc"
+                )
+            ],
+            extra_flags=[
+                "-DINT8_ACT",
+                "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2",
+            ],
+        )
+
+        k3_silu_obj = KernelObjectArtifact.new(
+            "conv2dk3_i8_silu.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk3_i8_silu.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT"],
+        )
+
+        xclbin_artifact = XclbinArtifact.new(
+            f"{file_name_base}.xclbin",
+            depends=[
+                mlir_artifact,
+                k1_silu_obj,
+                k1_silu_cv2_obj,
+                k3_silu_obj,
+            ],
+        )
+
+        insts_artifact = InstsBinArtifact.new(
+            f"{file_name_base}.bin", depends=[mlir_artifact]
+        )
+
+        self.xclbin_artifact = xclbin_artifact
+        self.insts_artifact = insts_artifact
+        self.add_artifacts([xclbin_artifact, insts_artifact])
+
+    def set_up_runtime(self):
+        total_input = self.in_channels * self.height * self.width
+
+        cv1_oc_chunk = 64
+        cv1_n_oc = self.cv1_oc // cv1_oc_chunk
+        cv1_wt_chunk = cv1_oc_chunk * self.in_channels + cv1_oc_chunk * 4
+        cv1_total_wt = cv1_n_oc * cv1_wt_chunk
+
+        bn_k3_wt = self.bn_ch * self.bn_ch * 9 + self.bn_ch * 4
+        cv2_wt_size = self.cv2_oc * self.cv2_ic + self.cv2_oc * 4
+
+        total_wt = cv1_total_wt + 2 * bn_k3_wt + cv2_wt_size
+
+        total_output = self.cv2_oc * self.height * self.width
+        total_concat = self.cv2_ic * self.height * self.width
+        output_buf_size = total_output + total_concat
+
+        self.add_buffer("input", total_input, dtype=np.int8)
+        self.add_buffer("weights", total_wt, dtype=np.int8)
+        self.add_buffer("output", output_buf_size, dtype=np.int8)
+
+        self.add_kernel(
+            "c2f_l12",
+            self.xclbin_artifact,
+            self.xclbin_artifact.kernel_name,
+            self.insts_artifact,
+        )
+        self.add_to_runlist("c2f_l12", "input", "weights", "output")
+
+
+@pytest.mark.parametrize(
+    "l12_h,l12_w",
+    [
+        pytest.param(16, 16, id="c2f_l12_16x16"),
+        pytest.param(40, 40, id="c2f_l12_40x40"),
+    ],
+)
+def test_dataflow_c2f_l12(l12_h, l12_w):
+    """Test neck C2f L12 dataflow: 384->128, n=1 bottleneck, fused SiLU.
+
+    cv1(384->128, k1 fused) -> split -> bn0.cv1(64->64, k3 fused)
+    -> bn0.cv2(64->64, k3 fused) -> concat[half1|half2|bn0_out] = 192ch
+    -> cv2(192->128, k1 fused).
+    """
+    torch.manual_seed(42)
+    scale = 10
+    shift2 = 7
+
+    in_channels = 384
+    cv1_oc = 128
+    bn_ch = 64
+    cv2_ic = 192
+    cv2_oc = 128
+
+    # Generate weights + biases
+    w_cv1 = torch.randint(-50, 51, (cv1_oc, in_channels, 1, 1), dtype=torch.int8)
+    b_cv1 = torch.randint(-500, 501, (cv1_oc,), dtype=torch.int32)
+    w_bn0cv1 = torch.randint(-50, 51, (bn_ch, bn_ch, 3, 3), dtype=torch.int8)
+    b_bn0cv1 = torch.randint(-500, 501, (bn_ch,), dtype=torch.int32)
+    w_bn0cv2 = torch.randint(-50, 51, (bn_ch, bn_ch, 3, 3), dtype=torch.int8)
+    b_bn0cv2 = torch.randint(-500, 501, (bn_ch,), dtype=torch.int32)
+    w_cv2 = torch.randint(-50, 51, (cv2_oc, cv2_ic, 1, 1), dtype=torch.int8)
+    b_cv2 = torch.randint(-500, 501, (cv2_oc,), dtype=torch.int32)
+
+    # Generate input
+    x_int8 = torch.randint(-20, 21, (1, in_channels, l12_h, l12_w), dtype=torch.int8)
+
+    # === CPU reference ===
+    ref_cv1 = conv2d_int8_pade_silu_reference(
+        x_int8, w_cv1, b_cv1, scale, shift2, stride=1, padding=0
+    )
+    half1 = ref_cv1[:, :bn_ch, :, :]
+    half2 = ref_cv1[:, bn_ch:, :, :]
+    ref_bn0_inter = conv2d_int8_pade_silu_reference(
+        half2, w_bn0cv1, b_bn0cv1, scale, shift2, stride=1, padding=1
+    )
+    ref_bn0_out = conv2d_int8_pade_silu_reference(
+        ref_bn0_inter, w_bn0cv2, b_bn0cv2, scale, shift2, stride=1, padding=1
+    )
+    concat = torch.cat([half1, half2, ref_bn0_out], dim=1)
+    ref_output = conv2d_int8_pade_silu_reference(
+        concat, w_cv2, b_cv2, scale, shift2, stride=1, padding=0
+    )
+
+    # === Pack weights for NPU design ===
+    # cv1: 2 OC chunks of 64, each with bias
+    cv1_oc_chunk = 64
+    cv1_chunks = []
+    for g in range(2):
+        w_slice = w_cv1[g * cv1_oc_chunk : (g + 1) * cv1_oc_chunk]
+        b_slice = b_cv1[g * cv1_oc_chunk : (g + 1) * cv1_oc_chunk]
+        w_tiled = weights_to_tiled_int8(w_slice)
+        b_bytes = b_slice.numpy().astype(np.int32).view(np.int8)
+        cv1_chunks.append(np.concatenate([w_tiled, b_bytes]))
+    packed_cv1 = np.concatenate(cv1_chunks)
+
+    # bn0.cv1 and bn0.cv2: k3 weights with bias
+    packed_bn0cv1 = pack_fused_weights_k3(w_bn0cv1, b_bn0cv1)
+    packed_bn0cv2 = pack_fused_weights_k3(w_bn0cv2, b_bn0cv2)
+
+    # cv2: k1 weights with bias
+    packed_cv2 = _pack_k1_silu_weights(w_cv2, b_cv2)
+
+    # Full weight buffer
+    packed_weights = np.concatenate(
+        [packed_cv1, packed_bn0cv1, packed_bn0cv2, packed_cv2]
+    )
+
+    # === Build NPU design ===
+    ctx = AIEContext()
+    op = AIEDataflowC2fL12(
+        height=l12_h,
+        width=l12_w,
+        cv1_shift1=scale,
+        cv1_shift2=shift2,
+        bn0_cv1_shift1=scale,
+        bn0_cv1_shift2=shift2,
+        bn0_cv2_shift1=scale,
+        bn0_cv2_shift2=shift2,
+        cv2_shift1=scale,
+        cv2_shift2=shift2,
+        context=ctx,
+    )
+
+    ctx.compile_all()
+    ctx.prepare_runtime()
+
+    total_output = cv2_oc * l12_h * l12_w
+    output_buf_size = op.buffers["output"]
+
+    op.write_buffer("input", nchw_to_tiled_int8(x_int8))
+    op.write_buffer("weights", packed_weights)
+    op.write_buffer("output", np.zeros(output_buf_size, dtype=np.int8))
+
+    t0 = time.perf_counter()
+    op.run_runlist()
+    run_ms = (time.perf_counter() - t0) * 1000
+    print(f"\n  C2f L12 dataflow ({l12_h}x{l12_w}): {run_ms:.1f}ms")
+
+    # Read only the final output (first total_output bytes)
+    out_flat = op.read_buffer("output", (output_buf_size,), dtype=np.int8)
+    out_flat = out_flat[:total_output]
+    npu_output = tiled_to_nchw_int8(out_flat, cv2_oc, l12_h, l12_w)
+
+    # === Compare ===
+    ref_np = ref_output.numpy().astype(np.int8)
+    npu_np = npu_output.numpy().astype(np.int8)
+    diff = np.abs(ref_np.astype(np.int32) - npu_np.astype(np.int32))
+    max_diff = int(diff.max())
+    total = diff.size
+    errors_gt1 = int(np.sum(diff > 1))
+    errors_gt5 = int(np.sum(diff > 5))
+    print(f"  max_diff={max_diff}, errors>1={errors_gt1}/{total}, "
+          f"errors>5={errors_gt5}/{total}")
+
+    assert max_diff <= 10, (
+        f"C2f L12 dataflow failed: max_diff={max_diff} exceeds threshold 10"
+    )
+    error_rate = errors_gt5 / total if total > 0 else 0
+    assert error_rate < 0.10, (
+        f"C2f L12 dataflow: {100 * error_rate:.2f}% errors > 5 "
+        f"exceeds 10% threshold"
+    )
