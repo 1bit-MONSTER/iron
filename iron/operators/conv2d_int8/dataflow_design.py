@@ -1620,22 +1620,22 @@ def my_dataflow_l12_l15(
             oi.release(1)
 
     # Workers (9, 4 columns)
-    Worker(_k1oc(l12_ic,l12_cv1_chunk,l12_cv1_n,l12_cv1_s1,l12_cv1_s2,l12_h,l12_w),
+    w0=Worker(_k1oc(l12_ic,l12_cv1_chunk,l12_cv1_n,l12_cv1_s1,l12_cv1_s2,l12_h,l12_w),
            [f12i.cons(),f12cw.cons(),f12co.prod(),k12c1], placement=Tile(0,2))
-    Worker(_k3(l12_bn_ch,l12_bn_ch,l12_bn_cv1_s1,l12_bn_cv1_s2,l12_h,l12_w),
+    w1=Worker(_k3(l12_bn_ch,l12_bn_ch,l12_bn_cv1_s1,l12_bn_cv1_s2,l12_h,l12_w),
            [f12bi.cons(l12_bd),f12bw1.cons(),f12bm.prod(),k12bn], placement=Tile(0,3))
-    Worker(_k3(l12_bn_ch,l12_bn_ch,l12_bn_cv2_s1,l12_bn_cv2_s2,l12_h,l12_w),
+    w2=Worker(_k3(l12_bn_ch,l12_bn_ch,l12_bn_cv2_s1,l12_bn_cv2_s2,l12_h,l12_w),
            [f12bm.cons(l12_bd),f12bw2.cons(),f12bo.prod(),k12bn], placement=Tile(1,2))
-    Worker(_k1(l12_cv2_ic,l12_cv2_oc,l12_cv2_s1,l12_cv2_s2,l12_h,l12_w),
+    w3=Worker(_k1(l12_cv2_ic,l12_cv2_oc,l12_cv2_s1,l12_cv2_s2,l12_h,l12_w),
            [f12vi.cons(),f12vw.cons(),f12vo.prod(),k12c2], placement=Tile(1,3))
-    Worker(_ups, [fui.cons(),fuo.prod(),kups], placement=Tile(1,4))
-    Worker(_k1(l15_ic,l15_cv1_oc,l15_cv1_s1,l15_cv1_s2,l15_h,l15_w),
+    w4=Worker(_ups, [fui.cons(),fuo.prod(),kups], placement=Tile(1,4))
+    w5=Worker(_k1(l15_ic,l15_cv1_oc,l15_cv1_s1,l15_cv1_s2,l15_h,l15_w),
            [f15i.cons(),f15cw.cons(),f15co.prod(),k15c1], placement=Tile(2,2))
-    Worker(_k3(l15_bn_ch,l15_bn_ch,l15_bn_cv1_s1,l15_bn_cv1_s2,l15_h,l15_w),
+    w6=Worker(_k3(l15_bn_ch,l15_bn_ch,l15_bn_cv1_s1,l15_bn_cv1_s2,l15_h,l15_w),
            [f15bi.cons(l15_bd),f15bw1.cons(),f15bm.prod(),k15bn], placement=Tile(2,3))
-    Worker(_k3(l15_bn_ch,l15_bn_ch,l15_bn_cv2_s1,l15_bn_cv2_s2,l15_h,l15_w),
+    w7=Worker(_k3(l15_bn_ch,l15_bn_ch,l15_bn_cv2_s1,l15_bn_cv2_s2,l15_h,l15_w),
            [f15bm.cons(l15_bd),f15bw2.cons(),f15bo.prod(),k15bn], placement=Tile(3,2))
-    Worker(_k1(l15_cv2_ic,l15_cv2_oc,l15_cv2_s1,l15_cv2_s2,l15_h,l15_w),
+    w8=Worker(_k1(l15_cv2_ic,l15_cv2_oc,l15_cv2_s1,l15_cv2_s2,l15_h,l15_w),
            [f15vi.cons(),f15vw.cons(),f15vo.prod(),k15c2], placement=Tile(3,3))
 
     # TAP helpers
@@ -1663,6 +1663,7 @@ def my_dataflow_l12_l15(
     wo = 0
     rt = Runtime()
     with rt.sequence(t(total_input), t(wT), t(oT)) as (I, W, O):
+        rt.start(w0, w1, w2, w3, w4, w5, w6, w7, w8)
         # TG1: L12 cv1
         tg=rt.task_group()
         rt.fill(f12i.prod(),I,_of(total_input,0,l12_cv1_n,total_input),task_group=tg)
