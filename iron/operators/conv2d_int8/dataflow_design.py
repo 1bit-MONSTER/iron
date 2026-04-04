@@ -13234,8 +13234,12 @@ def my_dataflow_detect_scale(
 ):
     """Detection head: one PDI per scale (reg + cls branches).
 
-    6 workers (2 columns), 6 task groups, 6 kernel symbols.
+    6 workers (2 columns), 4-6 task groups, 6 kernel symbols.
     Each branch: cv1(k3+SiLU) -> cv2(k3+SiLU) -> cv3(k1+bias, no activation).
+
+    When cv2 has n_oc==1 (weights fit in L1), cv2→cv3 chains core-to-core
+    via an ObjectFIFO, eliminating the DDR round-trip. This merges TG2+TG3
+    (reg) or TG5+TG6 (cls) into a single task group.
 
     Col 0: reg_cv1(0,2), reg_cv2(0,3), reg_cv3(0,4)
     Col 1: cls_cv1(1,2), cls_cv2(1,3), cls_cv3(1,4)
@@ -13340,6 +13344,10 @@ def my_dataflow_detect_scale(
     wt_off_ccv3 = wt_off_ccv2 + ccv2_total_wt
     total_wt = wt_off_ccv3 + ccv3_total_wt
 
+    # --- Core-to-core chaining: skip DDR for cv2→cv3 when n_oc==1 ---
+    reg_chain = rcv2_n_oc == 1  # True at P4/P5 (w≤56), False at P3 (w≥64)
+    cls_chain = ccv2_n_oc == 1  # Always False (80ch k3 weights exceed L1)
+
     # --- L1 budget checks ---
     def _check_k3_l1(name, ic, oc_chunk, depth, w):
         in_row = ic * w
@@ -13439,9 +13447,13 @@ def my_dataflow_detect_scale(
 
     rcv2_in_fifo = ObjectFifo(rcv2_in_ty, name="det_rcv2_in", depth=rcv2_depth)
     rcv2_wt_fifo = ObjectFifo(rcv2_wt_ty, name="det_rcv2_wt", depth=1)
-    rcv2_out_fifo = ObjectFifo(rcv2_out_ty, name="det_rcv2_out", depth=2)
+    if reg_chain:
+        # Core-to-core FIFO: cv2 output feeds cv3 input directly (no DDR)
+        rcv2_cv3_fifo = ObjectFifo(rcv3_in_ty, name="det_r_c2c3", depth=2)
+    else:
+        rcv2_out_fifo = ObjectFifo(rcv2_out_ty, name="det_rcv2_out", depth=2)
+        rcv3_in_fifo = ObjectFifo(rcv3_in_ty, name="det_rcv3_in", depth=2)
 
-    rcv3_in_fifo = ObjectFifo(rcv3_in_ty, name="det_rcv3_in", depth=2)
     rcv3_wt_fifo = ObjectFifo(rcv3_wt_ty, name="det_rcv3_wt", depth=1)
     rcv3_out_fifo = ObjectFifo(rcv3_out_ty, name="det_rcv3_out", depth=2)
 
@@ -13452,9 +13464,13 @@ def my_dataflow_detect_scale(
 
     ccv2_in_fifo = ObjectFifo(ccv2_in_ty, name="det_ccv2_in", depth=ccv2_depth)
     ccv2_wt_fifo = ObjectFifo(ccv2_wt_ty, name="det_ccv2_wt", depth=1)
-    ccv2_out_fifo = ObjectFifo(ccv2_out_ty, name="det_ccv2_out", depth=2)
+    if cls_chain:
+        # Core-to-core FIFO: cv2 output feeds cv3 input directly (no DDR)
+        ccv2_cv3_fifo = ObjectFifo(ccv3_in_ty, name="det_c_c2c3", depth=2)
+    else:
+        ccv2_out_fifo = ObjectFifo(ccv2_out_ty, name="det_ccv2_out", depth=2)
+        ccv3_in_fifo = ObjectFifo(ccv3_in_ty, name="det_ccv3_in", depth=2)
 
-    ccv3_in_fifo = ObjectFifo(ccv3_in_ty, name="det_ccv3_in", depth=2)
     ccv3_wt_fifo = ObjectFifo(ccv3_wt_ty, name="det_ccv3_wt", depth=1)
     ccv3_out_fifo = ObjectFifo(ccv3_out_ty, name="det_ccv3_out", depth=2)
 
@@ -13520,20 +13536,36 @@ def my_dataflow_detect_scale(
          rcv1_out_fifo.prod(), k3_rcv1_kernel],
         placement=Tile(0, 2),
     )
-    worker_rcv2 = Worker(
-        _make_k3_oc_fn(reg_mid, rcv2_oc_chunk, rcv2_n_oc,
-                        reg_cv2_s1, reg_cv2_s2),
-        [rcv2_in_fifo.cons(rcv2_depth), rcv2_wt_fifo.cons(),
-         rcv2_out_fifo.prod(), k3_rcv2_kernel],
-        placement=Tile(0, 3),
-    )
-    worker_rcv3 = Worker(
-        _make_k1_oc_fn(reg_mid, rcv3_oc_chunk, rcv3_n_oc,
-                        reg_cv3_s1, reg_cv3_s2),
-        [rcv3_in_fifo.cons(), rcv3_wt_fifo.cons(),
-         rcv3_out_fifo.prod(), k1_rcv3_kernel],
-        placement=Tile(0, 4),
-    )
+    if reg_chain:
+        worker_rcv2 = Worker(
+            _make_k3_oc_fn(reg_mid, rcv2_oc_chunk, rcv2_n_oc,
+                            reg_cv2_s1, reg_cv2_s2),
+            [rcv2_in_fifo.cons(rcv2_depth), rcv2_wt_fifo.cons(),
+             rcv2_cv3_fifo.prod(), k3_rcv2_kernel],
+            placement=Tile(0, 3),
+        )
+        worker_rcv3 = Worker(
+            _make_k1_oc_fn(reg_mid, rcv3_oc_chunk, rcv3_n_oc,
+                            reg_cv3_s1, reg_cv3_s2),
+            [rcv2_cv3_fifo.cons(), rcv3_wt_fifo.cons(),
+             rcv3_out_fifo.prod(), k1_rcv3_kernel],
+            placement=Tile(0, 4),
+        )
+    else:
+        worker_rcv2 = Worker(
+            _make_k3_oc_fn(reg_mid, rcv2_oc_chunk, rcv2_n_oc,
+                            reg_cv2_s1, reg_cv2_s2),
+            [rcv2_in_fifo.cons(rcv2_depth), rcv2_wt_fifo.cons(),
+             rcv2_out_fifo.prod(), k3_rcv2_kernel],
+            placement=Tile(0, 3),
+        )
+        worker_rcv3 = Worker(
+            _make_k1_oc_fn(reg_mid, rcv3_oc_chunk, rcv3_n_oc,
+                            reg_cv3_s1, reg_cv3_s2),
+            [rcv3_in_fifo.cons(), rcv3_wt_fifo.cons(),
+             rcv3_out_fifo.prod(), k1_rcv3_kernel],
+            placement=Tile(0, 4),
+        )
 
     worker_ccv1 = Worker(
         _make_k3_oc_fn(in_channels, ccv1_oc_chunk, ccv1_n_oc,
@@ -13542,20 +13574,36 @@ def my_dataflow_detect_scale(
          ccv1_out_fifo.prod(), k3_ccv1_kernel],
         placement=Tile(1, 2),
     )
-    worker_ccv2 = Worker(
-        _make_k3_oc_fn(cls_mid, ccv2_oc_chunk, ccv2_n_oc,
-                        cls_cv2_s1, cls_cv2_s2),
-        [ccv2_in_fifo.cons(ccv2_depth), ccv2_wt_fifo.cons(),
-         ccv2_out_fifo.prod(), k3_ccv2_kernel],
-        placement=Tile(1, 3),
-    )
-    worker_ccv3 = Worker(
-        _make_k1_oc_fn(cls_mid, ccv3_oc_chunk, ccv3_n_oc,
-                        cls_cv3_s1, cls_cv3_s2),
-        [ccv3_in_fifo.cons(), ccv3_wt_fifo.cons(),
-         ccv3_out_fifo.prod(), k1_ccv3_kernel],
-        placement=Tile(1, 4),
-    )
+    if cls_chain:
+        worker_ccv2 = Worker(
+            _make_k3_oc_fn(cls_mid, ccv2_oc_chunk, ccv2_n_oc,
+                            cls_cv2_s1, cls_cv2_s2),
+            [ccv2_in_fifo.cons(ccv2_depth), ccv2_wt_fifo.cons(),
+             ccv2_cv3_fifo.prod(), k3_ccv2_kernel],
+            placement=Tile(1, 3),
+        )
+        worker_ccv3 = Worker(
+            _make_k1_oc_fn(cls_mid, ccv3_oc_chunk, ccv3_n_oc,
+                            cls_cv3_s1, cls_cv3_s2),
+            [ccv2_cv3_fifo.cons(), ccv3_wt_fifo.cons(),
+             ccv3_out_fifo.prod(), k1_ccv3_kernel],
+            placement=Tile(1, 4),
+        )
+    else:
+        worker_ccv2 = Worker(
+            _make_k3_oc_fn(cls_mid, ccv2_oc_chunk, ccv2_n_oc,
+                            cls_cv2_s1, cls_cv2_s2),
+            [ccv2_in_fifo.cons(ccv2_depth), ccv2_wt_fifo.cons(),
+             ccv2_out_fifo.prod(), k3_ccv2_kernel],
+            placement=Tile(1, 3),
+        )
+        worker_ccv3 = Worker(
+            _make_k1_oc_fn(cls_mid, ccv3_oc_chunk, ccv3_n_oc,
+                            cls_cv3_s1, cls_cv3_s2),
+            [ccv3_in_fifo.cons(), ccv3_wt_fifo.cons(),
+             ccv3_out_fifo.prod(), k1_ccv3_kernel],
+            placement=Tile(1, 4),
+        )
 
     # --- Helper: factorize and create strided TAP ---
     def _oc_drain_tap(buf_size, offset, n_oc, oc_chunk_w, row_total, h):
@@ -13619,37 +13667,58 @@ def my_dataflow_detect_scale(
                  wait=True, task_group=tg1)
         rt.finish_task_group(tg1)
 
-        # ===== TG2: reg.cv2 OC streaming -> reg_scratch_B =====
-        tg2 = rt.task_group()
-        rt.fill(rcv2_in_fifo.prod(), O,
-                _oc_fill_tap(output_buf_size, reg_sa_offset,
-                             rcv2_n_oc, reg_scratch_a),
-                task_group=tg2)
-        rt.fill(rcv2_wt_fifo.prod(), W,
-                _contiguous_tap(total_wt, wt_off_rcv2, rcv2_total_wt),
-                task_group=tg2)
-        rt.drain(rcv2_out_fifo.cons(), O,
-                 _oc_drain_tap(output_buf_size, reg_sb_offset,
-                               rcv2_n_oc, rcv2_oc_chunk * width,
-                               reg_mid * width, height),
-                 wait=True, task_group=tg2)
-        rt.finish_task_group(tg2)
+        if reg_chain:
+            # ===== TG2: reg.cv2→cv3 core-to-core (no DDR intermediate) =====
+            tg2 = rt.task_group()
+            rt.fill(rcv2_in_fifo.prod(), O,
+                    _oc_fill_tap(output_buf_size, reg_sa_offset,
+                                 rcv2_n_oc, reg_scratch_a),
+                    task_group=tg2)
+            rt.fill(rcv2_wt_fifo.prod(), W,
+                    _contiguous_tap(total_wt, wt_off_rcv2, rcv2_total_wt),
+                    task_group=tg2)
+            rt.fill(rcv3_wt_fifo.prod(), W,
+                    _contiguous_tap(total_wt, wt_off_rcv3, rcv3_total_wt),
+                    task_group=tg2)
+            # cv2→cv3 flows core-to-core via rcv2_cv3_fifo — no fill/drain
+            rt.drain(rcv3_out_fifo.cons(), O,
+                     _oc_drain_tap(output_buf_size, reg_out_offset,
+                                   rcv3_n_oc, rcv3_oc_chunk * width,
+                                   reg_out * width, height),
+                     wait=True, task_group=tg2)
+            rt.finish_task_group(tg2)
+        else:
+            # ===== TG2: reg.cv2 OC streaming -> reg_scratch_B =====
+            tg2 = rt.task_group()
+            rt.fill(rcv2_in_fifo.prod(), O,
+                    _oc_fill_tap(output_buf_size, reg_sa_offset,
+                                 rcv2_n_oc, reg_scratch_a),
+                    task_group=tg2)
+            rt.fill(rcv2_wt_fifo.prod(), W,
+                    _contiguous_tap(total_wt, wt_off_rcv2, rcv2_total_wt),
+                    task_group=tg2)
+            rt.drain(rcv2_out_fifo.cons(), O,
+                     _oc_drain_tap(output_buf_size, reg_sb_offset,
+                                   rcv2_n_oc, rcv2_oc_chunk * width,
+                                   reg_mid * width, height),
+                     wait=True, task_group=tg2)
+            rt.finish_task_group(tg2)
 
-        # ===== TG3: reg.cv3 k1+bias -> reg_output =====
-        tg3 = rt.task_group()
-        rt.fill(rcv3_in_fifo.prod(), O,
-                _oc_fill_tap(output_buf_size, reg_sb_offset,
-                             rcv3_n_oc, reg_scratch_b),
-                task_group=tg3)
-        rt.fill(rcv3_wt_fifo.prod(), W,
-                _contiguous_tap(total_wt, wt_off_rcv3, rcv3_total_wt),
-                task_group=tg3)
-        rt.drain(rcv3_out_fifo.cons(), O,
-                 _oc_drain_tap(output_buf_size, reg_out_offset,
-                               rcv3_n_oc, rcv3_oc_chunk * width,
-                               reg_out * width, height),
-                 wait=True, task_group=tg3)
-        rt.finish_task_group(tg3)
+            # ===== TG3: reg.cv3 k1+bias -> reg_output =====
+            tg3 = rt.task_group()
+            rt.fill(rcv3_in_fifo.prod(), O,
+                    _oc_fill_tap(output_buf_size, reg_sb_offset,
+                                 rcv3_n_oc, reg_scratch_b),
+                    task_group=tg3)
+            rt.fill(rcv3_wt_fifo.prod(), W,
+                    _contiguous_tap(total_wt, wt_off_rcv3, rcv3_total_wt),
+                    task_group=tg3)
+            rt.drain(rcv3_out_fifo.cons(), O,
+                     _oc_drain_tap(output_buf_size, reg_out_offset,
+                                   rcv3_n_oc, rcv3_oc_chunk * width,
+                                   reg_out * width, height),
+                     wait=True, task_group=tg3)
+            rt.finish_task_group(tg3)
 
         # ===== TG4: cls.cv1 OC streaming -> cls_scratch_A =====
         tg4 = rt.task_group()
@@ -13666,36 +13735,57 @@ def my_dataflow_detect_scale(
                  wait=True, task_group=tg4)
         rt.finish_task_group(tg4)
 
-        # ===== TG5: cls.cv2 OC streaming -> cls_scratch_B =====
-        tg5 = rt.task_group()
-        rt.fill(ccv2_in_fifo.prod(), O,
-                _oc_fill_tap(output_buf_size, cls_sa_offset,
-                             ccv2_n_oc, cls_scratch_a),
-                task_group=tg5)
-        rt.fill(ccv2_wt_fifo.prod(), W,
-                _contiguous_tap(total_wt, wt_off_ccv2, ccv2_total_wt),
-                task_group=tg5)
-        rt.drain(ccv2_out_fifo.cons(), O,
-                 _oc_drain_tap(output_buf_size, cls_sb_offset,
-                               ccv2_n_oc, ccv2_oc_chunk * width,
-                               cls_mid * width, height),
-                 wait=True, task_group=tg5)
-        rt.finish_task_group(tg5)
+        if cls_chain:
+            # ===== TG5: cls.cv2→cv3 core-to-core (no DDR intermediate) =====
+            tg5 = rt.task_group()
+            rt.fill(ccv2_in_fifo.prod(), O,
+                    _oc_fill_tap(output_buf_size, cls_sa_offset,
+                                 ccv2_n_oc, cls_scratch_a),
+                    task_group=tg5)
+            rt.fill(ccv2_wt_fifo.prod(), W,
+                    _contiguous_tap(total_wt, wt_off_ccv2, ccv2_total_wt),
+                    task_group=tg5)
+            rt.fill(ccv3_wt_fifo.prod(), W,
+                    _contiguous_tap(total_wt, wt_off_ccv3, ccv3_total_wt),
+                    task_group=tg5)
+            # cv2→cv3 flows core-to-core via ccv2_cv3_fifo — no fill/drain
+            rt.drain(ccv3_out_fifo.cons(), O,
+                     _oc_drain_tap(output_buf_size, cls_out_offset,
+                                   ccv3_n_oc, ccv3_oc_chunk * width,
+                                   cls_out * width, height),
+                     wait=True, task_group=tg5)
+            rt.finish_task_group(tg5)
+        else:
+            # ===== TG5: cls.cv2 OC streaming -> cls_scratch_B =====
+            tg5 = rt.task_group()
+            rt.fill(ccv2_in_fifo.prod(), O,
+                    _oc_fill_tap(output_buf_size, cls_sa_offset,
+                                 ccv2_n_oc, cls_scratch_a),
+                    task_group=tg5)
+            rt.fill(ccv2_wt_fifo.prod(), W,
+                    _contiguous_tap(total_wt, wt_off_ccv2, ccv2_total_wt),
+                    task_group=tg5)
+            rt.drain(ccv2_out_fifo.cons(), O,
+                     _oc_drain_tap(output_buf_size, cls_sb_offset,
+                                   ccv2_n_oc, ccv2_oc_chunk * width,
+                                   cls_mid * width, height),
+                     wait=True, task_group=tg5)
+            rt.finish_task_group(tg5)
 
-        # ===== TG6: cls.cv3 k1+bias -> cls_output =====
-        tg6 = rt.task_group()
-        rt.fill(ccv3_in_fifo.prod(), O,
-                _oc_fill_tap(output_buf_size, cls_sb_offset,
-                             ccv3_n_oc, cls_scratch_b),
-                task_group=tg6)
-        rt.fill(ccv3_wt_fifo.prod(), W,
-                _contiguous_tap(total_wt, wt_off_ccv3, ccv3_total_wt),
-                task_group=tg6)
-        rt.drain(ccv3_out_fifo.cons(), O,
-                 _oc_drain_tap(output_buf_size, cls_out_offset,
-                               ccv3_n_oc, ccv3_oc_chunk * width,
-                               cls_out * width, height),
-                 wait=True, task_group=tg6)
-        rt.finish_task_group(tg6)
+            # ===== TG6: cls.cv3 k1+bias -> cls_output =====
+            tg6 = rt.task_group()
+            rt.fill(ccv3_in_fifo.prod(), O,
+                    _oc_fill_tap(output_buf_size, cls_sb_offset,
+                                 ccv3_n_oc, cls_scratch_b),
+                    task_group=tg6)
+            rt.fill(ccv3_wt_fifo.prod(), W,
+                    _contiguous_tap(total_wt, wt_off_ccv3, ccv3_total_wt),
+                    task_group=tg6)
+            rt.drain(ccv3_out_fifo.cons(), O,
+                     _oc_drain_tap(output_buf_size, cls_out_offset,
+                                   ccv3_n_oc, ccv3_oc_chunk * width,
+                                   cls_out * width, height),
+                     wait=True, task_group=tg6)
+            rt.finish_task_group(tg6)
 
     return Program(dev_ty, rt).resolve_program(SequentialPlacer())
