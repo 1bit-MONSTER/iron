@@ -8884,10 +8884,25 @@ class AIEDataflowC2fNeck(AIEOperatorBase):
     Supports L12 (384->128), L15 (192->64), L18 (192->128).
     """
 
-    def __init__(self, height, width, in_channels, cv1_oc, bn_ch, cv2_oc,
-                 cv1_shift1, cv1_shift2, bn0_cv1_shift1, bn0_cv1_shift2,
-                 bn0_cv2_shift1, bn0_cv2_shift2, cv2_shift1, cv2_shift2,
-                 tag="neck", context=None):
+    def __init__(
+        self,
+        height,
+        width,
+        in_channels,
+        cv1_oc,
+        bn_ch,
+        cv2_oc,
+        cv1_shift1,
+        cv1_shift2,
+        bn0_cv1_shift1,
+        bn0_cv1_shift2,
+        bn0_cv2_shift1,
+        bn0_cv2_shift2,
+        cv2_shift1,
+        cv2_shift2,
+        tag="neck",
+        context=None,
+    ):
         self.height = height
         self.width = width
         self.in_channels = in_channels
@@ -8920,33 +8935,56 @@ class AIEDataflowC2fNeck(AIEOperatorBase):
             callback_fn="my_dataflow_c2f_neck",
             callback_args=[
                 self.context.device_manager.device_type,
-                self.height, self.width,
-                self.in_channels, self.cv1_oc, self.bn_ch, self.cv2_oc,
-                self.cv1_shift1, self.cv1_shift2,
-                self.bn0_cv1_shift1, self.bn0_cv1_shift2,
-                self.bn0_cv2_shift1, self.bn0_cv2_shift2,
-                self.cv2_shift1, self.cv2_shift2,
+                self.height,
+                self.width,
+                self.in_channels,
+                self.cv1_oc,
+                self.bn_ch,
+                self.cv2_oc,
+                self.cv1_shift1,
+                self.cv1_shift2,
+                self.bn0_cv1_shift1,
+                self.bn0_cv1_shift2,
+                self.bn0_cv2_shift1,
+                self.bn0_cv2_shift2,
+                self.cv2_shift1,
+                self.cv2_shift2,
             ],
         )
         k1_silu_obj = KernelObjectArtifact.new(
             "conv2dk1_i8_silu.o",
-            depends=[SourceArtifact.new(
-                self.context.base_dir / "aie_kernels" / "aie2p" / "conv2dk1_i8_silu.cc"
-            )],
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk1_i8_silu.cc"
+                )
+            ],
             extra_flags=["-DINT8_ACT"],
         )
         k1_silu_cv2_obj = KernelObjectArtifact.new(
             "conv2dk1_i8_silu_cv2.o",
-            depends=[SourceArtifact.new(
-                self.context.base_dir / "aie_kernels" / "aie2p" / "conv2dk1_i8_silu.cc"
-            )],
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk1_i8_silu.cc"
+                )
+            ],
             extra_flags=["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"],
         )
         k3_silu_obj = KernelObjectArtifact.new(
             "conv2dk3_i8_silu.o",
-            depends=[SourceArtifact.new(
-                self.context.base_dir / "aie_kernels" / "aie2p" / "conv2dk3_i8_silu.cc"
-            )],
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk3_i8_silu.cc"
+                )
+            ],
             extra_flags=["-DINT8_ACT"],
         )
         xclbin_artifact = XclbinArtifact.new(
@@ -9070,13 +9108,22 @@ def _run_c2f_neck_test(tag, h, w, in_channels, cv1_oc, bn_ch, cv2_oc):
     # Build NPU design
     ctx = AIEContext()
     op = AIEDataflowC2fNeck(
-        height=h, width=w,
-        in_channels=in_channels, cv1_oc=cv1_oc, bn_ch=bn_ch, cv2_oc=cv2_oc,
-        cv1_shift1=scale, cv1_shift2=shift2,
-        bn0_cv1_shift1=scale, bn0_cv1_shift2=shift2,
-        bn0_cv2_shift1=scale, bn0_cv2_shift2=shift2,
-        cv2_shift1=scale, cv2_shift2=shift2,
-        tag=tag, context=ctx,
+        height=h,
+        width=w,
+        in_channels=in_channels,
+        cv1_oc=cv1_oc,
+        bn_ch=bn_ch,
+        cv2_oc=cv2_oc,
+        cv1_shift1=scale,
+        cv1_shift2=shift2,
+        bn0_cv1_shift1=scale,
+        bn0_cv1_shift2=shift2,
+        bn0_cv2_shift1=scale,
+        bn0_cv2_shift2=shift2,
+        cv2_shift1=scale,
+        cv2_shift2=shift2,
+        tag=tag,
+        context=ctx,
     )
     ctx.compile_all()
     ctx.prepare_runtime()
@@ -9103,12 +9150,14 @@ def _run_c2f_neck_test(tag, h, w, in_channels, cv1_oc, bn_ch, cv2_oc):
     total = diff.size
     errors_gt1 = int(np.sum(diff > 1))
     errors_gt5 = int(np.sum(diff > 5))
-    print(f"  max_diff={max_diff}, errors>1={errors_gt1}/{total}, "
-          f"errors>5={errors_gt5}/{total}")
-
-    assert max_diff <= 10, (
-        f"C2f {tag} dataflow failed: max_diff={max_diff} exceeds threshold 10"
+    print(
+        f"  max_diff={max_diff}, errors>1={errors_gt1}/{total}, "
+        f"errors>5={errors_gt5}/{total}"
     )
+
+    assert (
+        max_diff <= 10
+    ), f"C2f {tag} dataflow failed: max_diff={max_diff} exceeds threshold 10"
     error_rate = errors_gt5 / total if total > 0 else 0
     assert error_rate < 0.10, (
         f"C2f {tag} dataflow: {100 * error_rate:.2f}% errors > 5 "
@@ -9160,8 +9209,20 @@ def test_dataflow_c2f_l15(l15_h, l15_w):
 class AIEDataflowC2fL21(AIEOperatorBase):
     """C2f L21: 384->256, bn_ch=128, 20x20. All layers OC-streaming."""
 
-    def __init__(self, height, width, cv1_s1, cv1_s2, bn_cv1_s1, bn_cv1_s2,
-                 bn_cv2_s1, bn_cv2_s2, cv2_s1, cv2_s2, context=None):
+    def __init__(
+        self,
+        height,
+        width,
+        cv1_s1,
+        cv1_s2,
+        bn_cv1_s1,
+        bn_cv1_s2,
+        bn_cv2_s1,
+        bn_cv2_s2,
+        cv2_s1,
+        cv2_s2,
+        context=None,
+    ):
         self.height = height
         self.width = width
         self.cv1_s1 = cv1_s1
@@ -9189,32 +9250,52 @@ class AIEDataflowC2fL21(AIEOperatorBase):
             callback_fn="my_dataflow_c2f_l21",
             callback_args=[
                 self.context.device_manager.device_type,
-                self.height, self.width,
-                self.cv1_s1, self.cv1_s2,
-                self.bn_cv1_s1, self.bn_cv1_s2,
-                self.bn_cv2_s1, self.bn_cv2_s2,
-                self.cv2_s1, self.cv2_s2,
+                self.height,
+                self.width,
+                self.cv1_s1,
+                self.cv1_s2,
+                self.bn_cv1_s1,
+                self.bn_cv1_s2,
+                self.bn_cv2_s1,
+                self.bn_cv2_s2,
+                self.cv2_s1,
+                self.cv2_s2,
             ],
         )
         k1_silu_obj = KernelObjectArtifact.new(
             "conv2dk1_i8_silu.o",
-            depends=[SourceArtifact.new(
-                self.context.base_dir / "aie_kernels" / "aie2p" / "conv2dk1_i8_silu.cc"
-            )],
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk1_i8_silu.cc"
+                )
+            ],
             extra_flags=["-DINT8_ACT"],
         )
         k1_silu_cv2_obj = KernelObjectArtifact.new(
             "conv2dk1_i8_silu_cv2.o",
-            depends=[SourceArtifact.new(
-                self.context.base_dir / "aie_kernels" / "aie2p" / "conv2dk1_i8_silu.cc"
-            )],
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk1_i8_silu.cc"
+                )
+            ],
             extra_flags=["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"],
         )
         k3_silu_obj = KernelObjectArtifact.new(
             "conv2dk3_i8_silu.o",
-            depends=[SourceArtifact.new(
-                self.context.base_dir / "aie_kernels" / "aie2p" / "conv2dk3_i8_silu.cc"
-            )],
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk3_i8_silu.cc"
+                )
+            ],
             extra_flags=["-DINT8_ACT"],
         )
         xclbin_artifact = XclbinArtifact.new(
@@ -9262,8 +9343,10 @@ class AIEDataflowC2fL21(AIEOperatorBase):
         self.add_buffer("weights", total_wt, dtype=np.int8)
         self.add_buffer("output", output_buf_size, dtype=np.int8)
         self.add_kernel(
-            "c2f_l21", self.xclbin_artifact,
-            self.xclbin_artifact.kernel_name, self.insts_artifact,
+            "c2f_l21",
+            self.xclbin_artifact,
+            self.xclbin_artifact.kernel_name,
+            self.insts_artifact,
         )
         self.add_to_runlist("c2f_l21", "input", "weights", "output")
 
@@ -9326,22 +9409,31 @@ def test_dataflow_c2f_l21(l21_h, l21_w):
     for g in range(cv1_n_oc):
         w_s = w_cv1[g * cv1_oc_chunk : (g + 1) * cv1_oc_chunk]
         b_s = b_cv1[g * cv1_oc_chunk : (g + 1) * cv1_oc_chunk]
-        cv1_chunks.append(np.concatenate([
-            weights_to_tiled_int8(w_s),
-            b_s.numpy().astype(np.int32).view(np.int8),
-        ]))
+        cv1_chunks.append(
+            np.concatenate(
+                [
+                    weights_to_tiled_int8(w_s),
+                    b_s.numpy().astype(np.int32).view(np.int8),
+                ]
+            )
+        )
     packed_cv1 = np.concatenate(cv1_chunks)
 
     bn_oc_chunk, bn_n_oc, _ = _compute_oc_streaming_params(bn_ch, bn_ch, l21_w, 1)
+
     def _pack_k3_oc(w, b, oc_chunk, n_oc):
         chunks = []
         for g in range(n_oc):
             w_s = w[g * oc_chunk : (g + 1) * oc_chunk]
             b_s = b[g * oc_chunk : (g + 1) * oc_chunk]
-            chunks.append(np.concatenate([
-                weights_to_tiled_int8_k3(w_s),
-                b_s.numpy().astype(np.int32).view(np.int8),
-            ]))
+            chunks.append(
+                np.concatenate(
+                    [
+                        weights_to_tiled_int8_k3(w_s),
+                        b_s.numpy().astype(np.int32).view(np.int8),
+                    ]
+                )
+            )
         return np.concatenate(chunks)
 
     packed_bn0cv1 = _pack_k3_oc(w_bn0cv1, b_bn0cv1, bn_oc_chunk, bn_n_oc)
@@ -9353,10 +9445,14 @@ def test_dataflow_c2f_l21(l21_h, l21_w):
     for g in range(cv2_n_oc):
         w_s = w_cv2[g * cv2_oc_chunk : (g + 1) * cv2_oc_chunk]
         b_s = b_cv2[g * cv2_oc_chunk : (g + 1) * cv2_oc_chunk]
-        cv2_chunks.append(np.concatenate([
-            weights_to_tiled_int8(w_s),
-            b_s.numpy().astype(np.int32).view(np.int8),
-        ]))
+        cv2_chunks.append(
+            np.concatenate(
+                [
+                    weights_to_tiled_int8(w_s),
+                    b_s.numpy().astype(np.int32).view(np.int8),
+                ]
+            )
+        )
     packed_cv2 = np.concatenate(cv2_chunks)
 
     packed_weights = np.concatenate(
@@ -9366,11 +9462,16 @@ def test_dataflow_c2f_l21(l21_h, l21_w):
     # Build NPU design
     ctx = AIEContext()
     op = AIEDataflowC2fL21(
-        height=l21_h, width=l21_w,
-        cv1_s1=scale, cv1_s2=shift2,
-        bn_cv1_s1=scale, bn_cv1_s2=shift2,
-        bn_cv2_s1=scale, bn_cv2_s2=shift2,
-        cv2_s1=scale, cv2_s2=shift2,
+        height=l21_h,
+        width=l21_w,
+        cv1_s1=scale,
+        cv1_s2=shift2,
+        bn_cv1_s1=scale,
+        bn_cv1_s2=shift2,
+        bn_cv2_s1=scale,
+        bn_cv2_s2=shift2,
+        cv2_s1=scale,
+        cv2_s2=shift2,
         context=ctx,
     )
     ctx.compile_all()
@@ -9398,15 +9499,574 @@ def test_dataflow_c2f_l21(l21_h, l21_w):
     total = diff.size
     errors_gt1 = int(np.sum(diff > 1))
     errors_gt5 = int(np.sum(diff > 5))
-    print(f"  max_diff={max_diff}, errors>1={errors_gt1}/{total}, "
-          f"errors>5={errors_gt5}/{total}")
-
-    assert max_diff <= 10, (
-        f"C2f L21 dataflow failed: max_diff={max_diff} exceeds threshold 10"
+    print(
+        f"  max_diff={max_diff}, errors>1={errors_gt1}/{total}, "
+        f"errors>5={errors_gt5}/{total}"
     )
+
+    assert (
+        max_diff <= 10
+    ), f"C2f L21 dataflow failed: max_diff={max_diff} exceeds threshold 10"
     error_rate = errors_gt5 / total if total > 0 else 0
     assert error_rate < 0.10, (
         f"C2f L21 dataflow: {100 * error_rate:.2f}% errors > 5 "
+        f"exceeds 10% threshold"
+    )
+
+
+# ============================================================================
+# C2f L8 (256->256, bn_ch=128) — same structure as L21 with in_channels=256
+# ============================================================================
+
+
+class AIEDataflowC2fL8(AIEOperatorBase):
+    """C2f L8: 256->256, bn_ch=128, 20x20. All layers OC-streaming."""
+
+    def __init__(
+        self,
+        height,
+        width,
+        cv1_s1,
+        cv1_s2,
+        bn_cv1_s1,
+        bn_cv1_s2,
+        bn_cv2_s1,
+        bn_cv2_s2,
+        cv2_s1,
+        cv2_s2,
+        context=None,
+    ):
+        self.height = height
+        self.width = width
+        self.cv1_s1 = cv1_s1
+        self.cv1_s2 = cv1_s2
+        self.bn_cv1_s1 = bn_cv1_s1
+        self.bn_cv1_s2 = bn_cv1_s2
+        self.bn_cv2_s1 = bn_cv2_s1
+        self.bn_cv2_s2 = bn_cv2_s2
+        self.cv2_s1 = cv2_s1
+        self.cv2_s2 = cv2_s2
+        self.xclbin_artifact = None
+        self.insts_artifact = None
+        AIEOperatorBase.__init__(self, context=context, register=True)
+
+    def set_up_artifacts(self):
+        from iron.operators.conv2d_int8.dataflow_design import (
+            _compute_oc_streaming_params,
+        )
+
+        operator_dir = Path(__file__).parent
+        file_name_base = f"dataflow_c2f_l8_{self.height}h_{self.width}w"
+        mlir_artifact = PythonGeneratedMLIRArtifact.new(
+            f"{file_name_base}.mlir",
+            import_path=operator_dir / "dataflow_design.py",
+            callback_fn="my_dataflow_c2f_l8",
+            callback_args=[
+                self.context.device_manager.device_type,
+                self.height,
+                self.width,
+                self.cv1_s1,
+                self.cv1_s2,
+                self.bn_cv1_s1,
+                self.bn_cv1_s2,
+                self.bn_cv2_s1,
+                self.bn_cv2_s2,
+                self.cv2_s1,
+                self.cv2_s2,
+            ],
+        )
+        k1_silu_obj = KernelObjectArtifact.new(
+            "conv2dk1_i8_silu.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk1_i8_silu.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT"],
+        )
+        k1_silu_cv2_obj = KernelObjectArtifact.new(
+            "conv2dk1_i8_silu_cv2.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk1_i8_silu.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"],
+        )
+        k3_silu_obj = KernelObjectArtifact.new(
+            "conv2dk3_i8_silu.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk3_i8_silu.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT"],
+        )
+        xclbin_artifact = XclbinArtifact.new(
+            f"{file_name_base}.xclbin",
+            depends=[mlir_artifact, k1_silu_obj, k1_silu_cv2_obj, k3_silu_obj],
+        )
+        insts_artifact = InstsBinArtifact.new(
+            f"{file_name_base}.bin", depends=[mlir_artifact]
+        )
+        self.xclbin_artifact = xclbin_artifact
+        self.insts_artifact = insts_artifact
+        self.add_artifacts([xclbin_artifact, insts_artifact])
+
+        # Store OC streaming params for weight packing
+        self._cv1_oc_chunk = 64
+        self._cv1_n_oc = 4
+        bn_oc_chunk, bn_n_oc, _ = _compute_oc_streaming_params(128, 128, self.width, 1)
+        self._bn_oc_chunk = bn_oc_chunk
+        self._bn_n_oc = bn_n_oc
+        self._cv2_oc_chunk = 64
+        self._cv2_n_oc = 4
+
+    def set_up_runtime(self):
+        in_channels = 256
+        cv1_oc = 256
+        bn_ch = 128
+        cv2_ic = 384
+        cv2_oc = 256
+
+        total_input = in_channels * self.height * self.width
+        cv1_wt_chunk = self._cv1_oc_chunk * in_channels + self._cv1_oc_chunk * 4
+        cv1_total_wt = self._cv1_n_oc * cv1_wt_chunk
+        bn_wt_chunk = self._bn_oc_chunk * bn_ch * 9 + self._bn_oc_chunk * 4
+        bn_total_wt = self._bn_n_oc * bn_wt_chunk
+        cv2_wt_chunk = self._cv2_oc_chunk * cv2_ic + self._cv2_oc_chunk * 4
+        cv2_total_wt = self._cv2_n_oc * cv2_wt_chunk
+        total_wt = cv1_total_wt + 2 * bn_total_wt + cv2_total_wt
+
+        total_output = cv2_oc * self.height * self.width
+        total_concat = cv2_ic * self.height * self.width
+        bn_scratch = bn_ch * self.height * self.width
+        output_buf_size = total_output + total_concat + bn_scratch
+
+        self.add_buffer("input", total_input, dtype=np.int8)
+        self.add_buffer("weights", total_wt, dtype=np.int8)
+        self.add_buffer("output", output_buf_size, dtype=np.int8)
+        self.add_kernel(
+            "c2f_l8",
+            self.xclbin_artifact,
+            self.xclbin_artifact.kernel_name,
+            self.insts_artifact,
+        )
+        self.add_to_runlist("c2f_l8", "input", "weights", "output")
+
+
+@pytest.mark.parametrize(
+    "l8_h,l8_w",
+    [
+        pytest.param(8, 8, id="c2f_l8_8x8"),
+        pytest.param(20, 20, id="c2f_l8_20x20"),
+    ],
+)
+def test_dataflow_c2f_l8(l8_h, l8_w):
+    """L8 C2f: 256->256, bn_ch=128, 20x20. All layers OC streaming."""
+    from iron.operators.conv2d_int8.dataflow_design import (
+        _compute_oc_streaming_params,
+    )
+
+    torch.manual_seed(42)
+    scale = 10
+    shift2 = 7
+
+    in_channels = 256
+    cv1_oc = 256
+    bn_ch = 128
+    cv2_ic = 384
+    cv2_oc = 256
+
+    # Generate data
+    x_int8 = torch.randint(-20, 21, (1, in_channels, l8_h, l8_w), dtype=torch.int8)
+    w_cv1 = torch.randint(-50, 51, (cv1_oc, in_channels, 1, 1), dtype=torch.int8)
+    b_cv1 = torch.randint(-500, 501, (cv1_oc,), dtype=torch.int32)
+    w_bn0cv1 = torch.randint(-50, 51, (bn_ch, bn_ch, 3, 3), dtype=torch.int8)
+    b_bn0cv1 = torch.randint(-500, 501, (bn_ch,), dtype=torch.int32)
+    w_bn0cv2 = torch.randint(-50, 51, (bn_ch, bn_ch, 3, 3), dtype=torch.int8)
+    b_bn0cv2 = torch.randint(-500, 501, (bn_ch,), dtype=torch.int32)
+    w_cv2 = torch.randint(-50, 51, (cv2_oc, cv2_ic, 1, 1), dtype=torch.int8)
+    b_cv2 = torch.randint(-500, 501, (cv2_oc,), dtype=torch.int32)
+
+    # CPU reference
+    ref_cv1 = conv2d_int8_pade_silu_reference(
+        x_int8, w_cv1, b_cv1, scale, shift2, stride=1, padding=0
+    )
+    half1 = ref_cv1[:, :bn_ch, :, :]
+    half2 = ref_cv1[:, bn_ch:, :, :]
+    ref_bn0_inter = conv2d_int8_pade_silu_reference(
+        half2, w_bn0cv1, b_bn0cv1, scale, shift2, stride=1, padding=1
+    )
+    ref_bn0_out = conv2d_int8_pade_silu_reference(
+        ref_bn0_inter, w_bn0cv2, b_bn0cv2, scale, shift2, stride=1, padding=1
+    )
+    concat = torch.cat([half1, half2, ref_bn0_out], dim=1)
+    ref_output = conv2d_int8_pade_silu_reference(
+        concat, w_cv2, b_cv2, scale, shift2, stride=1, padding=0
+    )
+
+    # Pack weights — OC streaming chunks for each layer
+    cv1_oc_chunk = 64
+    cv1_n_oc = cv1_oc // cv1_oc_chunk
+    cv1_chunks = []
+    for g in range(cv1_n_oc):
+        w_s = w_cv1[g * cv1_oc_chunk : (g + 1) * cv1_oc_chunk]
+        b_s = b_cv1[g * cv1_oc_chunk : (g + 1) * cv1_oc_chunk]
+        cv1_chunks.append(
+            np.concatenate(
+                [
+                    weights_to_tiled_int8(w_s),
+                    b_s.numpy().astype(np.int32).view(np.int8),
+                ]
+            )
+        )
+    packed_cv1 = np.concatenate(cv1_chunks)
+
+    bn_oc_chunk, bn_n_oc, _ = _compute_oc_streaming_params(bn_ch, bn_ch, l8_w, 1)
+
+    def _pack_k3_oc(w, b, oc_chunk, n_oc):
+        chunks = []
+        for g in range(n_oc):
+            w_s = w[g * oc_chunk : (g + 1) * oc_chunk]
+            b_s = b[g * oc_chunk : (g + 1) * oc_chunk]
+            chunks.append(
+                np.concatenate(
+                    [
+                        weights_to_tiled_int8_k3(w_s),
+                        b_s.numpy().astype(np.int32).view(np.int8),
+                    ]
+                )
+            )
+        return np.concatenate(chunks)
+
+    packed_bn0cv1 = _pack_k3_oc(w_bn0cv1, b_bn0cv1, bn_oc_chunk, bn_n_oc)
+    packed_bn0cv2 = _pack_k3_oc(w_bn0cv2, b_bn0cv2, bn_oc_chunk, bn_n_oc)
+
+    cv2_oc_chunk = 64
+    cv2_n_oc = cv2_oc // cv2_oc_chunk
+    cv2_chunks = []
+    for g in range(cv2_n_oc):
+        w_s = w_cv2[g * cv2_oc_chunk : (g + 1) * cv2_oc_chunk]
+        b_s = b_cv2[g * cv2_oc_chunk : (g + 1) * cv2_oc_chunk]
+        cv2_chunks.append(
+            np.concatenate(
+                [
+                    weights_to_tiled_int8(w_s),
+                    b_s.numpy().astype(np.int32).view(np.int8),
+                ]
+            )
+        )
+    packed_cv2 = np.concatenate(cv2_chunks)
+
+    packed_weights = np.concatenate(
+        [packed_cv1, packed_bn0cv1, packed_bn0cv2, packed_cv2]
+    )
+
+    # Build NPU design
+    ctx = AIEContext()
+    op = AIEDataflowC2fL8(
+        height=l8_h,
+        width=l8_w,
+        cv1_s1=scale,
+        cv1_s2=shift2,
+        bn_cv1_s1=scale,
+        bn_cv1_s2=shift2,
+        bn_cv2_s1=scale,
+        bn_cv2_s2=shift2,
+        cv2_s1=scale,
+        cv2_s2=shift2,
+        context=ctx,
+    )
+    ctx.compile_all()
+    ctx.prepare_runtime()
+
+    total_output = cv2_oc * l8_h * l8_w
+    output_buf_size = op.buffers["output"]
+    op.write_buffer("input", nchw_to_tiled_int8(x_int8))
+    op.write_buffer("weights", packed_weights)
+    op.write_buffer("output", np.zeros(output_buf_size, dtype=np.int8))
+
+    t0 = time.perf_counter()
+    op.run_runlist()
+    run_ms = (time.perf_counter() - t0) * 1000
+    print(f"\n  C2f L8 dataflow ({l8_h}x{l8_w}): {run_ms:.1f}ms")
+
+    out_flat = op.read_buffer("output", (output_buf_size,), dtype=np.int8)
+    out_flat = out_flat[:total_output]
+    npu_output = tiled_to_nchw_int8(out_flat, cv2_oc, l8_h, l8_w)
+
+    ref_np = ref_output.numpy().astype(np.int8)
+    npu_np = npu_output.numpy().astype(np.int8)
+    diff = np.abs(ref_np.astype(np.int32) - npu_np.astype(np.int32))
+    max_diff = int(diff.max())
+    total = diff.size
+    errors_gt1 = int(np.sum(diff > 1))
+    errors_gt5 = int(np.sum(diff > 5))
+    print(
+        f"  max_diff={max_diff}, errors>1={errors_gt1}/{total}, "
+        f"errors>5={errors_gt5}/{total}"
+    )
+
+    assert (
+        max_diff <= 10
+    ), f"C2f L8 dataflow failed: max_diff={max_diff} exceeds threshold 10"
+    error_rate = errors_gt5 / total if total > 0 else 0
+    assert error_rate < 0.10, (
+        f"C2f L8 dataflow: {100 * error_rate:.2f}% errors > 5 " f"exceeds 10% threshold"
+    )
+
+
+# ============================================================================
+# SPPF L9 dataflow tests
+# ============================================================================
+
+
+class AIEDataflowSPPFL9(AIEOperatorBase):
+    """SPPF L9: cv1(k1 256->128+SiLU) -> 3x maxpool5x5 -> concat -> cv2(k1 512->256+SiLU)."""
+
+    def __init__(self, height, width, cv1_s1, cv1_s2, cv2_s1, cv2_s2, context=None):
+        self.height = height
+        self.width = width
+        self.cv1_s1 = cv1_s1
+        self.cv1_s2 = cv1_s2
+        self.cv2_s1 = cv2_s1
+        self.cv2_s2 = cv2_s2
+        self.xclbin_artifact = None
+        self.insts_artifact = None
+        AIEOperatorBase.__init__(self, context=context, register=True)
+
+    def set_up_artifacts(self):
+        from iron.operators.conv2d_int8.dataflow_design import (
+            _compute_oc_streaming_params_k1,
+        )
+
+        operator_dir = Path(__file__).parent
+        file_name_base = f"dataflow_sppf_l9_{self.height}h_{self.width}w"
+        mlir_artifact = PythonGeneratedMLIRArtifact.new(
+            f"{file_name_base}.mlir",
+            import_path=operator_dir / "dataflow_design.py",
+            callback_fn="my_dataflow_sppf_l9",
+            callback_args=[
+                self.context.device_manager.device_type,
+                self.height,
+                self.width,
+                self.cv1_s1,
+                self.cv1_s2,
+                self.cv2_s1,
+                self.cv2_s2,
+            ],
+        )
+        k1_silu_obj = KernelObjectArtifact.new(
+            "conv2dk1_i8_silu.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk1_i8_silu.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT"],
+        )
+        k1_silu_cv2_obj = KernelObjectArtifact.new(
+            "conv2dk1_i8_silu_cv2.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir
+                    / "aie_kernels"
+                    / "aie2p"
+                    / "conv2dk1_i8_silu.cc"
+                )
+            ],
+            extra_flags=["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"],
+        )
+        mp_obj = KernelObjectArtifact.new(
+            "maxpool2d_5x5_i8_strip.o",
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir / "aie_kernels" / "aie2p" / "maxpool2d_i8.cc"
+                )
+            ],
+        )
+        xclbin_artifact = XclbinArtifact.new(
+            f"{file_name_base}.xclbin",
+            depends=[mlir_artifact, k1_silu_obj, k1_silu_cv2_obj, mp_obj],
+        )
+        insts_artifact = InstsBinArtifact.new(
+            f"{file_name_base}.bin", depends=[mlir_artifact]
+        )
+        self.xclbin_artifact = xclbin_artifact
+        self.insts_artifact = insts_artifact
+        self.add_artifacts([xclbin_artifact, insts_artifact])
+
+        cv2_oc_chunk, cv2_n_oc = _compute_oc_streaming_params_k1(512, 256, self.width)
+        self._cv2_oc_chunk = cv2_oc_chunk
+        self._cv2_n_oc = cv2_n_oc
+
+    def set_up_runtime(self):
+        in_channels = 256
+        mid_channels = 128
+        concat_channels = 512
+        cv2_oc = 256
+
+        w_pad = self.width + 4
+        concat_cg = concat_channels // 8
+        pad_h = self.height + 4
+        pad_row_stride = concat_cg * w_pad * 8
+
+        total_input = in_channels * self.height * self.width
+        cv2_final_size = cv2_oc * self.height * self.width
+        concat_pad_size = pad_h * pad_row_stride
+        output_buf_size = cv2_final_size + concat_pad_size
+
+        cv1_wt_size = mid_channels * in_channels + mid_channels * 4
+        cv2_wt_chunk = self._cv2_oc_chunk * concat_channels + self._cv2_oc_chunk * 4
+        cv2_total_wt = self._cv2_n_oc * cv2_wt_chunk
+        total_wt = cv1_wt_size + cv2_total_wt
+
+        self.add_buffer("input", total_input, dtype=np.int8)
+        self.add_buffer("weights", total_wt, dtype=np.int8)
+        self.add_buffer("output", output_buf_size, dtype=np.int8)
+        self.add_kernel(
+            "sppf_l9",
+            self.xclbin_artifact,
+            self.xclbin_artifact.kernel_name,
+            self.insts_artifact,
+        )
+        self.add_to_runlist("sppf_l9", "input", "weights", "output")
+
+
+@pytest.mark.parametrize(
+    "sppf_h,sppf_w",
+    [
+        pytest.param(8, 8, id="sppf_l9_8x8"),
+        pytest.param(20, 20, id="sppf_l9_20x20"),
+    ],
+)
+def test_dataflow_sppf_l9(sppf_h, sppf_w):
+    """SPPF L9: cv1 + 3x maxpool5x5 + concat + cv2."""
+    import torch.nn.functional as F
+    from iron.operators.conv2d_int8.dataflow_design import (
+        _compute_oc_streaming_params_k1,
+    )
+
+    torch.manual_seed(42)
+    scale = 10
+    shift2 = 7
+
+    in_channels = 256
+    mid_channels = 128
+    concat_channels = 512
+    cv2_oc = 256
+
+    # Generate data
+    x_int8 = torch.randint(-20, 21, (1, in_channels, sppf_h, sppf_w), dtype=torch.int8)
+    w_cv1 = torch.randint(-50, 51, (mid_channels, in_channels, 1, 1), dtype=torch.int8)
+    b_cv1 = torch.randint(-500, 501, (mid_channels,), dtype=torch.int32)
+    w_cv2 = torch.randint(-50, 51, (cv2_oc, concat_channels, 1, 1), dtype=torch.int8)
+    b_cv2 = torch.randint(-500, 501, (cv2_oc,), dtype=torch.int32)
+
+    # CPU reference
+    ref_cv1 = conv2d_int8_pade_silu_reference(
+        x_int8, w_cv1, b_cv1, scale, shift2, stride=1, padding=0
+    )
+    # 3x maxpool 5x5 stride=1 pad=2 (int8, pad with -128)
+    ref_mp1 = F.max_pool2d(ref_cv1.float(), 5, stride=1, padding=2).to(torch.int8)
+    ref_mp2 = F.max_pool2d(ref_mp1.float(), 5, stride=1, padding=2).to(torch.int8)
+    ref_mp3 = F.max_pool2d(ref_mp2.float(), 5, stride=1, padding=2).to(torch.int8)
+    concat = torch.cat([ref_cv1, ref_mp1, ref_mp2, ref_mp3], dim=1)
+    ref_output = conv2d_int8_pade_silu_reference(
+        concat, w_cv2, b_cv2, scale, shift2, stride=1, padding=0
+    )
+
+    # Pack cv1 weights (no OC streaming)
+    packed_cv1 = np.concatenate(
+        [
+            weights_to_tiled_int8(w_cv1),
+            b_cv1.numpy().astype(np.int32).view(np.int8),
+        ]
+    )
+
+    # Pack cv2 weights (OC streaming)
+    cv2_oc_chunk, cv2_n_oc = _compute_oc_streaming_params_k1(
+        concat_channels, cv2_oc, sppf_w
+    )
+    cv2_chunks = []
+    for g in range(cv2_n_oc):
+        w_s = w_cv2[g * cv2_oc_chunk : (g + 1) * cv2_oc_chunk]
+        b_s = b_cv2[g * cv2_oc_chunk : (g + 1) * cv2_oc_chunk]
+        cv2_chunks.append(
+            np.concatenate(
+                [
+                    weights_to_tiled_int8(w_s),
+                    b_s.numpy().astype(np.int32).view(np.int8),
+                ]
+            )
+        )
+    packed_cv2 = np.concatenate(cv2_chunks)
+
+    packed_weights = np.concatenate([packed_cv1, packed_cv2])
+
+    # Build NPU design
+    ctx = AIEContext()
+    op = AIEDataflowSPPFL9(
+        height=sppf_h,
+        width=sppf_w,
+        cv1_s1=scale,
+        cv1_s2=shift2,
+        cv2_s1=scale,
+        cv2_s2=shift2,
+        context=ctx,
+    )
+    ctx.compile_all()
+    ctx.prepare_runtime()
+
+    # Pre-fill output buffer with -128 (padding for maxpool edge handling)
+    output_buf_size = op.buffers["output"]
+    op.write_buffer("input", nchw_to_tiled_int8(x_int8))
+    op.write_buffer("weights", packed_weights)
+    op.write_buffer("output", np.full(output_buf_size, -128, dtype=np.int8))
+
+    t0 = time.perf_counter()
+    op.run_runlist()
+    run_ms = (time.perf_counter() - t0) * 1000
+    print(f"\n  SPPF L9 dataflow ({sppf_h}x{sppf_w}): {run_ms:.1f}ms")
+
+    # Read cv2 final output (first cv2_oc*H*W bytes)
+    total_output = cv2_oc * sppf_h * sppf_w
+    out_flat = op.read_buffer("output", (output_buf_size,), dtype=np.int8)
+    out_flat = out_flat[:total_output]
+    npu_output = tiled_to_nchw_int8(out_flat, cv2_oc, sppf_h, sppf_w)
+
+    ref_np = ref_output.numpy().astype(np.int8)
+    npu_np = npu_output.numpy().astype(np.int8)
+    diff = np.abs(ref_np.astype(np.int32) - npu_np.astype(np.int32))
+    max_diff = int(diff.max())
+    total = diff.size
+    errors_gt1 = int(np.sum(diff > 1))
+    errors_gt5 = int(np.sum(diff > 5))
+    print(
+        f"  max_diff={max_diff}, errors>1={errors_gt1}/{total}, "
+        f"errors>5={errors_gt5}/{total}"
+    )
+
+    # Tolerance: SPPF is a multi-layer pipeline (cv1 + 3x maxpool + cv2)
+    assert (
+        max_diff <= 10
+    ), f"SPPF L9 dataflow failed: max_diff={max_diff} exceeds threshold 10"
+    error_rate = errors_gt5 / total if total > 0 else 0
+    assert error_rate < 0.10, (
+        f"SPPF L9 dataflow: {100 * error_rate:.2f}% errors > 5 "
         f"exceeds 10% threshold"
     )
 
@@ -9419,11 +10079,39 @@ def test_dataflow_c2f_l21(l21_h, l21_w):
 class AIEDataflowL16L18(AIEOperatorBase):
     """Combined L16 CBS + L18 C2f in one PDI."""
 
-    def __init__(self, l16_h, l16_w, s1, s2, context=None):
+    def __init__(
+        self,
+        l16_h,
+        l16_w,
+        s1,
+        s2,
+        l16_s1=None,
+        l16_s2=None,
+        cv1_s1=None,
+        cv1_s2=None,
+        bn_cv1_s1=None,
+        bn_cv1_s2=None,
+        bn_cv2_s1=None,
+        bn_cv2_s2=None,
+        cv2_s1=None,
+        cv2_s2=None,
+        context=None,
+    ):
         self.l16_h = l16_h
         self.l16_w = l16_w
         self.s1 = s1
         self.s2 = s2
+        # Per-layer shifts (fall back to uniform s1/s2)
+        self.l16_s1 = l16_s1 if l16_s1 is not None else s1
+        self.l16_s2 = l16_s2 if l16_s2 is not None else s2
+        self.cv1_s1 = cv1_s1 if cv1_s1 is not None else s1
+        self.cv1_s2 = cv1_s2 if cv1_s2 is not None else s2
+        self.bn_cv1_s1 = bn_cv1_s1 if bn_cv1_s1 is not None else s1
+        self.bn_cv1_s2 = bn_cv1_s2 if bn_cv1_s2 is not None else s2
+        self.bn_cv2_s1 = bn_cv2_s1 if bn_cv2_s1 is not None else s1
+        self.bn_cv2_s2 = bn_cv2_s2 if bn_cv2_s2 is not None else s2
+        self.cv2_s1 = cv2_s1 if cv2_s1 is not None else s1
+        self.cv2_s2 = cv2_s2 if cv2_s2 is not None else s2
         self.xclbin_artifact = None
         self.insts_artifact = None
         AIEOperatorBase.__init__(self, context=context, register=True)
@@ -9441,9 +10129,18 @@ class AIEDataflowL16L18(AIEOperatorBase):
             callback_fn="my_dataflow_l16_l18",
             callback_args=[
                 self.context.device_manager.device_type,
-                self.l16_h, self.l16_w,
-                self.s1, self.s2, self.s1, self.s2, self.s1, self.s2,
-                self.s1, self.s2, self.s1, self.s2,
+                self.l16_h,
+                self.l16_w,
+                self.l16_s1,
+                self.l16_s2,
+                self.cv1_s1,
+                self.cv1_s2,
+                self.bn_cv1_s1,
+                self.bn_cv1_s2,
+                self.bn_cv2_s1,
+                self.bn_cv2_s2,
+                self.cv2_s1,
+                self.cv2_s2,
             ],
         )
         k_objs = self._make_kernel_objs()
@@ -9460,15 +10157,21 @@ class AIEDataflowL16L18(AIEOperatorBase):
     def _make_kernel_objs(self):
         base_dir = self.context.base_dir / "aie_kernels" / "aie2p"
         return [
-            KernelObjectArtifact.new("conv2dk3_i8_silu.o",
+            KernelObjectArtifact.new(
+                "conv2dk3_i8_silu.o",
                 depends=[SourceArtifact.new(base_dir / "conv2dk3_i8_silu.cc")],
-                extra_flags=["-DINT8_ACT"]),
-            KernelObjectArtifact.new("conv2dk1_i8_silu.o",
+                extra_flags=["-DINT8_ACT"],
+            ),
+            KernelObjectArtifact.new(
+                "conv2dk1_i8_silu.o",
                 depends=[SourceArtifact.new(base_dir / "conv2dk1_i8_silu.cc")],
-                extra_flags=["-DINT8_ACT"]),
-            KernelObjectArtifact.new("conv2dk1_i8_silu_cv2.o",
+                extra_flags=["-DINT8_ACT"],
+            ),
+            KernelObjectArtifact.new(
+                "conv2dk1_i8_silu_cv2.o",
                 depends=[SourceArtifact.new(base_dir / "conv2dk1_i8_silu.cc")],
-                extra_flags=["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"]),
+                extra_flags=["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"],
+            ),
         ]
 
     def set_up_runtime(self):
@@ -9483,18 +10186,26 @@ class AIEDataflowL16L18(AIEOperatorBase):
         l18_output = 128 * l18_h * l18_w
         l18_concat = 192 * l18_h * l18_w
         output_buf = l18_output + l18_concat
+        self._l18_output_size = l18_output
         self.add_buffer("input", l16_input, dtype=np.int8)
         self.add_buffer("weights", total_wt, dtype=np.int8)
         self.add_buffer("output", output_buf, dtype=np.int8)
-        self.add_kernel("l16_l18", self.xclbin_artifact,
-                        self.xclbin_artifact.kernel_name, self.insts_artifact)
+        self.add_kernel(
+            "l16_l18",
+            self.xclbin_artifact,
+            self.xclbin_artifact.kernel_name,
+            self.insts_artifact,
+        )
         self.add_to_runlist("l16_l18", "input", "weights", "output")
 
 
-@pytest.mark.parametrize("h,w", [
-    pytest.param(16, 16, id="l16_l18_16x16"),
-    pytest.param(80, 80, id="l16_l18_80x80"),
-])
+@pytest.mark.parametrize(
+    "h,w",
+    [
+        pytest.param(16, 16, id="l16_l18_16x16"),
+        pytest.param(80, 80, id="l16_l18_80x80"),
+    ],
+)
 def test_dataflow_l16_l18(h, w):
     """Combined L16 CBS + L18 C2f: L15_out(64ch) -> L16(k3s2) -> L18(C2f) -> 128ch."""
     from iron.operators.conv2d_int8.dataflow_design import _compute_oc_streaming_params
@@ -9546,10 +10257,14 @@ def test_dataflow_l16_l18(h, w):
     for g in range(n_oc):
         ws = w_l16[g * oc_chunk : (g + 1) * oc_chunk]
         bs = b_l16[g * oc_chunk : (g + 1) * oc_chunk]
-        l16_chunks.append(np.concatenate([
-            weights_to_tiled_int8_k3(ws),
-            bs.numpy().astype(np.int32).view(np.int8),
-        ]))
+        l16_chunks.append(
+            np.concatenate(
+                [
+                    weights_to_tiled_int8_k3(ws),
+                    bs.numpy().astype(np.int32).view(np.int8),
+                ]
+            )
+        )
     packed_l16 = np.concatenate(l16_chunks)
     packed_cv1 = _pack_k1_silu_weights(w_cv1, b_cv1)
     packed_bn0cv1 = pack_fused_weights_k3(w_bn0cv1, b_bn0cv1)
@@ -9576,7 +10291,9 @@ def test_dataflow_l16_l18(h, w):
     for row in range(l18_h):
         src_start = row * 128 * l18_w
         dst_start = concat_offset + row * 192 * l18_w + 64 * l18_w
-        o_buf[dst_start:dst_start + 128 * l18_w] = skip_tiled[src_start:src_start + 128 * l18_w]
+        o_buf[dst_start : dst_start + 128 * l18_w] = skip_tiled[
+            src_start : src_start + 128 * l18_w
+        ]
 
     op.write_buffer("input", nchw_to_tiled_int8(x_l15))
     op.write_buffer("weights", packed_weights)
@@ -9627,9 +10344,18 @@ class AIEDataflowL19L21(AIEOperatorBase):
             callback_fn="my_dataflow_l19_l21",
             callback_args=[
                 self.context.device_manager.device_type,
-                self.l19_h, self.l19_w,
-                self.s1, self.s2, self.s1, self.s2, self.s1, self.s2,
-                self.s1, self.s2, self.s1, self.s2,
+                self.l19_h,
+                self.l19_w,
+                self.s1,
+                self.s2,
+                self.s1,
+                self.s2,
+                self.s1,
+                self.s2,
+                self.s1,
+                self.s2,
+                self.s1,
+                self.s2,
             ],
         )
         k_objs = self._make_kernel_objs()
@@ -9650,22 +10376,30 @@ class AIEDataflowL19L21(AIEOperatorBase):
     def _make_kernel_objs(self):
         base_dir = self.context.base_dir / "aie_kernels" / "aie2p"
         return [
-            KernelObjectArtifact.new("conv2dk3_i8_silu.o",
+            KernelObjectArtifact.new(
+                "conv2dk3_i8_silu.o",
                 depends=[SourceArtifact.new(base_dir / "conv2dk3_i8_silu.cc")],
-                extra_flags=["-DINT8_ACT"]),
-            KernelObjectArtifact.new("conv2dk1_i8_silu.o",
+                extra_flags=["-DINT8_ACT"],
+            ),
+            KernelObjectArtifact.new(
+                "conv2dk1_i8_silu.o",
                 depends=[SourceArtifact.new(base_dir / "conv2dk1_i8_silu.cc")],
-                extra_flags=["-DINT8_ACT"]),
-            KernelObjectArtifact.new("conv2dk1_i8_silu_cv2.o",
+                extra_flags=["-DINT8_ACT"],
+            ),
+            KernelObjectArtifact.new(
+                "conv2dk1_i8_silu_cv2.o",
                 depends=[SourceArtifact.new(base_dir / "conv2dk1_i8_silu.cc")],
-                extra_flags=["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"]),
+                extra_flags=["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"],
+            ),
         ]
 
     def set_up_runtime(self):
         l21_h = self.l19_h // 2
         l21_w = self.l19_w // 2
         l19_input = 128 * self.l19_h * self.l19_w
-        l19_wt = self._l19_n_oc * (self._l19_oc_chunk * 128 * 9 + self._l19_oc_chunk * 4)
+        l19_wt = self._l19_n_oc * (
+            self._l19_oc_chunk * 128 * 9 + self._l19_oc_chunk * 4
+        )
         cv1_wt_chunk = 64 * 384 + 64 * 4
         cv1_total_wt = 4 * cv1_wt_chunk
         bn_wt_chunk = self._bn_oc_chunk * 128 * 9 + self._bn_oc_chunk * 4
@@ -9680,15 +10414,22 @@ class AIEDataflowL19L21(AIEOperatorBase):
         self.add_buffer("input", l19_input, dtype=np.int8)
         self.add_buffer("weights", total_wt, dtype=np.int8)
         self.add_buffer("output", output_buf, dtype=np.int8)
-        self.add_kernel("l19_l21", self.xclbin_artifact,
-                        self.xclbin_artifact.kernel_name, self.insts_artifact)
+        self.add_kernel(
+            "l19_l21",
+            self.xclbin_artifact,
+            self.xclbin_artifact.kernel_name,
+            self.insts_artifact,
+        )
         self.add_to_runlist("l19_l21", "input", "weights", "output")
 
 
-@pytest.mark.parametrize("h,w", [
-    pytest.param(16, 16, id="l19_l21_16x16"),
-    pytest.param(40, 40, id="l19_l21_40x40"),
-])
+@pytest.mark.parametrize(
+    "h,w",
+    [
+        pytest.param(16, 16, id="l19_l21_16x16"),
+        pytest.param(40, 40, id="l19_l21_40x40"),
+    ],
+)
 def test_dataflow_l19_l21(h, w):
     """Combined L19 CBS + L21 C2f: L18_out(128ch) -> L19(k3s2) -> L21(C2f) -> 256ch."""
     from iron.operators.conv2d_int8.dataflow_design import _compute_oc_streaming_params
@@ -9740,10 +10481,14 @@ def test_dataflow_l19_l21(h, w):
     for g in range(l19_n_oc):
         ws = w_l19[g * l19_oc_chunk : (g + 1) * l19_oc_chunk]
         bs = b_l19[g * l19_oc_chunk : (g + 1) * l19_oc_chunk]
-        l19_chunks.append(np.concatenate([
-            weights_to_tiled_int8_k3(ws),
-            bs.numpy().astype(np.int32).view(np.int8),
-        ]))
+        l19_chunks.append(
+            np.concatenate(
+                [
+                    weights_to_tiled_int8_k3(ws),
+                    bs.numpy().astype(np.int32).view(np.int8),
+                ]
+            )
+        )
     packed_l19 = np.concatenate(l19_chunks)
 
     cv1_oc_chunk, cv1_n_oc = 64, 4
@@ -9751,23 +10496,33 @@ def test_dataflow_l19_l21(h, w):
     for g in range(cv1_n_oc):
         ws = w_cv1[g * cv1_oc_chunk : (g + 1) * cv1_oc_chunk]
         bs = b_cv1[g * cv1_oc_chunk : (g + 1) * cv1_oc_chunk]
-        cv1_chunks.append(np.concatenate([
-            weights_to_tiled_int8(ws),
-            bs.numpy().astype(np.int32).view(np.int8),
-        ]))
+        cv1_chunks.append(
+            np.concatenate(
+                [
+                    weights_to_tiled_int8(ws),
+                    bs.numpy().astype(np.int32).view(np.int8),
+                ]
+            )
+        )
     packed_cv1 = np.concatenate(cv1_chunks)
 
     bn_oc_chunk, bn_n_oc, _ = _compute_oc_streaming_params(128, 128, l21_w, 1)
+
     def _pack_k3_oc(wt, b, oc_c, n):
         chunks = []
         for g in range(n):
             ws = wt[g * oc_c : (g + 1) * oc_c]
             bs = b[g * oc_c : (g + 1) * oc_c]
-            chunks.append(np.concatenate([
-                weights_to_tiled_int8_k3(ws),
-                bs.numpy().astype(np.int32).view(np.int8),
-            ]))
+            chunks.append(
+                np.concatenate(
+                    [
+                        weights_to_tiled_int8_k3(ws),
+                        bs.numpy().astype(np.int32).view(np.int8),
+                    ]
+                )
+            )
         return np.concatenate(chunks)
+
     packed_bn0cv1 = _pack_k3_oc(w_bn0cv1, b_bn0cv1, bn_oc_chunk, bn_n_oc)
     packed_bn0cv2 = _pack_k3_oc(w_bn0cv2, b_bn0cv2, bn_oc_chunk, bn_n_oc)
 
@@ -9775,10 +10530,14 @@ def test_dataflow_l19_l21(h, w):
     for g in range(4):
         ws = w_cv2[g * 64 : (g + 1) * 64]
         bs = b_cv2[g * 64 : (g + 1) * 64]
-        cv2_chunks.append(np.concatenate([
-            weights_to_tiled_int8(ws),
-            bs.numpy().astype(np.int32).view(np.int8),
-        ]))
+        cv2_chunks.append(
+            np.concatenate(
+                [
+                    weights_to_tiled_int8(ws),
+                    bs.numpy().astype(np.int32).view(np.int8),
+                ]
+            )
+        )
     packed_cv2 = np.concatenate(cv2_chunks)
 
     packed_weights = np.concatenate(
@@ -9802,7 +10561,9 @@ def test_dataflow_l19_l21(h, w):
     for row in range(l21_h):
         src_start = row * 256 * l21_w
         dst_start = concat_offset + row * 384 * l21_w + 128 * l21_w
-        o_buf[dst_start:dst_start + 256 * l21_w] = skip_tiled[src_start:src_start + 256 * l21_w]
+        o_buf[dst_start : dst_start + 256 * l21_w] = skip_tiled[
+            src_start : src_start + 256 * l21_w
+        ]
 
     op.write_buffer("input", nchw_to_tiled_int8(x_l18))
     op.write_buffer("weights", packed_weights)
@@ -9836,9 +10597,37 @@ def test_dataflow_l19_l21(h, w):
 class AIEDataflowL19L21_2col(AIEOperatorBase):
     """Combined L19+L21 with 2-column parallelism."""
 
-    def __init__(self, l19_h, l19_w, s1, s2, context=None):
+    def __init__(
+        self,
+        l19_h,
+        l19_w,
+        s1,
+        s2,
+        l19_s1=None,
+        l19_s2=None,
+        cv1_s1=None,
+        cv1_s2=None,
+        bn_cv1_s1=None,
+        bn_cv1_s2=None,
+        bn_cv2_s1=None,
+        bn_cv2_s2=None,
+        cv2_s1=None,
+        cv2_s2=None,
+        context=None,
+    ):
         self.l19_h, self.l19_w = l19_h, l19_w
         self.s1, self.s2 = s1, s2
+        # Per-layer shifts (fall back to uniform s1/s2)
+        self.l19_s1 = l19_s1 if l19_s1 is not None else s1
+        self.l19_s2 = l19_s2 if l19_s2 is not None else s2
+        self.cv1_s1 = cv1_s1 if cv1_s1 is not None else s1
+        self.cv1_s2 = cv1_s2 if cv1_s2 is not None else s2
+        self.bn_cv1_s1 = bn_cv1_s1 if bn_cv1_s1 is not None else s1
+        self.bn_cv1_s2 = bn_cv1_s2 if bn_cv1_s2 is not None else s2
+        self.bn_cv2_s1 = bn_cv2_s1 if bn_cv2_s1 is not None else s1
+        self.bn_cv2_s2 = bn_cv2_s2 if bn_cv2_s2 is not None else s2
+        self.cv2_s1 = cv2_s1 if cv2_s1 is not None else s1
+        self.cv2_s2 = cv2_s2 if cv2_s2 is not None else s2
         self.xclbin_artifact = self.insts_artifact = None
         AIEOperatorBase.__init__(self, context=context, register=True)
 
@@ -9846,29 +10635,46 @@ class AIEDataflowL19L21_2col(AIEOperatorBase):
         from iron.operators.conv2d_int8.dataflow_design import (
             _compute_oc_streaming_params,
         )
+
         d = Path(__file__).parent
         bd = self.context.base_dir / "aie_kernels" / "aie2p"
         base = f"dataflow_l19_l21_2col_{self.l19_h}h_{self.l19_w}w"
-        s = self.s1
         mlir = PythonGeneratedMLIRArtifact.new(
-            f"{base}.mlir", import_path=d / "dataflow_design.py",
+            f"{base}.mlir",
+            import_path=d / "dataflow_design.py",
             callback_fn="my_dataflow_l19_l21_2col",
             callback_args=[
                 self.context.device_manager.device_type,
-                self.l19_h, self.l19_w,
-                s, self.s2, s, self.s2, s, self.s2,
-                s, self.s2, s, self.s2,
-            ])
+                self.l19_h,
+                self.l19_w,
+                self.l19_s1,
+                self.l19_s2,
+                self.cv1_s1,
+                self.cv1_s2,
+                self.bn_cv1_s1,
+                self.bn_cv1_s2,
+                self.bn_cv2_s1,
+                self.bn_cv2_s2,
+                self.cv2_s1,
+                self.cv2_s2,
+            ],
+        )
+
         def ko(name, src, flags):
-            return KernelObjectArtifact.new(name,
-                depends=[SourceArtifact.new(bd / src)], extra_flags=flags)
+            return KernelObjectArtifact.new(
+                name, depends=[SourceArtifact.new(bd / src)], extra_flags=flags
+            )
+
         k_objs = [
             ko("conv2dk3_i8_silu.o", "conv2dk3_i8_silu.cc", ["-DINT8_ACT"]),
             ko("conv2dk1_i8_silu.o", "conv2dk1_i8_silu.cc", ["-DINT8_ACT"]),
-            ko("conv2dk1_i8_silu_cv2.o", "conv2dk1_i8_silu.cc",
-               ["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"]),
+            ko(
+                "conv2dk1_i8_silu_cv2.o",
+                "conv2dk1_i8_silu.cc",
+                ["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"],
+            ),
         ]
-        xclbin = XclbinArtifact.new(f"{base}.xclbin", depends=[mlir]+k_objs)
+        xclbin = XclbinArtifact.new(f"{base}.xclbin", depends=[mlir] + k_objs)
         insts = InstsBinArtifact.new(f"{base}.bin", depends=[mlir])
         self.xclbin_artifact, self.insts_artifact = xclbin, insts
         self.add_artifacts([xclbin, insts])
@@ -9882,27 +10688,36 @@ class AIEDataflowL19L21_2col(AIEOperatorBase):
         NC = 2
         l21_h, l21_w = self.l19_h // 2, self.l19_w // 2
         l19_ti = 128 * self.l19_h * self.l19_w
-        l19_tw = self._l19_n_oc * (self._l19_oc_chunk*128*9+self._l19_oc_chunk*4)
-        cv1_tw = 4*(64*384+64*4)
-        bn_tw = self._bn_n_oc*(self._bn_oc_chunk*128*9+self._bn_oc_chunk*4)
-        cv2_tw = 4*(64*384+64*4)
-        tw = l19_tw+cv1_tw+2*bn_tw+cv2_tw
-        l21_out = 256*l21_h*l21_w
-        l21_concat = 384*l21_h*l21_w
-        bn_scratch = 128*l21_h*l21_w
-        oT = l21_out+l21_concat+bn_scratch
+        l19_tw = self._l19_n_oc * (
+            self._l19_oc_chunk * 128 * 9 + self._l19_oc_chunk * 4
+        )
+        cv1_tw = 4 * (64 * 384 + 64 * 4)
+        bn_tw = self._bn_n_oc * (self._bn_oc_chunk * 128 * 9 + self._bn_oc_chunk * 4)
+        cv2_tw = 4 * (64 * 384 + 64 * 4)
+        tw = l19_tw + cv1_tw + 2 * bn_tw + cv2_tw
+        l21_out = 256 * l21_h * l21_w
+        l21_concat = 384 * l21_h * l21_w
+        bn_scratch = 128 * l21_h * l21_w
+        oT = l21_out + l21_concat + bn_scratch
         self.add_buffer("input", l19_ti, dtype=np.int8)
         self.add_buffer("weights", tw, dtype=np.int8)
         self.add_buffer("output", oT, dtype=np.int8)
-        self.add_kernel("l19l21_2c", self.xclbin_artifact,
-                        self.xclbin_artifact.kernel_name, self.insts_artifact)
+        self.add_kernel(
+            "l19l21_2c",
+            self.xclbin_artifact,
+            self.xclbin_artifact.kernel_name,
+            self.insts_artifact,
+        )
         self.add_to_runlist("l19l21_2c", "input", "weights", "output")
 
 
-@pytest.mark.parametrize("h,w", [
-    pytest.param(16, 16, id="l19_l21_2col_16x16"),
-    pytest.param(40, 40, id="l19_l21_2col_40x40"),
-])
+@pytest.mark.parametrize(
+    "h,w",
+    [
+        pytest.param(16, 16, id="l19_l21_2col_16x16"),
+        pytest.param(40, 40, id="l19_l21_2col_40x40"),
+    ],
+)
 def test_dataflow_l19_l21_2col(h, w):
     """Combined L19+L21 with 2-column parallelism."""
     from iron.operators.conv2d_int8.dataflow_design import _compute_oc_streaming_params
@@ -9910,61 +10725,90 @@ def test_dataflow_l19_l21_2col(h, w):
     torch.manual_seed(42)
     s, s2 = 10, 7
     NC = 2
-    l21_h, l21_w = h//2, w//2
+    l21_h, l21_w = h // 2, w // 2
 
     x_l18 = torch.randint(-20, 21, (1, 128, h, w), dtype=torch.int8)
     x_p5 = torch.randint(-20, 21, (1, 256, l21_h, l21_w), dtype=torch.int8)
-    w_l19 = torch.randint(-50,51,(128,128,3,3),dtype=torch.int8)
-    b_l19 = torch.randint(-500,501,(128,),dtype=torch.int32)
-    w_cv1 = torch.randint(-50,51,(256,384,1,1),dtype=torch.int8)
-    b_cv1 = torch.randint(-500,501,(256,),dtype=torch.int32)
-    w_bn1 = torch.randint(-50,51,(128,128,3,3),dtype=torch.int8)
-    b_bn1 = torch.randint(-500,501,(128,),dtype=torch.int32)
-    w_bn2 = torch.randint(-50,51,(128,128,3,3),dtype=torch.int8)
-    b_bn2 = torch.randint(-500,501,(128,),dtype=torch.int32)
-    w_cv2 = torch.randint(-50,51,(256,384,1,1),dtype=torch.int8)
-    b_cv2 = torch.randint(-500,501,(256,),dtype=torch.int32)
+    w_l19 = torch.randint(-50, 51, (128, 128, 3, 3), dtype=torch.int8)
+    b_l19 = torch.randint(-500, 501, (128,), dtype=torch.int32)
+    w_cv1 = torch.randint(-50, 51, (256, 384, 1, 1), dtype=torch.int8)
+    b_cv1 = torch.randint(-500, 501, (256,), dtype=torch.int32)
+    w_bn1 = torch.randint(-50, 51, (128, 128, 3, 3), dtype=torch.int8)
+    b_bn1 = torch.randint(-500, 501, (128,), dtype=torch.int32)
+    w_bn2 = torch.randint(-50, 51, (128, 128, 3, 3), dtype=torch.int8)
+    b_bn2 = torch.randint(-500, 501, (128,), dtype=torch.int32)
+    w_cv2 = torch.randint(-50, 51, (256, 384, 1, 1), dtype=torch.int8)
+    b_cv2 = torch.randint(-500, 501, (256,), dtype=torch.int32)
 
     # CPU ref
-    rl19 = conv2d_int8_pade_silu_reference(x_l18,w_l19,b_l19,s,s2,stride=2)
+    rl19 = conv2d_int8_pade_silu_reference(x_l18, w_l19, b_l19, s, s2, stride=2)
     rc = torch.cat([rl19, x_p5], dim=1)
-    rcv1 = conv2d_int8_pade_silu_reference(rc,w_cv1,b_cv1,s,s2,stride=1,padding=0)
-    h1,h2_=rcv1[:,:128],rcv1[:,128:]
-    rb1 = conv2d_int8_pade_silu_reference(h2_,w_bn1,b_bn1,s,s2,stride=1,padding=1)
-    rb2 = conv2d_int8_pade_silu_reference(rb1,w_bn2,b_bn2,s,s2,stride=1,padding=1)
+    rcv1 = conv2d_int8_pade_silu_reference(rc, w_cv1, b_cv1, s, s2, stride=1, padding=0)
+    h1, h2_ = rcv1[:, :128], rcv1[:, 128:]
+    rb1 = conv2d_int8_pade_silu_reference(h2_, w_bn1, b_bn1, s, s2, stride=1, padding=1)
+    rb2 = conv2d_int8_pade_silu_reference(rb1, w_bn2, b_bn2, s, s2, stride=1, padding=1)
     ref = conv2d_int8_pade_silu_reference(
-        torch.cat([h1,h2_,rb2],dim=1),w_cv2,b_cv2,s,s2,stride=1,padding=0)
+        torch.cat([h1, h2_, rb2], dim=1), w_cv2, b_cv2, s, s2, stride=1, padding=0
+    )
 
     # Pack weights: col0 gets first half of OC groups, col1 gets second half
-    l19_oc_chunk, l19_n, _ = _compute_oc_streaming_params(128,128,w,2)
+    l19_oc_chunk, l19_n, _ = _compute_oc_streaming_params(128, 128, w, 2)
     l19_npc = l19_n // NC
+
     def _pk3(wt, b, oc_c, n):
         cs = []
         for g in range(n):
-            ws=wt[g*oc_c:(g+1)*oc_c]; bs=b[g*oc_c:(g+1)*oc_c]
-            cs.append(np.concatenate([weights_to_tiled_int8_k3(ws),
-                                      bs.numpy().astype(np.int32).view(np.int8)]))
+            ws = wt[g * oc_c : (g + 1) * oc_c]
+            bs = b[g * oc_c : (g + 1) * oc_c]
+            cs.append(
+                np.concatenate(
+                    [
+                        weights_to_tiled_int8_k3(ws),
+                        bs.numpy().astype(np.int32).view(np.int8),
+                    ]
+                )
+            )
         return np.concatenate(cs)
+
     def _pk1(wt, b, oc_c, n):
         cs = []
         for g in range(n):
-            ws=wt[g*oc_c:(g+1)*oc_c]; bs=b[g*oc_c:(g+1)*oc_c]
-            cs.append(np.concatenate([weights_to_tiled_int8(ws),
-                                      bs.numpy().astype(np.int32).view(np.int8)]))
+            ws = wt[g * oc_c : (g + 1) * oc_c]
+            bs = b[g * oc_c : (g + 1) * oc_c]
+            cs.append(
+                np.concatenate(
+                    [
+                        weights_to_tiled_int8(ws),
+                        bs.numpy().astype(np.int32).view(np.int8),
+                    ]
+                )
+            )
         return np.concatenate(cs)
 
     half = l19_npc * l19_oc_chunk
-    pw_l19 = np.concatenate([_pk3(w_l19[:half],b_l19[:half],l19_oc_chunk,l19_npc),
-                              _pk3(w_l19[half:],b_l19[half:],l19_oc_chunk,l19_npc)])
+    pw_l19 = np.concatenate(
+        [
+            _pk3(w_l19[:half], b_l19[:half], l19_oc_chunk, l19_npc),
+            _pk3(w_l19[half:], b_l19[half:], l19_oc_chunk, l19_npc),
+        ]
+    )
     cv1_c = 64
     pw_cv1 = _pk1(w_cv1, b_cv1, cv1_c, 4)  # single-col, all 4 groups
-    bn_oc_chunk, bn_n, _ = _compute_oc_streaming_params(128,128,l21_w,1)
+    bn_oc_chunk, bn_n, _ = _compute_oc_streaming_params(128, 128, l21_w, 1)
     bn_npc = bn_n // NC
     bn_half = bn_npc * bn_oc_chunk
-    pw_bn1 = np.concatenate([_pk3(w_bn1[:bn_half],b_bn1[:bn_half],bn_oc_chunk,bn_npc),
-                              _pk3(w_bn1[bn_half:],b_bn1[bn_half:],bn_oc_chunk,bn_npc)])
-    pw_bn2 = np.concatenate([_pk3(w_bn2[:bn_half],b_bn2[:bn_half],bn_oc_chunk,bn_npc),
-                              _pk3(w_bn2[bn_half:],b_bn2[bn_half:],bn_oc_chunk,bn_npc)])
+    pw_bn1 = np.concatenate(
+        [
+            _pk3(w_bn1[:bn_half], b_bn1[:bn_half], bn_oc_chunk, bn_npc),
+            _pk3(w_bn1[bn_half:], b_bn1[bn_half:], bn_oc_chunk, bn_npc),
+        ]
+    )
+    pw_bn2 = np.concatenate(
+        [
+            _pk3(w_bn2[:bn_half], b_bn2[:bn_half], bn_oc_chunk, bn_npc),
+            _pk3(w_bn2[bn_half:], b_bn2[bn_half:], bn_oc_chunk, bn_npc),
+        ]
+    )
     pw_cv2 = _pk1(w_cv2, b_cv2, cv1_c, 4)  # single-col, all 4 groups
     pw = np.concatenate([pw_l19, pw_cv1, pw_bn1, pw_bn2, pw_cv2])
 
@@ -9975,16 +10819,16 @@ def test_dataflow_l19_l21_2col(h, w):
     ctx.prepare_runtime()
 
     oT = op.buffers["output"]
-    l21_out = 256*l21_h*l21_w
+    l21_out = 256 * l21_h * l21_w
     concat_off = l21_out
 
     # Pre-fill P5 into concat[128:384ch]
     o_buf = np.zeros(oT, dtype=np.int8)
     p5t = nchw_to_tiled_int8(x_p5)
     for row in range(l21_h):
-        src = row*256*l21_w
-        dst = concat_off + row*384*l21_w + 128*l21_w
-        o_buf[dst:dst+256*l21_w] = p5t[src:src+256*l21_w]
+        src = row * 256 * l21_w
+        dst = concat_off + row * 384 * l21_w + 128 * l21_w
+        o_buf[dst : dst + 256 * l21_w] = p5t[src : src + 256 * l21_w]
 
     op.write_buffer("input", nchw_to_tiled_int8(x_l18))
     op.write_buffer("weights", pw)
@@ -9992,16 +10836,18 @@ def test_dataflow_l19_l21_2col(h, w):
 
     t0 = time.perf_counter()
     op.run_runlist()
-    ms = (time.perf_counter()-t0)*1000
+    ms = (time.perf_counter() - t0) * 1000
     print(f"\n  L19+L21 2-col ({h}×{w}): {ms:.1f}ms")
 
     out = op.read_buffer("output", (oT,), dtype=np.int8)[:l21_out]
     npu = tiled_to_nchw_int8(out, 256, l21_h, l21_w)
     diff = np.abs(ref.numpy().astype(np.int32) - npu.numpy().astype(np.int32))
-    md = int(diff.max()); e5 = int(np.sum(diff>5)); tot = diff.size
+    md = int(diff.max())
+    e5 = int(np.sum(diff > 5))
+    tot = diff.size
     print(f"  max_diff={md}, errors>5={e5}/{tot}")
     assert md <= 10, f"L19+L21 2-col failed: max_diff={md}"
-    assert e5/tot < 0.10
+    assert e5 / tot < 0.10
 
 
 # ============================================================================
@@ -10029,14 +10875,18 @@ class AIEDataflowUpsample2x(AIEOperatorBase):
             callback_fn="my_dataflow_upsample2x",
             callback_args=[
                 self.context.device_manager.device_type,
-                self.height, self.width, self.channels,
+                self.height,
+                self.width,
+                self.channels,
             ],
         )
         k_obj = KernelObjectArtifact.new(
             "upsample2x_i8.o",
-            depends=[SourceArtifact.new(
-                self.context.base_dir / "aie_kernels" / "aie2p" / "upsample2x_i8.cc"
-            )],
+            depends=[
+                SourceArtifact.new(
+                    self.context.base_dir / "aie_kernels" / "aie2p" / "upsample2x_i8.cc"
+                )
+            ],
             extra_flags=["-DINT8_ACT"],
         )
         xclbin = XclbinArtifact.new(f"{base}.xclbin", depends=[mlir, k_obj])
@@ -10051,17 +10901,24 @@ class AIEDataflowUpsample2x(AIEOperatorBase):
         self.add_buffer("input", total_in, dtype=np.int8)
         self.add_buffer("weights", 4, dtype=np.int8)  # dummy, 3-buf interface
         self.add_buffer("output", total_out, dtype=np.int8)
-        self.add_kernel("ups2x", self.xclbin_artifact,
-                        self.xclbin_artifact.kernel_name, self.insts_artifact)
+        self.add_kernel(
+            "ups2x",
+            self.xclbin_artifact,
+            self.xclbin_artifact.kernel_name,
+            self.insts_artifact,
+        )
         self.add_to_runlist("ups2x", "input", "weights", "output")
 
 
-@pytest.mark.parametrize("h,w,c", [
-    pytest.param(8, 8, 64, id="ups2x_64ch_8x8"),
-    pytest.param(8, 8, 128, id="ups2x_128ch_8x8"),
-    pytest.param(20, 20, 128, id="ups2x_128ch_20x20"),
-    pytest.param(40, 40, 128, id="ups2x_128ch_40x40"),
-])
+@pytest.mark.parametrize(
+    "h,w,c",
+    [
+        pytest.param(8, 8, 64, id="ups2x_64ch_8x8"),
+        pytest.param(8, 8, 128, id="ups2x_128ch_8x8"),
+        pytest.param(20, 20, 128, id="ups2x_128ch_20x20"),
+        pytest.param(40, 40, 128, id="ups2x_128ch_40x40"),
+    ],
+)
 def test_dataflow_upsample2x(h, w, c):
     """Test nearest-neighbor 2× upsample on NPU."""
     torch.manual_seed(42)
@@ -10094,8 +10951,10 @@ def test_dataflow_upsample2x(h, w, c):
     max_diff = int(diff.max())
     total_elems = diff.size
     exact = int(np.sum(diff == 0))
-    print(f"\n  Upsample 2× ({c}ch, {h}×{w} → {h*2}×{w*2}): "
-          f"{run_ms:.1f}ms, max_diff={max_diff}, exact={exact}/{total_elems}")
+    print(
+        f"\n  Upsample 2× ({c}ch, {h}×{w} → {h*2}×{w*2}): "
+        f"{run_ms:.1f}ms, max_diff={max_diff}, exact={exact}/{total_elems}"
+    )
 
     assert max_diff == 0, f"Upsample 2× failed: max_diff={max_diff} (expected exact)"
 
@@ -10108,9 +10967,49 @@ def test_dataflow_upsample2x(h, w, c):
 class AIEDataflowL12L15(AIEOperatorBase):
     """Combined L12 C2f + Upsample + L15 C2f in one PDI."""
 
-    def __init__(self, l12_h, l12_w, s1, s2, context=None):
+    def __init__(
+        self,
+        l12_h,
+        l12_w,
+        s1,
+        s2,
+        l12_cv1_s1=None,
+        l12_cv1_s2=None,
+        l12_bn_cv1_s1=None,
+        l12_bn_cv1_s2=None,
+        l12_bn_cv2_s1=None,
+        l12_bn_cv2_s2=None,
+        l12_cv2_s1=None,
+        l12_cv2_s2=None,
+        l15_cv1_s1=None,
+        l15_cv1_s2=None,
+        l15_bn_cv1_s1=None,
+        l15_bn_cv1_s2=None,
+        l15_bn_cv2_s1=None,
+        l15_bn_cv2_s2=None,
+        l15_cv2_s1=None,
+        l15_cv2_s2=None,
+        context=None,
+    ):
         self.l12_h, self.l12_w = l12_h, l12_w
         self.s1, self.s2 = s1, s2
+        # Per-layer shifts (fall back to uniform s1/s2)
+        self.l12_cv1_s1 = l12_cv1_s1 if l12_cv1_s1 is not None else s1
+        self.l12_cv1_s2 = l12_cv1_s2 if l12_cv1_s2 is not None else s2
+        self.l12_bn_cv1_s1 = l12_bn_cv1_s1 if l12_bn_cv1_s1 is not None else s1
+        self.l12_bn_cv1_s2 = l12_bn_cv1_s2 if l12_bn_cv1_s2 is not None else s2
+        self.l12_bn_cv2_s1 = l12_bn_cv2_s1 if l12_bn_cv2_s1 is not None else s1
+        self.l12_bn_cv2_s2 = l12_bn_cv2_s2 if l12_bn_cv2_s2 is not None else s2
+        self.l12_cv2_s1 = l12_cv2_s1 if l12_cv2_s1 is not None else s1
+        self.l12_cv2_s2 = l12_cv2_s2 if l12_cv2_s2 is not None else s2
+        self.l15_cv1_s1 = l15_cv1_s1 if l15_cv1_s1 is not None else s1
+        self.l15_cv1_s2 = l15_cv1_s2 if l15_cv1_s2 is not None else s2
+        self.l15_bn_cv1_s1 = l15_bn_cv1_s1 if l15_bn_cv1_s1 is not None else s1
+        self.l15_bn_cv1_s2 = l15_bn_cv1_s2 if l15_bn_cv1_s2 is not None else s2
+        self.l15_bn_cv2_s1 = l15_bn_cv2_s1 if l15_bn_cv2_s1 is not None else s1
+        self.l15_bn_cv2_s2 = l15_bn_cv2_s2 if l15_bn_cv2_s2 is not None else s2
+        self.l15_cv2_s1 = l15_cv2_s1 if l15_cv2_s1 is not None else s1
+        self.l15_cv2_s2 = l15_cv2_s2 if l15_cv2_s2 is not None else s2
         self.xclbin_artifact = self.insts_artifact = None
         AIEOperatorBase.__init__(self, context=context, register=True)
 
@@ -10118,136 +11017,204 @@ class AIEDataflowL12L15(AIEOperatorBase):
         d = Path(__file__).parent
         bd = self.context.base_dir / "aie_kernels" / "aie2p"
         base = f"dataflow_l12_l15_{self.l12_h}h_{self.l12_w}w"
-        s = self.s1
         mlir = PythonGeneratedMLIRArtifact.new(
-            f"{base}.mlir", import_path=d / "dataflow_design.py",
+            f"{base}.mlir",
+            import_path=d / "dataflow_design.py",
             callback_fn="my_dataflow_l12_l15",
             callback_args=[
-                self.context.device_manager.device_type, self.l12_h, self.l12_w,
-                s, self.s2, s, self.s2, s, self.s2, s, self.s2,
-                s, self.s2, s, self.s2, s, self.s2, s, self.s2,
-            ])
+                self.context.device_manager.device_type,
+                self.l12_h,
+                self.l12_w,
+                self.l12_cv1_s1,
+                self.l12_cv1_s2,
+                self.l12_bn_cv1_s1,
+                self.l12_bn_cv1_s2,
+                self.l12_bn_cv2_s1,
+                self.l12_bn_cv2_s2,
+                self.l12_cv2_s1,
+                self.l12_cv2_s2,
+                self.l15_cv1_s1,
+                self.l15_cv1_s2,
+                self.l15_bn_cv1_s1,
+                self.l15_bn_cv1_s2,
+                self.l15_bn_cv2_s1,
+                self.l15_bn_cv2_s2,
+                self.l15_cv2_s1,
+                self.l15_cv2_s2,
+            ],
+        )
+
         def ko(name, src, flags):
-            return KernelObjectArtifact.new(name,
-                depends=[SourceArtifact.new(bd / src)], extra_flags=flags)
+            return KernelObjectArtifact.new(
+                name, depends=[SourceArtifact.new(bd / src)], extra_flags=flags
+            )
+
         k_objs = [
             ko("conv2dk1_i8_silu.o", "conv2dk1_i8_silu.cc", ["-DINT8_ACT"]),
-            ko("conv2dk1_i8_silu_cv2.o", "conv2dk1_i8_silu.cc",
-               ["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"]),
+            ko(
+                "conv2dk1_i8_silu_cv2.o",
+                "conv2dk1_i8_silu.cc",
+                ["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_cv2"],
+            ),
             ko("conv2dk3_i8_silu.o", "conv2dk3_i8_silu.cc", ["-DINT8_ACT"]),
-            ko("conv2dk1_i8_silu_l15.o", "conv2dk1_i8_silu.cc",
-               ["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_l15"]),
-            ko("conv2dk1_i8_silu_l15cv2.o", "conv2dk1_i8_silu.cc",
-               ["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_l15cv2"]),
-            ko("conv2dk3_i8_silu_l15.o", "conv2dk3_i8_silu.cc",
-               ["-DINT8_ACT", "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_l15",
-                "-Dconv2dk3s2_i8_silu=conv2dk3s2_i8_silu_l15"]),
+            ko(
+                "conv2dk1_i8_silu_l15.o",
+                "conv2dk1_i8_silu.cc",
+                ["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_l15"],
+            ),
+            ko(
+                "conv2dk1_i8_silu_l15cv2.o",
+                "conv2dk1_i8_silu.cc",
+                ["-DINT8_ACT", "-Dconv2dk1_i8_silu=conv2dk1_i8_silu_l15cv2"],
+            ),
+            ko(
+                "conv2dk3_i8_silu_l15.o",
+                "conv2dk3_i8_silu.cc",
+                [
+                    "-DINT8_ACT",
+                    "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_l15",
+                    "-Dconv2dk3s2_i8_silu=conv2dk3s2_i8_silu_l15",
+                ],
+            ),
             ko("upsample2x_i8.o", "upsample2x_i8.cc", ["-DINT8_ACT"]),
         ]
-        xclbin = XclbinArtifact.new(f"{base}.xclbin", depends=[mlir]+k_objs)
+        xclbin = XclbinArtifact.new(f"{base}.xclbin", depends=[mlir] + k_objs)
         insts = InstsBinArtifact.new(f"{base}.bin", depends=[mlir])
         self.xclbin_artifact, self.insts_artifact = xclbin, insts
         self.add_artifacts([xclbin, insts])
 
     def set_up_runtime(self):
         h12, w12 = self.l12_h, self.l12_w
-        h15, w15 = h12*2, w12*2
+        h15, w15 = h12 * 2, w12 * 2
         total_in = 384 * h12 * w12
         # Weights
-        avail = 65536 - 1040 - 2*384*w12
+        avail = 65536 - 1040 - 2 * 384 * w12
         cv1c = 128
         for oc in range(128, 0, -8):
-            if 128 % oc != 0: continue
-            if oc*384+oc*4+2*oc*w12 <= avail: cv1c = oc; break
-        l12_cv1_tw = (128//cv1c) * (cv1c*384+cv1c*4)
-        l12_bw = 64*64*9+64*4
-        l12_c2w = 128*192+128*4
-        l15_c1w = 64*192+64*4
-        l15_bw = 32*32*9+32*4
-        l15_c2w = 64*96+64*4
-        tw = l12_cv1_tw+2*l12_bw+l12_c2w+l15_c1w+2*l15_bw+l15_c2w
+            if 128 % oc != 0:
+                continue
+            if oc * 384 + oc * 4 + 2 * oc * w12 <= avail:
+                cv1c = oc
+                break
+        l12_cv1_tw = (128 // cv1c) * (cv1c * 384 + cv1c * 4)
+        l12_bw = 64 * 64 * 9 + 64 * 4
+        l12_c2w = 128 * 192 + 128 * 4
+        l15_c1w = 64 * 192 + 64 * 4
+        l15_bw = 32 * 32 * 9 + 32 * 4
+        l15_c2w = 64 * 96 + 64 * 4
+        tw = l12_cv1_tw + 2 * l12_bw + l12_c2w + l15_c1w + 2 * l15_bw + l15_c2w
         # Output buf
-        s0 = 64*h15*w15; s1 = 192*h12*w12; s2 = 128*h12*w12
-        s3 = 192*h15*w15; s4 = 96*h15*w15
-        oT = s0+s1+s2+s3+s4
+        s0 = 64 * h15 * w15
+        s1 = 192 * h12 * w12
+        s2 = 128 * h12 * w12
+        s3 = 192 * h15 * w15
+        s4 = 96 * h15 * w15
+        oT = s0 + s1 + s2 + s3 + s4
         self.add_buffer("input", total_in, dtype=np.int8)
         self.add_buffer("weights", tw, dtype=np.int8)
         self.add_buffer("output", oT, dtype=np.int8)
-        self.add_kernel("l12l15", self.xclbin_artifact,
-                        self.xclbin_artifact.kernel_name, self.insts_artifact)
+        self.add_kernel(
+            "l12l15",
+            self.xclbin_artifact,
+            self.xclbin_artifact.kernel_name,
+            self.insts_artifact,
+        )
         self.add_to_runlist("l12l15", "input", "weights", "output")
 
 
-@pytest.mark.parametrize("h,w", [
-    pytest.param(8, 8, id="l12_l15_8x8"),
-    pytest.param(40, 40, id="l12_l15_40x40"),
-])
+@pytest.mark.parametrize(
+    "h,w",
+    [
+        pytest.param(8, 8, id="l12_l15_8x8"),
+        pytest.param(40, 40, id="l12_l15_40x40"),
+    ],
+)
 def test_dataflow_l12_l15(h, w):
     """Combined L12+upsample+L15: 384ch input → 64ch output."""
     torch.manual_seed(42)
     s, s2 = 10, 7
-    h15, w15 = h*2, w*2
+    h15, w15 = h * 2, w * 2
 
     # Input + P3 skip
     x = torch.randint(-20, 21, (1, 384, h, w), dtype=torch.int8)
     p3 = torch.randint(-20, 21, (1, 64, h15, w15), dtype=torch.int8)
 
     # L12 weights
-    w12c1 = torch.randint(-50,51,(128,384,1,1),dtype=torch.int8)
-    b12c1 = torch.randint(-500,501,(128,),dtype=torch.int32)
-    w12b1 = torch.randint(-50,51,(64,64,3,3),dtype=torch.int8)
-    b12b1 = torch.randint(-500,501,(64,),dtype=torch.int32)
-    w12b2 = torch.randint(-50,51,(64,64,3,3),dtype=torch.int8)
-    b12b2 = torch.randint(-500,501,(64,),dtype=torch.int32)
-    w12c2 = torch.randint(-50,51,(128,192,1,1),dtype=torch.int8)
-    b12c2 = torch.randint(-500,501,(128,),dtype=torch.int32)
+    w12c1 = torch.randint(-50, 51, (128, 384, 1, 1), dtype=torch.int8)
+    b12c1 = torch.randint(-500, 501, (128,), dtype=torch.int32)
+    w12b1 = torch.randint(-50, 51, (64, 64, 3, 3), dtype=torch.int8)
+    b12b1 = torch.randint(-500, 501, (64,), dtype=torch.int32)
+    w12b2 = torch.randint(-50, 51, (64, 64, 3, 3), dtype=torch.int8)
+    b12b2 = torch.randint(-500, 501, (64,), dtype=torch.int32)
+    w12c2 = torch.randint(-50, 51, (128, 192, 1, 1), dtype=torch.int8)
+    b12c2 = torch.randint(-500, 501, (128,), dtype=torch.int32)
     # L15 weights
-    w15c1 = torch.randint(-50,51,(64,192,1,1),dtype=torch.int8)
-    b15c1 = torch.randint(-500,501,(64,),dtype=torch.int32)
-    w15b1 = torch.randint(-50,51,(32,32,3,3),dtype=torch.int8)
-    b15b1 = torch.randint(-500,501,(32,),dtype=torch.int32)
-    w15b2 = torch.randint(-50,51,(32,32,3,3),dtype=torch.int8)
-    b15b2 = torch.randint(-500,501,(32,),dtype=torch.int32)
-    w15c2 = torch.randint(-50,51,(64,96,1,1),dtype=torch.int8)
-    b15c2 = torch.randint(-500,501,(64,),dtype=torch.int32)
+    w15c1 = torch.randint(-50, 51, (64, 192, 1, 1), dtype=torch.int8)
+    b15c1 = torch.randint(-500, 501, (64,), dtype=torch.int32)
+    w15b1 = torch.randint(-50, 51, (32, 32, 3, 3), dtype=torch.int8)
+    b15b1 = torch.randint(-500, 501, (32,), dtype=torch.int32)
+    w15b2 = torch.randint(-50, 51, (32, 32, 3, 3), dtype=torch.int8)
+    b15b2 = torch.randint(-500, 501, (32,), dtype=torch.int32)
+    w15c2 = torch.randint(-50, 51, (64, 96, 1, 1), dtype=torch.int8)
+    b15c2 = torch.randint(-500, 501, (64,), dtype=torch.int32)
 
     # CPU ref: L12
     rc1 = conv2d_int8_pade_silu_reference(x, w12c1, b12c1, s, s2, stride=1, padding=0)
-    h1, h2_ = rc1[:,:64], rc1[:,64:]
+    h1, h2_ = rc1[:, :64], rc1[:, 64:]
     rb1 = conv2d_int8_pade_silu_reference(h2_, w12b1, b12b1, s, s2, stride=1, padding=1)
     rb2 = conv2d_int8_pade_silu_reference(rb1, w12b2, b12b2, s, s2, stride=1, padding=1)
     rc2 = conv2d_int8_pade_silu_reference(
-        torch.cat([h1,h2_,rb2],dim=1), w12c2, b12c2, s, s2, stride=1, padding=0)
+        torch.cat([h1, h2_, rb2], dim=1), w12c2, b12c2, s, s2, stride=1, padding=0
+    )
     # Upsample + concat P3
-    ups = rc2.repeat_interleave(2,dim=2).repeat_interleave(2,dim=3)
+    ups = rc2.repeat_interleave(2, dim=2).repeat_interleave(2, dim=3)
     l15_in = torch.cat([ups, p3], dim=1)
     # L15
-    rc1_ = conv2d_int8_pade_silu_reference(l15_in, w15c1, b15c1, s, s2, stride=1, padding=0)
-    h1_, h2__ = rc1_[:,:32], rc1_[:,32:]
-    rb1_ = conv2d_int8_pade_silu_reference(h2__, w15b1, b15b1, s, s2, stride=1, padding=1)
-    rb2_ = conv2d_int8_pade_silu_reference(rb1_, w15b2, b15b2, s, s2, stride=1, padding=1)
+    rc1_ = conv2d_int8_pade_silu_reference(
+        l15_in, w15c1, b15c1, s, s2, stride=1, padding=0
+    )
+    h1_, h2__ = rc1_[:, :32], rc1_[:, 32:]
+    rb1_ = conv2d_int8_pade_silu_reference(
+        h2__, w15b1, b15b1, s, s2, stride=1, padding=1
+    )
+    rb2_ = conv2d_int8_pade_silu_reference(
+        rb1_, w15b2, b15b2, s, s2, stride=1, padding=1
+    )
     ref = conv2d_int8_pade_silu_reference(
-        torch.cat([h1_,h2__,rb2_],dim=1), w15c2, b15c2, s, s2, stride=1, padding=0)
+        torch.cat([h1_, h2__, rb2_], dim=1), w15c2, b15c2, s, s2, stride=1, padding=0
+    )
 
     # Pack weights
-    avail = 65536 - 1040 - 2*384*w
+    avail = 65536 - 1040 - 2 * 384 * w
     cv1c = 128
-    for oc in range(128,0,-8):
-        if 128%oc!=0: continue
-        if oc*384+oc*4+2*oc*w<=avail: cv1c=oc; break
-    cv1n = 128//cv1c
+    for oc in range(128, 0, -8):
+        if 128 % oc != 0:
+            continue
+        if oc * 384 + oc * 4 + 2 * oc * w <= avail:
+            cv1c = oc
+            break
+    cv1n = 128 // cv1c
     chunks = []
     for g in range(cv1n):
-        ws=w12c1[g*cv1c:(g+1)*cv1c]; bs=b12c1[g*cv1c:(g+1)*cv1c]
-        chunks.append(np.concatenate([weights_to_tiled_int8(ws),
-                                      bs.numpy().astype(np.int32).view(np.int8)]))
-    pw = np.concatenate(chunks + [
-        pack_fused_weights_k3(w12b1,b12b1), pack_fused_weights_k3(w12b2,b12b2),
-        _pack_k1_silu_weights(w12c2,b12c2),
-        _pack_k1_silu_weights(w15c1,b15c1),
-        pack_fused_weights_k3(w15b1,b15b1), pack_fused_weights_k3(w15b2,b15b2),
-        _pack_k1_silu_weights(w15c2,b15c2),
-    ])
+        ws = w12c1[g * cv1c : (g + 1) * cv1c]
+        bs = b12c1[g * cv1c : (g + 1) * cv1c]
+        chunks.append(
+            np.concatenate(
+                [weights_to_tiled_int8(ws), bs.numpy().astype(np.int32).view(np.int8)]
+            )
+        )
+    pw = np.concatenate(
+        chunks
+        + [
+            pack_fused_weights_k3(w12b1, b12b1),
+            pack_fused_weights_k3(w12b2, b12b2),
+            _pack_k1_silu_weights(w12c2, b12c2),
+            _pack_k1_silu_weights(w15c1, b15c1),
+            pack_fused_weights_k3(w15b1, b15b1),
+            pack_fused_weights_k3(w15b2, b15b2),
+            _pack_k1_silu_weights(w15c2, b15c2),
+        ]
+    )
 
     # Build NPU
     ctx = AIEContext()
@@ -10256,16 +11223,19 @@ def test_dataflow_l12_l15(h, w):
     ctx.prepare_runtime()
 
     oT = op.buffers["output"]
-    s0=64*h15*w15; s1_=192*h*w; s2_=128*h*w; s3_=192*h15*w15
-    o3 = s0+s1_+s2_  # L15_concat offset
+    s0 = 64 * h15 * w15
+    s1_ = 192 * h * w
+    s2_ = 128 * h * w
+    s3_ = 192 * h15 * w15
+    o3 = s0 + s1_ + s2_  # L15_concat offset
 
     # Pre-fill P3 into L15_concat[128:192ch]
     o_buf = np.zeros(oT, dtype=np.int8)
     p3t = nchw_to_tiled_int8(p3)
     for row in range(h15):
-        src = row*64*w15
-        dst = o3 + row*192*w15 + 128*w15
-        o_buf[dst:dst+64*w15] = p3t[src:src+64*w15]
+        src = row * 64 * w15
+        dst = o3 + row * 192 * w15 + 128 * w15
+        o_buf[dst : dst + 64 * w15] = p3t[src : src + 64 * w15]
 
     op.write_buffer("input", nchw_to_tiled_int8(x))
     op.write_buffer("weights", pw)
@@ -10273,18 +11243,18 @@ def test_dataflow_l12_l15(h, w):
 
     t0 = time.perf_counter()
     op.run_runlist()
-    ms = (time.perf_counter()-t0)*1000
+    ms = (time.perf_counter() - t0) * 1000
     print(f"\n  L12+L15 combined ({h}×{w}): {ms:.1f}ms")
 
     out = op.read_buffer("output", (oT,), dtype=np.int8)[:s0]
     npu = tiled_to_nchw_int8(out, 64, h15, w15)
     diff = np.abs(ref.numpy().astype(np.int32) - npu.numpy().astype(np.int32))
     md = int(diff.max())
-    e5 = int(np.sum(diff>5))
+    e5 = int(np.sum(diff > 5))
     tot = diff.size
     print(f"  max_diff={md}, errors>5={e5}/{tot}")
     assert md <= 10, f"L12+L15 failed: max_diff={md}"
-    assert e5/tot < 0.10, f"L12+L15: too many errors >5"
+    assert e5 / tot < 0.10, f"L12+L15: too many errors >5"
 
 
 # ============================================================================
@@ -10300,11 +11270,22 @@ class AIEDataflowDetectScale(AIEOperatorBase):
     """
 
     def __init__(
-        self, height, width, in_channels,
-        reg_cv1_s1, reg_cv1_s2, reg_cv2_s1, reg_cv2_s2,
-        reg_cv3_s1, reg_cv3_s2,
-        cls_cv1_s1, cls_cv1_s2, cls_cv2_s1, cls_cv2_s2,
-        cls_cv3_s1, cls_cv3_s2,
+        self,
+        height,
+        width,
+        in_channels,
+        reg_cv1_s1,
+        reg_cv1_s2,
+        reg_cv2_s1,
+        reg_cv2_s2,
+        reg_cv3_s1,
+        reg_cv3_s2,
+        cls_cv1_s1,
+        cls_cv1_s2,
+        cls_cv2_s1,
+        cls_cv2_s2,
+        cls_cv3_s1,
+        cls_cv3_s2,
         context=None,
     ):
         self.height = height
@@ -10333,21 +11314,28 @@ class AIEDataflowDetectScale(AIEOperatorBase):
         )
 
         operator_dir = Path(__file__).parent
-        base = (f"dataflow_detect_{self.in_channels}ic_"
-                f"{self.height}h_{self.width}w")
+        base = f"dataflow_detect_{self.in_channels}ic_" f"{self.height}h_{self.width}w"
         mlir = PythonGeneratedMLIRArtifact.new(
             f"{base}.mlir",
             import_path=operator_dir / "dataflow_design.py",
             callback_fn="my_dataflow_detect_scale",
             callback_args=[
                 self.context.device_manager.device_type,
-                self.height, self.width, self.in_channels,
-                self.reg_cv1_s1, self.reg_cv1_s2,
-                self.reg_cv2_s1, self.reg_cv2_s2,
-                self.reg_cv3_s1, self.reg_cv3_s2,
-                self.cls_cv1_s1, self.cls_cv1_s2,
-                self.cls_cv2_s1, self.cls_cv2_s2,
-                self.cls_cv3_s1, self.cls_cv3_s2,
+                self.height,
+                self.width,
+                self.in_channels,
+                self.reg_cv1_s1,
+                self.reg_cv1_s2,
+                self.reg_cv2_s1,
+                self.reg_cv2_s2,
+                self.reg_cv3_s1,
+                self.reg_cv3_s2,
+                self.cls_cv1_s1,
+                self.cls_cv1_s2,
+                self.cls_cv2_s1,
+                self.cls_cv2_s2,
+                self.cls_cv3_s1,
+                self.cls_cv3_s2,
             ],
         )
         k_objs = self._make_kernel_objs()
@@ -10361,18 +11349,24 @@ class AIEDataflowDetectScale(AIEOperatorBase):
         reg_mid = 64
         cls_mid = 80
         self._rcv1_oc_chunk, self._rcv1_n_oc, _ = _compute_oc_streaming_params(
-            self.in_channels, reg_mid, self.width, 1)
+            self.in_channels, reg_mid, self.width, 1
+        )
         self._rcv2_oc_chunk, self._rcv2_n_oc, _ = _compute_oc_streaming_params(
-            reg_mid, reg_mid, self.width, 1)
+            reg_mid, reg_mid, self.width, 1
+        )
         self._rcv3_oc_chunk, self._rcv3_n_oc = _compute_oc_streaming_params_k1(
-            reg_mid, 64, self.width)  # reg_mid -> reg_out (64)
+            reg_mid, 64, self.width
+        )  # reg_mid -> reg_out (64)
 
         self._ccv1_oc_chunk, self._ccv1_n_oc, _ = _compute_oc_streaming_params(
-            self.in_channels, cls_mid, self.width, 1)
+            self.in_channels, cls_mid, self.width, 1
+        )
         self._ccv2_oc_chunk, self._ccv2_n_oc, _ = _compute_oc_streaming_params(
-            cls_mid, cls_mid, self.width, 1)
+            cls_mid, cls_mid, self.width, 1
+        )
         self._ccv3_oc_chunk, self._ccv3_n_oc = _compute_oc_streaming_params_k1(
-            cls_mid, cls_mid, self.width)
+            cls_mid, cls_mid, self.width
+        )
 
     def _make_kernel_objs(self):
         base_dir = self.context.base_dir / "aie_kernels" / "aie2p"
@@ -10380,31 +11374,41 @@ class AIEDataflowDetectScale(AIEOperatorBase):
         k1_bias_src = SourceArtifact.new(base_dir / "conv2dk1_i8_bias.cc")
         return [
             # 1. reg.cv1 k3+SiLU
-            KernelObjectArtifact.new("conv2dk3_i8_silu.o",
-                depends=[k3_src], extra_flags=["-DINT8_ACT"]),
+            KernelObjectArtifact.new(
+                "conv2dk3_i8_silu.o", depends=[k3_src], extra_flags=["-DINT8_ACT"]
+            ),
             # 2. reg.cv2 k3+SiLU (renamed symbol)
-            KernelObjectArtifact.new("conv2dk3_i8_silu_rcv2.o",
+            KernelObjectArtifact.new(
+                "conv2dk3_i8_silu_rcv2.o",
                 depends=[k3_src],
-                extra_flags=["-DINT8_ACT",
-                             "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_rcv2"]),
+                extra_flags=["-DINT8_ACT", "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_rcv2"],
+            ),
             # 3. cls.cv1 k3+SiLU (renamed symbol)
-            KernelObjectArtifact.new("conv2dk3_i8_silu_ccv1.o",
+            KernelObjectArtifact.new(
+                "conv2dk3_i8_silu_ccv1.o",
                 depends=[k3_src],
-                extra_flags=["-DINT8_ACT",
-                             "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_ccv1"]),
+                extra_flags=["-DINT8_ACT", "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_ccv1"],
+            ),
             # 4. cls.cv2 k3+SiLU (renamed symbol)
-            KernelObjectArtifact.new("conv2dk3_i8_silu_ccv2.o",
+            KernelObjectArtifact.new(
+                "conv2dk3_i8_silu_ccv2.o",
                 depends=[k3_src],
-                extra_flags=["-DINT8_ACT",
-                             "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_ccv2"]),
+                extra_flags=["-DINT8_ACT", "-Dconv2dk3_i8_silu=conv2dk3_i8_silu_ccv2"],
+            ),
             # 5. reg.cv3 k1+bias (-O1 to avoid Peano codegen bug at w_iters>=10)
-            KernelObjectArtifact.new("conv2dk1_i8_bias.o",
-                depends=[k1_bias_src], extra_flags=["-DINT8_ACT"]),
+            KernelObjectArtifact.new(
+                "conv2dk1_i8_bias.o", depends=[k1_bias_src], extra_flags=["-DINT8_ACT"]
+            ),
             # 6. cls.cv3 k1+bias (renamed, -O1 for same codegen bug)
-            KernelObjectArtifact.new("conv2dk1_i8_bias_cls.o",
+            KernelObjectArtifact.new(
+                "conv2dk1_i8_bias_cls.o",
                 depends=[k1_bias_src],
-                extra_flags=["-DINT8_ACT", "-O1",
-                             "-Dconv2dk1_i8_bias=conv2dk1_i8_bias_cls"]),
+                extra_flags=[
+                    "-DINT8_ACT",
+                    "-O1",
+                    "-Dconv2dk1_i8_bias=conv2dk1_i8_bias_cls",
+                ],
+            ),
         ]
 
     def set_up_runtime(self):
@@ -10440,16 +11444,23 @@ class AIEDataflowDetectScale(AIEOperatorBase):
         reg_scratch_b = reg_mid * h * w
         cls_scratch_a = cls_mid * h * w
         cls_scratch_b = cls_mid * h * w
-        output_buf_size = (reg_output_size + cls_output_size
-                           + reg_scratch_a + reg_scratch_b
-                           + cls_scratch_a + cls_scratch_b)
+        output_buf_size = (
+            reg_output_size
+            + cls_output_size
+            + reg_scratch_a
+            + reg_scratch_b
+            + cls_scratch_a
+            + cls_scratch_b
+        )
 
         self.add_buffer("input", total_input, dtype=np.int8)
         self.add_buffer("weights", total_wt, dtype=np.int8)
         self.add_buffer("output", output_buf_size, dtype=np.int8)
         self.add_kernel(
-            "detect", self.xclbin_artifact,
-            self.xclbin_artifact.kernel_name, self.insts_artifact,
+            "detect",
+            self.xclbin_artifact,
+            self.xclbin_artifact.kernel_name,
+            self.insts_artifact,
         )
         self.add_to_runlist("detect", "input", "weights", "output")
 
@@ -10461,10 +11472,8 @@ class AIEDataflowDetectScale(AIEOperatorBase):
         pytest.param(128, 40, 40, id="detect_p4_40x40"),
         pytest.param(64, 16, 16, id="detect_p3_16x16"),
         pytest.param(256, 16, 16, id="detect_p5_16x16"),
-        pytest.param(256, 20, 20, id="detect_p5_20x20",
-                     marks=pytest.mark.extensive),
-        pytest.param(64, 80, 80, id="detect_p3_80x80",
-                     marks=pytest.mark.extensive),
+        pytest.param(256, 20, 20, id="detect_p5_20x20", marks=pytest.mark.extensive),
+        pytest.param(64, 80, 80, id="detect_p3_80x80", marks=pytest.mark.extensive),
     ],
 )
 def test_dataflow_detect_scale(det_ic, det_h, det_w):
@@ -10485,9 +11494,7 @@ def test_dataflow_detect_scale(det_ic, det_h, det_w):
     cls_out = 80
 
     # Generate input
-    x_int8 = torch.randint(
-        -20, 21, (1, det_ic, det_h, det_w), dtype=torch.int8
-    )
+    x_int8 = torch.randint(-20, 21, (1, det_ic, det_h, det_w), dtype=torch.int8)
 
     # reg branch weights
     w_rcv1 = torch.randint(-50, 51, (reg_mid, det_ic, 3, 3), dtype=torch.int8)
@@ -10534,10 +11541,14 @@ def test_dataflow_detect_scale(det_ic, det_h, det_w):
         for g in range(n_oc):
             w_s = w[g * oc_chunk : (g + 1) * oc_chunk]
             b_s = b[g * oc_chunk : (g + 1) * oc_chunk]
-            chunks.append(np.concatenate([
-                weights_to_tiled_int8_k3(w_s),
-                b_s.numpy().astype(np.int32).view(np.int8),
-            ]))
+            chunks.append(
+                np.concatenate(
+                    [
+                        weights_to_tiled_int8_k3(w_s),
+                        b_s.numpy().astype(np.int32).view(np.int8),
+                    ]
+                )
+            )
         return np.concatenate(chunks)
 
     # k1 weight packing
@@ -10546,10 +11557,14 @@ def test_dataflow_detect_scale(det_ic, det_h, det_w):
         for g in range(n_oc):
             w_s = w[g * oc_chunk : (g + 1) * oc_chunk]
             b_s = b[g * oc_chunk : (g + 1) * oc_chunk]
-            chunks.append(np.concatenate([
-                weights_to_tiled_int8(w_s),
-                b_s.numpy().astype(np.int32).view(np.int8),
-            ]))
+            chunks.append(
+                np.concatenate(
+                    [
+                        weights_to_tiled_int8(w_s),
+                        b_s.numpy().astype(np.int32).view(np.int8),
+                    ]
+                )
+            )
         return np.concatenate(chunks)
 
     # OC streaming params
@@ -10567,21 +11582,35 @@ def test_dataflow_detect_scale(det_ic, det_h, det_w):
     packed_ccv2 = _pack_k3_oc(w_ccv2, b_ccv2, ccv2_oc, ccv2_n)
     packed_ccv3 = _pack_k1_oc(w_ccv3, b_ccv3, ccv3_oc, ccv3_n)
 
-    packed_weights = np.concatenate([
-        packed_rcv1, packed_rcv2, packed_rcv3,
-        packed_ccv1, packed_ccv2, packed_ccv3,
-    ])
+    packed_weights = np.concatenate(
+        [
+            packed_rcv1,
+            packed_rcv2,
+            packed_rcv3,
+            packed_ccv1,
+            packed_ccv2,
+            packed_ccv3,
+        ]
+    )
 
     # Build NPU design
     ctx = AIEContext()
     op = AIEDataflowDetectScale(
-        height=det_h, width=det_w, in_channels=det_ic,
-        reg_cv1_s1=scale, reg_cv1_s2=shift2,
-        reg_cv2_s1=scale, reg_cv2_s2=shift2,
-        reg_cv3_s1=scale, reg_cv3_s2=shift2,
-        cls_cv1_s1=scale, cls_cv1_s2=shift2,
-        cls_cv2_s1=scale, cls_cv2_s2=shift2,
-        cls_cv3_s1=scale, cls_cv3_s2=shift2,
+        height=det_h,
+        width=det_w,
+        in_channels=det_ic,
+        reg_cv1_s1=scale,
+        reg_cv1_s2=shift2,
+        reg_cv2_s1=scale,
+        reg_cv2_s2=shift2,
+        reg_cv3_s1=scale,
+        reg_cv3_s2=shift2,
+        cls_cv1_s1=scale,
+        cls_cv1_s2=shift2,
+        cls_cv2_s1=scale,
+        cls_cv2_s2=shift2,
+        cls_cv3_s1=scale,
+        cls_cv3_s2=shift2,
         context=ctx,
     )
     ctx.compile_all()
@@ -10628,16 +11657,16 @@ def test_dataflow_detect_scale(det_ic, det_h, det_w):
     # Large IC (256) accumulates more bf16 rounding error through 3 layers
     max_diff_thresh = 30 if det_ic >= 256 else 15
     e5_rate_thresh = 0.25 if det_ic >= 256 else 0.10
-    assert max_diff_reg <= max_diff_thresh, (
-        f"Detect reg failed: max_diff={max_diff_reg} exceeds threshold {max_diff_thresh}"
-    )
+    assert (
+        max_diff_reg <= max_diff_thresh
+    ), f"Detect reg failed: max_diff={max_diff_reg} exceeds threshold {max_diff_thresh}"
     assert e5_reg / tot_reg < e5_rate_thresh, (
         f"Detect reg: {100 * e5_reg / tot_reg:.2f}% errors > 5 "
         f"exceeds {100 * e5_rate_thresh:.0f}%"
     )
-    assert max_diff_cls <= max_diff_thresh, (
-        f"Detect cls failed: max_diff={max_diff_cls} exceeds threshold {max_diff_thresh}"
-    )
+    assert (
+        max_diff_cls <= max_diff_thresh
+    ), f"Detect cls failed: max_diff={max_diff_cls} exceeds threshold {max_diff_thresh}"
     assert e5_cls / tot_cls < e5_rate_thresh, (
         f"Detect cls: {100 * e5_cls / tot_cls:.2f}% errors > 5 "
         f"exceeds {100 * e5_rate_thresh:.0f}%"
