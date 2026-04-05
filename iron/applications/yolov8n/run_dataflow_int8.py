@@ -2,30 +2,33 @@
 # SPDX-FileCopyrightText: Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Run YOLOv8n with full dataflow on NPU (int8) — 13 PDIs.
+"""Run YOLOv8n with full dataflow on NPU (int8) — 13 PDIs, 4 AIEContexts.
 
 Architecture:
-  - Backbone (L0-L7): dataflow phases on NPU (5 PDIs, core-to-core chaining)
-  - L8 C2f: fused dataflow PDI (4 workers, OC streaming)
-  - L9 SPPF: dataflow PDI (3 workers: cv1 + maxpool + cv2)
-  - Neck (L12+L15, L16+L18, L19+L21): 3 fused dataflow PDIs
-  - Detect (P3, P4, P5): 3 dataflow PDIs (one per scale)
+  - Backbone (L0-L7): dataflow phases on NPU (5 PDIs, 1 shared AIEContext)
+  - L8 C2f + L9 SPPF: 2 PDIs, 1 shared AIEContext
+  - Neck (L12+L15, L16+L18, L19+L21): 3 fused dataflow PDIs, 1 shared AIEContext
+  - Detect (P3, P4, P5): 3 dataflow PDIs, 1 shared AIEContext
   - CPU-only ops between PDIs: upsample, concat, skip pre-fills
 
-13-PDI pipeline:
-  Phase 1:  L0→L1→L2(C2f)→L3  (8→64ch, 640→80)   8 cores, 2 columns
-  Phase 2:  L4 C2f n=2         (64→64ch, 80×80)    7 cores, 2 columns
-  Phase 3:  L5 CBS             (64→128ch, 80→40)   1 core, OC streaming
-  Phase 4:  L6 C2f n=2         (128→128ch, 40×40)  8 cores, 2 columns
-  Phase 5:  L7 CBS             (128→256ch, 40→20)  1 core, OC streaming
-  Phase 6:  L8 C2f n=1         (256→256ch, 20×20)  4 workers, fused SiLU
-  Phase 7:  L9 SPPF            (256→256ch, 20×20)  3 workers, maxpool on NPU
-  Phase 8:  L12+L15            (384→64ch, 40→80)   fused PDI
-  Phase 9:  L16+L18            (64→128ch, 80→40)   fused PDI
-  Phase 10: L19+L21            (128→256ch, 40→20)  fused PDI, 2-column
-  Phase 11: Detect P3           (64→64+80, 80×80)  6 workers
-  Phase 12: Detect P4           (128→64+80, 40×40) 6 workers
-  Phase 13: Detect P5           (256→64+80, 20×20) 6 workers
+13-PDI pipeline (4 AIEContexts):
+  Context 1 — Backbone:
+    Phase 1:  L0→L1→L2(C2f)→L3  (8→64ch, 640→80)   8 cores, 2 columns
+    Phase 2:  L4 C2f n=2         (64→64ch, 80×80)    7 cores, 2 columns
+    Phase 3:  L5 CBS             (64→128ch, 80→40)   1 core, OC streaming
+    Phase 4:  L6 C2f n=2         (128→128ch, 40×40)  8 cores, 2 columns
+    Phase 5:  L7 CBS             (128→256ch, 40→20)  1 core, OC streaming
+  Context 2 — L8+L9:
+    Phase 6:  L8 C2f n=1         (256→256ch, 20×20)  4 workers, fused SiLU
+    Phase 7:  L9 SPPF            (256→256ch, 20×20)  3 workers, maxpool on NPU
+  Context 3 — Neck:
+    Phase 8:  L12+L15            (384→64ch, 40→80)   fused PDI
+    Phase 9:  L16+L18            (64→128ch, 80→40)   fused PDI
+    Phase 10: L19+L21            (128→256ch, 40→20)  fused PDI, 2-column
+  Context 4 — Detect:
+    Phase 11: Detect P3           (64→64+80, 80×80)  6 workers
+    Phase 12: Detect P4           (128→64+80, 40×40) 6 workers
+    Phase 13: Detect P5           (256→64+80, 20×20) 6 workers
 
 Usage:
     python3 iron/applications/yolov8n/run_dataflow_int8.py [--image PATH]
@@ -143,8 +146,10 @@ def run_backbone_dataflow(
             return s
         return (s, 7)  # default shift2=7
 
-    # ===== Phase 1: L0→L1→L2(C2f)→L3 =====
-    print("  Phase 1: L0→L1→L2→L3 ...", end="", flush=True)
+    # ===== Create shared context for all backbone phases =====
+    ctx = AIEContext()
+
+    # --- Register all 5 backbone operators on the shared context ---
     l0_s1, l0_s2 = get_shift("l0")
     l1_s1, l1_s2 = get_shift("l1")
     cv1_s1, cv1_s2 = get_shift("l2.cv1")
@@ -153,7 +158,6 @@ def run_backbone_dataflow(
     cv2_s1, cv2_s2 = get_shift("l2.cv2")
     l3_s1, l3_s2 = get_shift("l3")
 
-    ctx1 = AIEContext()
     op1 = AIEDataflowBackbonePhase1(
         l0_height=640,
         l0_width=640,
@@ -175,15 +179,76 @@ def run_backbone_dataflow(
         l3_oc=64,
         l3_shift1=l3_s1,
         l3_shift2=l3_s2,
-        context=ctx1,
+        context=ctx,
     )
-    ctx1.compile_all()
-    ctx1.prepare_runtime()
 
-    # Write input
+    p2_scale = shifts.get("l4.cv1", 10)
+    if isinstance(p2_scale, tuple):
+        p2_scale = p2_scale[0]
+
+    op2 = AIEDataflowC2fL4(
+        height=80,
+        width=80,
+        in_channels=64,
+        cv1_scale=p2_scale,
+        bn0_cv1_scale=p2_scale,
+        bn0_cv2_scale=p2_scale,
+        bn1_cv1_scale=p2_scale,
+        bn1_cv2_scale=p2_scale,
+        cv2_scale=p2_scale,
+        context=ctx,
+    )
+
+    l5_s1, l5_s2 = get_shift("l5")
+
+    op3 = AIEDataflowFusedOCStreaming(
+        height=80,
+        width=80,
+        in_channels=64,
+        out_channels=128,
+        shift1=l5_s1,
+        shift2=l5_s2,
+        context=ctx,
+    )
+
+    p4_scale = shifts.get("l6.cv1", 10)
+    if isinstance(p4_scale, tuple):
+        p4_scale = p4_scale[0]
+
+    op4 = AIEDataflowC2fL6(
+        height=40,
+        width=40,
+        in_channels=128,
+        cv1_scale=p4_scale,
+        bn0_cv1_scale=p4_scale,
+        bn0_cv2_scale=p4_scale,
+        bn1_cv1_scale=p4_scale,
+        bn1_cv2_scale=p4_scale,
+        cv2_scale=p4_scale,
+        context=ctx,
+    )
+
+    l7_s1, l7_s2 = get_shift("l7")
+
+    op5 = AIEDataflowFusedOCStreaming(
+        height=40,
+        width=40,
+        in_channels=128,
+        out_channels=256,
+        shift1=l7_s1,
+        shift2=l7_s2,
+        context=ctx,
+    )
+
+    # Compile and prepare all 5 backbone operators at once
+    ctx.compile_all()
+    ctx.prepare_runtime()
+
+    # ===== Phase 1: L0→L1→L2(C2f)→L3 =====
+    print("  Phase 1: L0→L1→L2→L3 ...", end="", flush=True)
+
     op1.write_buffer("input", nchw_to_tiled_int8(x_int8))
 
-    # Pack Phase 1 weights
     def _pad(data, slot_size):
         pad = np.zeros(slot_size - len(data), dtype=np.int8)
         return np.concatenate([data, pad])
@@ -196,7 +261,6 @@ def run_backbone_dataflow(
     w_cv2, ws_cv2, b_cv2 = lookup_weight(int8_weights, "l2.cv2")
     w3, ws3, b3 = lookup_weight(int8_weights, "l3")
 
-    # Effective input activation scales through the Phase 1 chain
     l0_in_sc = act_scales.get("input", 1.0)
     if l0_in_sc == 0:
         l0_in_sc = 1.0
@@ -233,41 +297,16 @@ def run_backbone_dataflow(
     t1 = time.perf_counter()
     print(f" {1000 * (t1 - t0):.0f}ms")
 
-    # Extract Phase 1 output (L3 output at offset 0, 64ch×80×80)
     total_output_buf = op1.buffers["output"]
     output_buf = op1.read_buffer("output", (total_output_buf,), dtype=np.int8)
     p1_output = output_buf[: op1._total_output].copy()
-
-    # Phase 1 output is also P3 input (after C2f L4)
-    # Convert to NCHW for CPU reference / neck usage
     l3_out = tiled_to_nchw_int8(p1_output, 64, 80, 80)
-    del ctx1, op1
 
     # ===== Phase 2: C2f L4 (64→64, 80×80) =====
     print("  Phase 2: C2f L4 ...", end="", flush=True)
-    p2_scale = shifts.get("l4.cv1", 10)
-    if isinstance(p2_scale, tuple):
-        p2_scale = p2_scale[0]
-
-    ctx2 = AIEContext()
-    op2 = AIEDataflowC2fL4(
-        height=80,
-        width=80,
-        in_channels=64,
-        cv1_scale=p2_scale,
-        bn0_cv1_scale=p2_scale,
-        bn0_cv2_scale=p2_scale,
-        bn1_cv1_scale=p2_scale,
-        bn1_cv2_scale=p2_scale,
-        cv2_scale=p2_scale,
-        context=ctx2,
-    )
-    ctx2.compile_all()
-    ctx2.prepare_runtime()
 
     op2.write_buffer("input", p1_output)
 
-    # Pack Phase 2 weights (non-fused k1 and k3)
     w_cv1_p2, _, _ = lookup_weight(int8_weights, "l4.cv1")
     w_bn0cv1, _, _ = lookup_weight(int8_weights, "l4.bn0.cv1")
     w_bn0cv2, _, _ = lookup_weight(int8_weights, "l4.bn0.cv2")
@@ -300,30 +339,13 @@ def run_backbone_dataflow(
     output_raw_p2 = op2.read_buffer("output", (p2_output_buf_size,), dtype=np.int8)
     p2_output = output_raw_p2[:p2_total_output].copy()
     p3 = tiled_to_nchw_int8(p2_output, 64, 80, 80)
-    del ctx2, op2
 
     # ===== Phase 3: L5 CBS (64→128, s2, 80→40) =====
     print("  Phase 3: L5 ...", end="", flush=True)
-    l5_s1, l5_s2 = get_shift("l5")
-
-    ctx3 = AIEContext()
-    op3 = AIEDataflowFusedOCStreaming(
-        height=80,
-        width=80,
-        in_channels=64,
-        out_channels=128,
-        shift1=l5_s1,
-        shift2=l5_s2,
-        context=ctx3,
-    )
-    ctx3.compile_all()
-    ctx3.prepare_runtime()
 
     op3.write_buffer("input", p2_output)
 
-    # Pack L5 weights for OC streaming
     w_l5, ws_l5, b_l5 = lookup_weight(int8_weights, "l5")
-    # L5 input = L4 output. L4 is non-fused so uses act_scales directly.
     l5_in_scale = act_scales.get("l4.cv2", 1.0)
     b_l5_i32 = _prescale_bias(b_l5, ws_l5, l5_in_scale)
     oc_chunk_l5 = op3._oc_chunk
@@ -347,33 +369,12 @@ def run_backbone_dataflow(
     print(f" {1000 * (t1 - t0):.0f}ms")
 
     p3_output = op3.read_buffer("output", (p3_total_output,), dtype=np.int8).copy()
-    del ctx3, op3
 
     # ===== Phase 4: C2f L6 (128→128, 40×40) =====
     print("  Phase 4: C2f L6 ...", end="", flush=True)
-    p4_scale = shifts.get("l6.cv1", 10)
-    if isinstance(p4_scale, tuple):
-        p4_scale = p4_scale[0]
-
-    ctx4 = AIEContext()
-    op4 = AIEDataflowC2fL6(
-        height=40,
-        width=40,
-        in_channels=128,
-        cv1_scale=p4_scale,
-        bn0_cv1_scale=p4_scale,
-        bn0_cv2_scale=p4_scale,
-        bn1_cv1_scale=p4_scale,
-        bn1_cv2_scale=p4_scale,
-        cv2_scale=p4_scale,
-        context=ctx4,
-    )
-    ctx4.compile_all()
-    ctx4.prepare_runtime()
 
     op4.write_buffer("input", p3_output)
 
-    # Pack Phase 4 weights (non-fused)
     w_cv1_p4, _, _ = lookup_weight(int8_weights, "l6.cv1")
     w_bn0cv1_p4, _, _ = lookup_weight(int8_weights, "l6.bn0.cv1")
     w_bn0cv2_p4, _, _ = lookup_weight(int8_weights, "l6.bn0.cv2")
@@ -406,30 +407,13 @@ def run_backbone_dataflow(
     output_raw_p4 = op4.read_buffer("output", (p4_output_buf_size,), dtype=np.int8)
     p4_output = output_raw_p4[:p4_total_output].copy()
     p4 = tiled_to_nchw_int8(p4_output, 128, 40, 40)
-    del ctx4, op4
 
     # ===== Phase 5: L7 CBS (128→256, s2, 40→20) =====
     print("  Phase 5: L7 ...", end="", flush=True)
-    l7_s1, l7_s2 = get_shift("l7")
-
-    ctx5 = AIEContext()
-    op5 = AIEDataflowFusedOCStreaming(
-        height=40,
-        width=40,
-        in_channels=128,
-        out_channels=256,
-        shift1=l7_s1,
-        shift2=l7_s2,
-        context=ctx5,
-    )
-    ctx5.compile_all()
-    ctx5.prepare_runtime()
 
     op5.write_buffer("input", p4_output)
 
-    # Pack L7 weights for OC streaming
     w_l7, ws_l7, b_l7 = lookup_weight(int8_weights, "l7")
-    # L7 input = L6 output. L6 is non-fused so uses act_scales directly.
     l7_in_scale = act_scales.get("l6.cv2", 1.0)
     b_l7_i32 = _prescale_bias(b_l7, ws_l7, l7_in_scale)
     oc_chunk_l7 = op5._oc_chunk
@@ -454,15 +438,13 @@ def run_backbone_dataflow(
 
     p5_output_raw = op5.read_buffer("output", (p5_total_output,), dtype=np.int8)
     p5_pre_c2f = tiled_to_nchw_int8(p5_output_raw.copy(), 256, 20, 20)
-    del ctx5, op5
+    del ctx
 
-    # L8 C2f and L9 SPPF don't have dataflow designs yet.
-    # Return p3, p4, and the L7 output for the sequential fallback.
     return p3, p4, p5_pre_c2f
 
 
-def run_l8_dataflow(l7_out, int8_weights, shifts, act_scales):
-    """Run L8 C2f (256→256, 20×20, n=1) using fused dataflow PDI.
+def run_l8_l9_dataflow(l7_out, int8_weights, shifts, act_scales):
+    """Run L8 C2f + SPPF L9 using a shared AIEContext.
 
     Args:
         l7_out: [1, 256, 20, 20] int8 — L7 CBS output.
@@ -471,11 +453,8 @@ def run_l8_dataflow(l7_out, int8_weights, shifts, act_scales):
         act_scales: Dict of per-layer activation scales.
 
     Returns:
-        l8_out: [1, 256, 20, 20] int8 — L8 C2f output.
+        (l8_out, p5): L8 output [1, 256, 20, 20] and P5 feature map [1, 256, 20, 20].
     """
-    from iron.operators.conv2d_int8.dataflow_design import (
-        _compute_oc_streaming_params,
-    )
 
     def get_shift(name):
         s = shifts[name]
@@ -483,14 +462,14 @@ def run_l8_dataflow(l7_out, int8_weights, shifts, act_scales):
             return s
         return (s, 7)
 
-    print("  L8 C2f ...", end="", flush=True)
+    # --- Register both operators on shared context ---
+    ctx = AIEContext()
 
     cv1_s1, cv1_s2 = get_shift("l8.cv1")
     bn_cv1_s1, bn_cv1_s2 = get_shift("l8.bn0.cv1")
     bn_cv2_s1, bn_cv2_s2 = get_shift("l8.bn0.cv2")
-    cv2_s1, cv2_s2 = get_shift("l8.cv2")
+    l8_cv2_s1, l8_cv2_s2 = get_shift("l8.cv2")
 
-    ctx_l8 = AIEContext()
     op_l8 = AIEDataflowC2fL8(
         height=20,
         width=20,
@@ -500,18 +479,30 @@ def run_l8_dataflow(l7_out, int8_weights, shifts, act_scales):
         bn_cv1_s2=bn_cv1_s2,
         bn_cv2_s1=bn_cv2_s1,
         bn_cv2_s2=bn_cv2_s2,
-        cv2_s1=cv2_s1,
-        cv2_s2=cv2_s2,
-        context=ctx_l8,
+        cv2_s1=l8_cv2_s1,
+        cv2_s2=l8_cv2_s2,
+        context=ctx,
     )
-    ctx_l8.compile_all()
-    ctx_l8.prepare_runtime()
 
-    # Pack L8 weights: [cv1_chunks | bn0cv1_chunks | bn0cv2_chunks | cv2_chunks]
-    in_channels = 256
-    cv1_oc = 256
-    bn_ch = 128
-    cv2_ic = 384
+    l9_cv1_s1, l9_cv1_s2 = get_shift("l9.cv1")
+    l9_cv2_s1, l9_cv2_s2 = get_shift("l9.cv2")
+
+    op_l9 = AIEDataflowSPPFL9(
+        height=20,
+        width=20,
+        cv1_s1=l9_cv1_s1,
+        cv1_s2=l9_cv1_s2,
+        cv2_s1=l9_cv2_s1,
+        cv2_s2=l9_cv2_s2,
+        context=ctx,
+    )
+
+    ctx.compile_all()
+    ctx.prepare_runtime()
+
+    # ===== L8 C2f =====
+    print("  L8 C2f ...", end="", flush=True)
+
     cv2_oc = 256
     h, w = 20, 20
 
@@ -520,23 +511,19 @@ def run_l8_dataflow(l7_out, int8_weights, shifts, act_scales):
     w_bn0cv2, ws_bn0cv2_l8, b_bn0cv2 = lookup_weight(int8_weights, "l8.bn0.cv2")
     w_cv2, ws_cv2_l8, b_cv2 = lookup_weight(int8_weights, "l8.cv2")
 
-    # Effective input scales through L8
-    # L8 input = L7 output (fused). L7 output scale = 256/l7_s2.
     l8_in_scale = act_scales.get("l7", 1.0)
     l8_cv1_out = 256.0 / float(cv1_s2) if cv1_s2 > 0 else 1.0
     l8_bn1_out = 256.0 / float(bn_cv1_s2) if bn_cv1_s2 > 0 else 1.0
 
-    # cv1: OC streaming chunks
     b_cv1_i32 = _prescale_bias(b_cv1, ws_cv1_l8, l8_in_scale)
-    cv1_oc_chunk = op_l8._cv1_oc_chunk  # 64
-    cv1_n_oc = op_l8._cv1_n_oc  # 4
+    cv1_oc_chunk = op_l8._cv1_oc_chunk
+    cv1_n_oc = op_l8._cv1_n_oc
     cv1_chunks = []
     for g in range(cv1_n_oc):
         ws = w_cv1[g * cv1_oc_chunk : (g + 1) * cv1_oc_chunk]
         bs = b_cv1_i32[g * cv1_oc_chunk : (g + 1) * cv1_oc_chunk]
         cv1_chunks.append(np.concatenate([weights_to_tiled_int8(ws), bs.view(np.int8)]))
 
-    # bn0: OC streaming chunks
     bn_oc_chunk = op_l8._bn_oc_chunk
     bn_n_oc = op_l8._bn_n_oc
 
@@ -555,10 +542,9 @@ def run_l8_dataflow(l7_out, int8_weights, shifts, act_scales):
     packed_bn0cv1 = _pack_k3_oc_i32(w_bn0cv1, b_bn0cv1_i32, bn_oc_chunk, bn_n_oc)
     packed_bn0cv2 = _pack_k3_oc_i32(w_bn0cv2, b_bn0cv2_i32, bn_oc_chunk, bn_n_oc)
 
-    # cv2: OC streaming chunks
     b_cv2_i32 = _prescale_bias(b_cv2, ws_cv2_l8, l8_cv1_out)
-    cv2_oc_chunk = op_l8._cv2_oc_chunk  # 64
-    cv2_n_oc = op_l8._cv2_n_oc  # 4
+    cv2_oc_chunk = op_l8._cv2_oc_chunk
+    cv2_n_oc = op_l8._cv2_n_oc
     cv2_chunks = []
     for g in range(cv2_n_oc):
         ws = w_cv2[g * cv2_oc_chunk : (g + 1) * cv2_oc_chunk]
@@ -583,98 +569,53 @@ def run_l8_dataflow(l7_out, int8_weights, shifts, act_scales):
 
     out_flat = op_l8.read_buffer("output", (output_buf_size,), dtype=np.int8)
     l8_out = tiled_to_nchw_int8(out_flat[:total_output].copy(), cv2_oc, h, w)
-    del ctx_l8, op_l8
 
-    return l8_out
-
-
-def run_l9_dataflow(l8_out, int8_weights, shifts, act_scales):
-    """Run SPPF L9 (256→256, 20×20) using dataflow PDI.
-
-    SPPF: cv1(k1 256→128+SiLU) → 3× maxpool5×5 → concat(512ch) → cv2(k1 512→256+SiLU)
-
-    Args:
-        l8_out: [1, 256, 20, 20] int8 — L8 C2f output.
-        int8_weights: Dict of quantized weight tensors.
-        shifts: Dict of per-layer shift values.
-        act_scales: Dict of per-layer activation scales.
-
-    Returns:
-        p5: [1, 256, 20, 20] int8 — P5 feature map.
-    """
-    from iron.operators.conv2d_int8.dataflow_design import (
-        _compute_oc_streaming_params_k1,
-    )
-
-    def get_shift(name):
-        s = shifts[name]
-        if isinstance(s, tuple):
-            return s
-        return (s, 7)
-
+    # ===== SPPF L9 =====
     print("  SPPF L9 ...", end="", flush=True)
 
-    cv1_s1, cv1_s2 = get_shift("l9.cv1")
-    cv2_s1, cv2_s2 = get_shift("l9.cv2")
+    w_cv1_l9, ws_cv1_l9, b_cv1_l9 = lookup_weight(int8_weights, "l9.cv1")
+    w_cv2_l9, ws_cv2_l9, b_cv2_l9 = lookup_weight(int8_weights, "l9.cv2")
 
-    ctx_l9 = AIEContext()
-    op_l9 = AIEDataflowSPPFL9(
-        height=20,
-        width=20,
-        cv1_s1=cv1_s1,
-        cv1_s2=cv1_s2,
-        cv2_s1=cv2_s1,
-        cv2_s2=cv2_s2,
-        context=ctx_l9,
-    )
-    ctx_l9.compile_all()
-    ctx_l9.prepare_runtime()
-
-    # Pack weights: cv1 (no OC streaming) + cv2 (OC streaming)
-    w_cv1, ws_cv1_l9, b_cv1 = lookup_weight(int8_weights, "l9.cv1")
-    w_cv2, ws_cv2_l9, b_cv2 = lookup_weight(int8_weights, "l9.cv2")
-
-    # L9 input = L8 output. L8 cv2 is fused → output scale = 256/l8_cv2_s2.
-    l8_cv2_s1, l8_cv2_s2 = get_shift("l8.cv2")
     l9_in_scale = 256.0 / float(l8_cv2_s2) if l8_cv2_s2 > 0 else 1.0
-    l9_cv1_out = 256.0 / float(cv1_s2) if cv1_s2 > 0 else 1.0
+    l9_cv1_out = 256.0 / float(l9_cv1_s2) if l9_cv1_s2 > 0 else 1.0
 
-    b_cv1_i32 = _prescale_bias(b_cv1, ws_cv1_l9, l9_in_scale)
-    packed_cv1 = np.concatenate([weights_to_tiled_int8(w_cv1), b_cv1_i32.view(np.int8)])
+    b_cv1_l9_i32 = _prescale_bias(b_cv1_l9, ws_cv1_l9, l9_in_scale)
+    packed_cv1 = np.concatenate(
+        [weights_to_tiled_int8(w_cv1_l9), b_cv1_l9_i32.view(np.int8)]
+    )
 
-    # cv2 input scale: maxpool doesn't change the activation scale
-    b_cv2_i32 = _prescale_bias(b_cv2, ws_cv2_l9, l9_cv1_out)
-    cv2_oc_chunk = op_l9._cv2_oc_chunk
-    cv2_n_oc = op_l9._cv2_n_oc
-    cv2_chunks = []
-    for g in range(cv2_n_oc):
-        ws = w_cv2[g * cv2_oc_chunk : (g + 1) * cv2_oc_chunk]
-        bs = b_cv2_i32[g * cv2_oc_chunk : (g + 1) * cv2_oc_chunk]
-        cv2_chunks.append(np.concatenate([weights_to_tiled_int8(ws), bs.view(np.int8)]))
-    packed_cv2 = np.concatenate(cv2_chunks)
+    b_cv2_l9_i32 = _prescale_bias(b_cv2_l9, ws_cv2_l9, l9_cv1_out)
+    l9_cv2_oc_chunk = op_l9._cv2_oc_chunk
+    l9_cv2_n_oc = op_l9._cv2_n_oc
+    l9_cv2_chunks = []
+    for g in range(l9_cv2_n_oc):
+        ws = w_cv2_l9[g * l9_cv2_oc_chunk : (g + 1) * l9_cv2_oc_chunk]
+        bs = b_cv2_l9_i32[g * l9_cv2_oc_chunk : (g + 1) * l9_cv2_oc_chunk]
+        l9_cv2_chunks.append(
+            np.concatenate([weights_to_tiled_int8(ws), bs.view(np.int8)])
+        )
+    packed_cv2 = np.concatenate(l9_cv2_chunks)
 
-    packed_weights = np.concatenate([packed_cv1, packed_cv2])
+    packed_weights_l9 = np.concatenate([packed_cv1, packed_cv2])
 
     op_l9.write_buffer("input", nchw_to_tiled_int8(l8_out))
-    op_l9.write_buffer("weights", packed_weights)
+    op_l9.write_buffer("weights", packed_weights_l9)
 
-    # Pre-fill output buffer with -128 (critical for maxpool edge padding)
-    output_buf_size = op_l9.buffers["output"]
-    op_l9.write_buffer("output", np.full(output_buf_size, -128, dtype=np.int8))
+    output_buf_size_l9 = op_l9.buffers["output"]
+    op_l9.write_buffer("output", np.full(output_buf_size_l9, -128, dtype=np.int8))
 
     t0 = time.perf_counter()
     op_l9.run_runlist()
     t1 = time.perf_counter()
     print(f" {1000 * (t1 - t0):.0f}ms")
 
-    # cv2 output is at offset 0 in the output buffer
-    cv2_oc = 256
-    total_output = cv2_oc * 20 * 20
-    out_flat = op_l9.read_buffer("output", (output_buf_size,), dtype=np.int8)
-    p5 = tiled_to_nchw_int8(out_flat[:total_output].copy(), cv2_oc, 20, 20)
-    del ctx_l9, op_l9
+    l9_cv2_oc = 256
+    l9_total_output = l9_cv2_oc * 20 * 20
+    out_flat_l9 = op_l9.read_buffer("output", (output_buf_size_l9,), dtype=np.int8)
+    p5 = tiled_to_nchw_int8(out_flat_l9[:l9_total_output].copy(), l9_cv2_oc, 20, 20)
+    del ctx
 
-    return p5
+    return l8_out, p5
 
 
 def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
@@ -704,14 +645,13 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
             return s
         return (s, 7)
 
-    # ===== PDI 1: L12+L15 (384ch 40×40 → 64ch 80×80) =====
-    print("  Neck PDI 1: L12+L15 ...", end="", flush=True)
+    # ===== Register all 3 neck operators on shared context =====
 
-    # L12 input = upsample(P5) + concat(P4) = (256+128)ch = 384ch 40×40
-    # The L12L15 PDI takes the concatenated 384ch input directly.
     # CPU: upsample P5 (20×20→40×40) then concat with P4
     p5_up = p5.repeat_interleave(2, dim=2).repeat_interleave(2, dim=3)
     l12_input = torch.cat([p5_up, p4], dim=1)  # [1, 384, 40, 40]
+
+    ctx = AIEContext()
 
     l12_cv1_s1, l12_cv1_s2 = get_shift("l12.cv1")
     l12_bn_cv1_s1, l12_bn_cv1_s2 = get_shift("l12.bn0.cv1")
@@ -722,7 +662,6 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
     l15_bn_cv2_s1, l15_bn_cv2_s2 = get_shift("l15.bn0.cv2")
     l15_cv2_s1, l15_cv2_s2 = get_shift("l15.cv2")
 
-    ctx_n1 = AIEContext()
     op_n1 = AIEDataflowL12L15(
         l12_h=40,
         l12_w=40,
@@ -744,13 +683,64 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
         l15_bn_cv2_s2=l15_bn_cv2_s2,
         l15_cv2_s1=l15_cv2_s1,
         l15_cv2_s2=l15_cv2_s2,
-        context=ctx_n1,
+        context=ctx,
     )
-    ctx_n1.compile_all()
-    ctx_n1.prepare_runtime()
 
-    # Pack L12+L15 weights
-    # L12 cv1: k1 384→128, OC streaming (same chunk computation as design)
+    l16_s1, l16_s2 = get_shift("l16")
+    l18_cv1_s1, l18_cv1_s2 = get_shift("l18.cv1")
+    l18_bn_cv1_s1, l18_bn_cv1_s2 = get_shift("l18.bn0.cv1")
+    l18_bn_cv2_s1, l18_bn_cv2_s2 = get_shift("l18.bn0.cv2")
+    l18_cv2_s1, l18_cv2_s2 = get_shift("l18.cv2")
+
+    op_n2 = AIEDataflowL16L18(
+        l16_h=80,
+        l16_w=80,
+        s1=l16_s1,
+        s2=l16_s2,
+        l16_s1=l16_s1,
+        l16_s2=l16_s2,
+        cv1_s1=l18_cv1_s1,
+        cv1_s2=l18_cv1_s2,
+        bn_cv1_s1=l18_bn_cv1_s1,
+        bn_cv1_s2=l18_bn_cv1_s2,
+        bn_cv2_s1=l18_bn_cv2_s1,
+        bn_cv2_s2=l18_bn_cv2_s2,
+        cv2_s1=l18_cv2_s1,
+        cv2_s2=l18_cv2_s2,
+        context=ctx,
+    )
+
+    l19_s1, l19_s2 = get_shift("l19")
+    l21_cv1_s1, l21_cv1_s2 = get_shift("l21.cv1")
+    l21_bn_cv1_s1, l21_bn_cv1_s2 = get_shift("l21.bn0.cv1")
+    l21_bn_cv2_s1, l21_bn_cv2_s2 = get_shift("l21.bn0.cv2")
+    l21_cv2_s1, l21_cv2_s2 = get_shift("l21.cv2")
+
+    op_n3 = AIEDataflowL19L21_2col(
+        l19_h=40,
+        l19_w=40,
+        s1=l19_s1,
+        s2=l19_s2,
+        l19_s1=l19_s1,
+        l19_s2=l19_s2,
+        cv1_s1=l21_cv1_s1,
+        cv1_s2=l21_cv1_s2,
+        bn_cv1_s1=l21_bn_cv1_s1,
+        bn_cv1_s2=l21_bn_cv1_s2,
+        bn_cv2_s1=l21_bn_cv2_s1,
+        bn_cv2_s2=l21_bn_cv2_s2,
+        cv2_s1=l21_cv2_s1,
+        cv2_s2=l21_cv2_s2,
+        context=ctx,
+    )
+
+    # Compile and prepare all 3 neck operators at once
+    ctx.compile_all()
+    ctx.prepare_runtime()
+
+    # ===== PDI 1: L12+L15 (384ch 40×40 → 64ch 80×80) =====
+    print("  Neck PDI 1: L12+L15 ...", end="", flush=True)
+
     h12, w12 = 40, 40
     h15, w15 = 80, 80
     avail = 65536 - 1040 - 2 * 384 * w12
@@ -772,8 +762,7 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
     w15b2, ws15b2, b15b2 = lookup_weight(int8_weights, "l15.bn0.cv2")
     w15c2, ws15c2, b15c2 = lookup_weight(int8_weights, "l15.cv2")
 
-    # Effective input scales through the L12+L15 chain
-    l12_in_scale = act_scales.get("l7", 1.0)  # L12 input = upsample(P5)+concat(P4)
+    l12_in_scale = act_scales.get("l7", 1.0)
     l12_cv1_out = 256.0 / float(l12_cv1_s2) if l12_cv1_s2 > 0 else 1.0
     l12_bn1_out = 256.0 / float(l12_bn_cv1_s2) if l12_bn_cv1_s2 > 0 else 1.0
     l12_bn2_out = 256.0 / float(l12_bn_cv2_s2) if l12_bn_cv2_s2 > 0 else 1.0
@@ -782,7 +771,6 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
     l15_bn1_out = 256.0 / float(l15_bn_cv1_s2) if l15_bn_cv1_s2 > 0 else 1.0
     l15_bn2_out = 256.0 / float(l15_bn_cv2_s2) if l15_bn_cv2_s2 > 0 else 1.0
 
-    # Pack L12 cv1 with OC streaming
     b12c1_i32 = _prescale_bias(b12c1, ws12c1, l12_in_scale)
     chunks = []
     for g in range(cv1n):
@@ -805,12 +793,11 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
     op_n1.write_buffer("input", nchw_to_tiled_int8(l12_input))
     op_n1.write_buffer("weights", pw_n1)
 
-    # Pre-fill P3 skip into L15_concat[128:192ch]
     oT_n1 = op_n1.buffers["output"]
     s0 = 64 * h15 * w15
     s1_ = 192 * h12 * w12
     s2_ = 128 * h12 * w12
-    o3 = s0 + s1_ + s2_  # L15_concat offset
+    o3 = s0 + s1_ + s2_
 
     o_buf_n1 = np.zeros(oT_n1, dtype=np.int8)
     p3t = nchw_to_tiled_int8(p3)
@@ -828,43 +815,13 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
     out_n1 = op_n1.read_buffer("output", (oT_n1,), dtype=np.int8)
     det_p3 = tiled_to_nchw_int8(out_n1[:s0].copy(), 64, h15, w15)
 
-    # Also extract L12 output (128ch 40×40) for L16+L18 skip
-    l12_out_offset = s0 + s1_  # after L15_final + L12_concat
+    l12_out_offset = s0 + s1_
     l12_out_tiled = out_n1[l12_out_offset : l12_out_offset + s2_].copy()
     l12_out = tiled_to_nchw_int8(l12_out_tiled, 128, h12, w12)
-    del ctx_n1, op_n1
 
     # ===== PDI 2: L16+L18 (64ch 80×80 → 128ch 40×40) =====
     print("  Neck PDI 2: L16+L18 ...", end="", flush=True)
 
-    l16_s1, l16_s2 = get_shift("l16")
-    l18_cv1_s1, l18_cv1_s2 = get_shift("l18.cv1")
-    l18_bn_cv1_s1, l18_bn_cv1_s2 = get_shift("l18.bn0.cv1")
-    l18_bn_cv2_s1, l18_bn_cv2_s2 = get_shift("l18.bn0.cv2")
-    l18_cv2_s1, l18_cv2_s2 = get_shift("l18.cv2")
-
-    ctx_n2 = AIEContext()
-    op_n2 = AIEDataflowL16L18(
-        l16_h=80,
-        l16_w=80,
-        s1=l16_s1,
-        s2=l16_s2,
-        l16_s1=l16_s1,
-        l16_s2=l16_s2,
-        cv1_s1=l18_cv1_s1,
-        cv1_s2=l18_cv1_s2,
-        bn_cv1_s1=l18_bn_cv1_s1,
-        bn_cv1_s2=l18_bn_cv1_s2,
-        bn_cv2_s1=l18_bn_cv2_s1,
-        bn_cv2_s2=l18_bn_cv2_s2,
-        cv2_s1=l18_cv2_s1,
-        cv2_s2=l18_cv2_s2,
-        context=ctx_n2,
-    )
-    ctx_n2.compile_all()
-    ctx_n2.prepare_runtime()
-
-    # Pack L16+L18 weights
     l18_h, l18_w = 40, 40
     oc_chunk_l16, n_oc_l16, _ = _compute_oc_streaming_params(64, 64, 80, 2)
     w_l16, ws_l16, b_l16 = lookup_weight(int8_weights, "l16")
@@ -873,7 +830,6 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
     w18b2, ws18b2, b18b2 = lookup_weight(int8_weights, "l18.bn0.cv2")
     w18c2, ws18c2, b18c2 = lookup_weight(int8_weights, "l18.cv2")
 
-    # Effective input scales through L16+L18
     l15_out_scale = 256.0 / float(l15_cv2_s2) if l15_cv2_s2 > 0 else 1.0
     l16_out_scale = 256.0 / float(l16_s2) if l16_s2 > 0 else 1.0
     l18_cv1_out = 256.0 / float(l18_cv1_s2) if l18_cv1_s2 > 0 else 1.0
@@ -897,11 +853,9 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
         ]
     )
 
-    # Input: L15 output = det_p3 (64ch 80×80)
     op_n2.write_buffer("input", nchw_to_tiled_int8(det_p3))
     op_n2.write_buffer("weights", pw_n2)
 
-    # Pre-fill L12 output into concat[64:192ch] (L18 skip connection)
     oT_n2 = op_n2.buffers["output"]
     l18_output_size = 128 * l18_h * l18_w
     concat_offset_n2 = l18_output_size
@@ -923,39 +877,10 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
 
     out_n2 = op_n2.read_buffer("output", (oT_n2,), dtype=np.int8)
     det_p4 = tiled_to_nchw_int8(out_n2[:l18_output_size].copy(), 128, l18_h, l18_w)
-    del ctx_n2, op_n2
 
     # ===== PDI 3: L19+L21 (128ch 40×40 → 256ch 20×20) =====
     print("  Neck PDI 3: L19+L21 ...", end="", flush=True)
 
-    l19_s1, l19_s2 = get_shift("l19")
-    l21_cv1_s1, l21_cv1_s2 = get_shift("l21.cv1")
-    l21_bn_cv1_s1, l21_bn_cv1_s2 = get_shift("l21.bn0.cv1")
-    l21_bn_cv2_s1, l21_bn_cv2_s2 = get_shift("l21.bn0.cv2")
-    l21_cv2_s1, l21_cv2_s2 = get_shift("l21.cv2")
-
-    ctx_n3 = AIEContext()
-    op_n3 = AIEDataflowL19L21_2col(
-        l19_h=40,
-        l19_w=40,
-        s1=l19_s1,
-        s2=l19_s2,
-        l19_s1=l19_s1,
-        l19_s2=l19_s2,
-        cv1_s1=l21_cv1_s1,
-        cv1_s2=l21_cv1_s2,
-        bn_cv1_s1=l21_bn_cv1_s1,
-        bn_cv1_s2=l21_bn_cv1_s2,
-        bn_cv2_s1=l21_bn_cv2_s1,
-        bn_cv2_s2=l21_bn_cv2_s2,
-        cv2_s1=l21_cv2_s1,
-        cv2_s2=l21_cv2_s2,
-        context=ctx_n3,
-    )
-    ctx_n3.compile_all()
-    ctx_n3.prepare_runtime()
-
-    # Pack L19+L21 weights
     l21_h, l21_w = 20, 20
     l19_oc_chunk, l19_n_oc, _ = _compute_oc_streaming_params(128, 128, 40, 2)
     bn_oc_chunk, bn_n_oc, _ = _compute_oc_streaming_params(128, 128, l21_w, 1)
@@ -966,7 +891,6 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
     w21b2, ws21b2, b21b2 = lookup_weight(int8_weights, "l21.bn0.cv2")
     w21c2, ws21c2, b21c2 = lookup_weight(int8_weights, "l21.cv2")
 
-    # Effective input scales through L19+L21
     l18_cv2_out = 256.0 / float(l18_cv2_s2) if l18_cv2_s2 > 0 else 1.0
     l19_out_scale = 256.0 / float(l19_s2) if l19_s2 > 0 else 1.0
     l21_cv1_out = 256.0 / float(l21_cv1_s2) if l21_cv1_s2 > 0 else 1.0
@@ -1017,7 +941,6 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
     op_n3.write_buffer("input", nchw_to_tiled_int8(det_p4))
     op_n3.write_buffer("weights", pw_n3)
 
-    # Pre-fill P5 into concat[128:384ch]
     oT_n3 = op_n3.buffers["output"]
     l21_output_size = 256 * l21_h * l21_w
     l21_concat_size = 384 * l21_h * l21_w
@@ -1040,7 +963,7 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
 
     out_n3 = op_n3.read_buffer("output", (oT_n3,), dtype=np.int8)
     det_p5 = tiled_to_nchw_int8(out_n3[:l21_output_size].copy(), 256, l21_h, l21_w)
-    del ctx_n3, op_n3
+    del ctx
 
     return det_p3, det_p4, det_p5
 
@@ -1077,21 +1000,17 @@ def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
         ("p5", det_p5, 256, 20, 20),
     ]
 
-    reg_outputs = []
-    cls_outputs = []
+    # --- Register all 3 detect operators on shared context ---
+    ctx = AIEContext()
+    ops = []
+    shift_data = []
 
     for scale_name, det_input, ic, h, w in scales:
-        print(f"  Detect {scale_name} ({ic}ch {h}×{w}) ...", end="", flush=True)
-
-        # Get per-layer shifts
         rcv1_s1, rcv1_s2 = get_shift(f"det.reg_{scale_name}.cv1")
         rcv2_s1, rcv2_s2 = get_shift(f"det.reg_{scale_name}.cv2")
         ccv1_s1, ccv1_s2 = get_shift(f"det.cls_{scale_name}.cv1")
         ccv2_s1, ccv2_s2 = get_shift(f"det.cls_{scale_name}.cv2")
 
-        # cv3 layers: compute_all_shifts returns single int (bare conv),
-        # but the dataflow kernel needs (s1, s2). Compute fused shifts
-        # using the effective input scale from cv2's output.
         _, ws_rcv3, _ = lookup_weight(int8_weights, f"det.reg_{scale_name}.cv3")
         rcv3_in_scale = 256.0 / float(rcv2_s2) if rcv2_s2 > 0 else 1.0
         rcv3_out_scale = act_scales.get(f"det.reg_{scale_name}.cv3", 1.0)
@@ -1102,7 +1021,6 @@ def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
         ccv3_out_scale = act_scales.get(f"det.cls_{scale_name}.cv3", 1.0)
         ccv3_s1, ccv3_s2 = compute_fused_shifts(ws_ccv3, ccv3_in_scale, ccv3_out_scale)
 
-        ctx_d = AIEContext()
         op_d = AIEDataflowDetectScale(
             height=h,
             width=w,
@@ -1119,12 +1037,38 @@ def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
             cls_cv2_s2=ccv2_s2,
             cls_cv3_s1=ccv3_s1,
             cls_cv3_s2=ccv3_s2,
-            context=ctx_d,
+            context=ctx,
         )
-        ctx_d.compile_all()
-        ctx_d.prepare_runtime()
+        ops.append(op_d)
+        shift_data.append(
+            (rcv1_s1, rcv1_s2, rcv2_s1, rcv2_s2, ccv1_s1, ccv1_s2, ccv2_s1, ccv2_s2)
+        )
 
-        # Pack weights: [rcv1, rcv2, rcv3, ccv1, ccv2, ccv3]
+    # Compile and prepare all 3 detect operators at once
+    ctx.compile_all()
+    ctx.prepare_runtime()
+
+    # --- Run each scale sequentially ---
+    reg_outputs = []
+    cls_outputs = []
+
+    def _pack_oc(wt, b_int32, oc_c, n, k3=True):
+        """Pack OC-streamed weight chunks with pre-scaled int32 bias."""
+        pack_fn = weights_to_tiled_int8_k3 if k3 else weights_to_tiled_int8
+        chunks = []
+        for g in range(n):
+            ws = wt[g * oc_c : (g + 1) * oc_c]
+            bs = b_int32[g * oc_c : (g + 1) * oc_c]
+            chunks.append(np.concatenate([pack_fn(ws), bs.view(np.int8)]))
+        return np.concatenate(chunks)
+
+    for i, (scale_name, det_input, ic, h, w) in enumerate(scales):
+        print(f"  Detect {scale_name} ({ic}ch {h}×{w}) ...", end="", flush=True)
+        op_d = ops[i]
+        rcv1_s1, rcv1_s2, rcv2_s1, rcv2_s2, ccv1_s1, ccv1_s2, ccv2_s1, ccv2_s2 = (
+            shift_data[i]
+        )
+
         reg_mid = 64
         reg_out = 64
         cls_mid = 80
@@ -1137,18 +1081,6 @@ def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
         ccv2_oc, ccv2_n, _ = _compute_oc_streaming_params(cls_mid, cls_mid, w, 1)
         ccv3_oc, ccv3_n = _compute_oc_streaming_params_k1(cls_mid, cls_out, w)
 
-        def _pack_oc(wt, b_int32, oc_c, n, k3=True):
-            """Pack OC-streamed weight chunks with pre-scaled int32 bias."""
-            pack_fn = weights_to_tiled_int8_k3 if k3 else weights_to_tiled_int8
-            chunks = []
-            for g in range(n):
-                ws = wt[g * oc_c : (g + 1) * oc_c]
-                bs = b_int32[g * oc_c : (g + 1) * oc_c]
-                chunks.append(np.concatenate([pack_fn(ws), bs.view(np.int8)]))
-            return np.concatenate(chunks)
-
-        # Lookup weights + scales, pre-scale biases
-        # Effective input act scales chain: input → cv1 → cv2 → cv3
         det_in_scale = act_scales.get(
             (
                 f"l15.cv2"
@@ -1177,16 +1109,9 @@ def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
             int8_weights, f"det.cls_{scale_name}.cv3"
         )
 
-        # Pre-scale biases to accumulator domain
-        # Input scale for cv1 = det_in_scale (from neck output)
-        # Input scale for cv2 = effective output of cv1 = 256/s2
-        # Input scale for cv3 = effective output of cv2 = 256/s2
         b_rcv1_i32 = _prescale_bias(b_rcv1, ws_rcv1, det_in_scale)
         rcv1_out_scale = 256.0 / float(rcv1_s2) if rcv1_s2 > 0 else 1.0
         b_rcv2_i32 = _prescale_bias(b_rcv2, ws_rcv2, rcv1_out_scale)
-        # cv3 uses conv2dk1_i8_bias which adds bias AFTER dequant (float domain).
-        # Bias is stored as int32, cast to float in the kernel: (float)bias[i].
-        # Round float bias to nearest int32 (values are small: [-4, 7]).
         b_rcv3_i32 = np.round(b_rcv3.numpy()).astype(np.int32)
 
         b_ccv1_i32 = _prescale_bias(b_ccv1, ws_ccv1, det_in_scale)
@@ -1227,8 +1152,8 @@ def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
 
         reg_outputs.append(reg_nchw)
         cls_outputs.append(cls_nchw)
-        del ctx_d, op_d
 
+    del ctx
     return {"reg": reg_outputs, "cls": cls_outputs}
 
 
@@ -1288,24 +1213,15 @@ def main():
     print(f"    P4 (L6 out): {p4.shape}")
     print(f"    L7 out:      {l7_out.shape}")
 
-    # -- Step 4: Dataflow L8 C2f --
+    # -- Step 4: Dataflow L8 C2f + SPPF L9 (shared context) --
     print(f"\n{'=' * 70}")
-    print("Dataflow L8 C2f (Phase 6)")
+    print("Dataflow L8 C2f + SPPF L9 (Phases 6-7)")
     print(f"{'=' * 70}")
 
-    t_l8 = time.time()
-    l8_out = run_l8_dataflow(l7_out, int8_weights, shifts, act_scales)
-    t_l8 = time.time() - t_l8
+    t_l8_l9 = time.time()
+    l8_out, p5 = run_l8_l9_dataflow(l7_out, int8_weights, shifts, act_scales)
+    t_l8_l9 = time.time() - t_l8_l9
     print(f"  L8 output: {l8_out.shape}")
-
-    # -- Step 4b: Dataflow SPPF L9 --
-    print(f"\n{'=' * 70}")
-    print("Dataflow SPPF L9 (Phase 7)")
-    print(f"{'=' * 70}")
-
-    t_l9 = time.time()
-    p5 = run_l9_dataflow(l8_out, int8_weights, shifts, act_scales)
-    t_l9 = time.time() - t_l9
     print(f"  P5 output: {p5.shape}")
 
     # -- Step 5: Dataflow Neck (3 PDIs) --
@@ -1367,12 +1283,12 @@ def main():
     print("Summary")
     print(f"{'=' * 70}")
     print(f"  Backbone (dataflow):  {t_backbone:.1f}s")
-    print(f"  L8 C2f (dataflow):    {t_l8:.1f}s")
-    print(f"  SPPF L9 (dataflow):   {t_l9:.1f}s")
+    print(f"  L8+L9 (dataflow):     {t_l8_l9:.1f}s")
     print(f"  Neck (dataflow):      {t_neck:.1f}s")
     print(f"  Detect (dataflow):    {t_detect:.1f}s")
-    t_total = t_backbone + t_l8 + t_l9 + t_neck + t_detect
+    t_total = t_backbone + t_l8_l9 + t_neck + t_detect
     print(f"  Total inference:      {t_total:.1f}s")
+    print(f"  AIE contexts:         4 (was 13)")
     print(f"  Detections (>0.25):   {n_boxes}")
 
 
