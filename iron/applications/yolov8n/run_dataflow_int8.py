@@ -68,6 +68,22 @@ from iron.applications.yolov8n.run_pretrained_int8 import (
 )
 from iron.applications.yolov8n.pipeline_int8 import compute_fused_shifts
 
+
+def upsample_tiled_2x(data, channels, height, width):
+    """Nearest-neighbor 2x upsample in tiled format [H, C/8, W, 8]."""
+    t = data.reshape(height, channels // 8, width, 8)
+    t = np.repeat(t, 2, axis=0)  # double rows
+    t = np.repeat(t, 2, axis=2)  # double columns
+    return t.ravel()
+
+
+def concat_tiled(a, b, ca, cb, h, w):
+    """Channel-concat two tiled buffers: [H, CA/8, W, 8] + [H, CB/8, W, 8]."""
+    ta = a.reshape(h, ca // 8, w, 8)
+    tb = b.reshape(h, cb // 8, w, 8)
+    return np.concatenate([ta, tb], axis=1).ravel()
+
+
 # Import dataflow operator classes from test_dataflow.py
 import sys
 
@@ -244,15 +260,20 @@ def run_backbone_dataflow(
     ctx.compile_all()
     ctx.prepare_runtime()
 
-    # ===== Phase 1: L0→L1→L2(C2f)→L3 =====
-    print("  Phase 1: L0→L1→L2→L3 ...", end="", flush=True)
+    # Timing accumulators
+    t_weight_pack = 0.0
+    t_npu = 0.0
+    t_buffer_io = 0.0
 
-    op1.write_buffer("input", nchw_to_tiled_int8(x_int8))
+    # ===== Pre-pack ALL weights before any phase runs =====
 
     def _pad(data, slot_size):
         pad = np.zeros(slot_size - len(data), dtype=np.int8)
         return np.concatenate([data, pad])
 
+    _t = time.perf_counter()
+
+    # Phase 1 weights
     w0, ws0, b0 = lookup_weight(int8_weights, "l0")
     w1, ws1, b1 = lookup_weight(int8_weights, "l1")
     w_cv1, ws_cv1, b_cv1 = lookup_weight(int8_weights, "l2.cv1")
@@ -289,24 +310,16 @@ def run_backbone_dataflow(
         ]
     )
     l3_packed = _pack_fused_k3(w3, b3, ws3, cv2_out_sc)
+
+    t_weight_pack += time.perf_counter() - _t
+
+    _t = time.perf_counter()
     op1.write_buffer("weights", np.concatenate([tg1_packed, c2f_packed, l3_packed]))
-    op1.write_buffer("output", np.zeros(op1.buffers["output"], dtype=np.int8))
+    t_buffer_io += time.perf_counter() - _t
 
-    t0 = time.perf_counter()
-    op1.run_runlist()
-    t1 = time.perf_counter()
-    print(f" {1000 * (t1 - t0):.0f}ms")
+    _t = time.perf_counter()
 
-    total_output_buf = op1.buffers["output"]
-    output_buf = op1.read_buffer("output", (total_output_buf,), dtype=np.int8)
-    p1_output = output_buf[: op1._total_output].copy()
-    l3_out = tiled_to_nchw_int8(p1_output, 64, 80, 80)
-
-    # ===== Phase 2: C2f L4 (64→64, 80×80) =====
-    print("  Phase 2: C2f L4 ...", end="", flush=True)
-
-    op2.write_buffer("input", p1_output)
-
+    # Phase 2 weights
     w_cv1_p2, _, _ = lookup_weight(int8_weights, "l4.cv1")
     w_bn0cv1, _, _ = lookup_weight(int8_weights, "l4.bn0.cv1")
     w_bn0cv2, _, _ = lookup_weight(int8_weights, "l4.bn0.cv2")
@@ -324,27 +337,16 @@ def run_backbone_dataflow(
             weights_to_tiled_int8(w_cv2_p2),
         ]
     )
+
+    t_weight_pack += time.perf_counter() - _t
+
+    _t = time.perf_counter()
     op2.write_buffer("weights", packed_p2)
+    t_buffer_io += time.perf_counter() - _t
 
-    p2_total_output = 64 * 80 * 80
-    p2_concat_size = 128 * 80 * 80
-    p2_output_buf_size = p2_total_output + p2_concat_size
-    op2.write_buffer("output", np.zeros(p2_output_buf_size, dtype=np.int8))
+    _t = time.perf_counter()
 
-    t0 = time.perf_counter()
-    op2.run_runlist()
-    t1 = time.perf_counter()
-    print(f" {1000 * (t1 - t0):.0f}ms")
-
-    output_raw_p2 = op2.read_buffer("output", (p2_output_buf_size,), dtype=np.int8)
-    p2_output = output_raw_p2[:p2_total_output].copy()
-    p3 = tiled_to_nchw_int8(p2_output, 64, 80, 80)
-
-    # ===== Phase 3: L5 CBS (64→128, s2, 80→40) =====
-    print("  Phase 3: L5 ...", end="", flush=True)
-
-    op3.write_buffer("input", p2_output)
-
+    # Phase 3 weights
     w_l5, ws_l5, b_l5 = lookup_weight(int8_weights, "l5")
     l5_in_scale = act_scales.get("l4.cv2", 1.0)
     b_l5_i32 = _prescale_bias(b_l5, ws_l5, l5_in_scale)
@@ -358,23 +360,16 @@ def run_backbone_dataflow(
         b_chunk = b_l5_i32[oc_start:oc_end]
         w_tiled = weights_to_tiled_int8_k3(w_chunk)
         packed_chunks_l5.append(np.concatenate([w_tiled, b_chunk.view(np.int8)]))
+
+    t_weight_pack += time.perf_counter() - _t
+
+    _t = time.perf_counter()
     op3.write_buffer("weights", np.concatenate(packed_chunks_l5))
+    t_buffer_io += time.perf_counter() - _t
 
-    p3_total_output = 128 * 40 * 40
-    op3.write_buffer("output", np.zeros(p3_total_output, dtype=np.int8))
+    _t = time.perf_counter()
 
-    t0 = time.perf_counter()
-    op3.run_runlist()
-    t1 = time.perf_counter()
-    print(f" {1000 * (t1 - t0):.0f}ms")
-
-    p3_output = op3.read_buffer("output", (p3_total_output,), dtype=np.int8).copy()
-
-    # ===== Phase 4: C2f L6 (128→128, 40×40) =====
-    print("  Phase 4: C2f L6 ...", end="", flush=True)
-
-    op4.write_buffer("input", p3_output)
-
+    # Phase 4 weights
     w_cv1_p4, _, _ = lookup_weight(int8_weights, "l6.cv1")
     w_bn0cv1_p4, _, _ = lookup_weight(int8_weights, "l6.bn0.cv1")
     w_bn0cv2_p4, _, _ = lookup_weight(int8_weights, "l6.bn0.cv2")
@@ -392,27 +387,16 @@ def run_backbone_dataflow(
             weights_to_tiled_int8(w_cv2_p4),
         ]
     )
+
+    t_weight_pack += time.perf_counter() - _t
+
+    _t = time.perf_counter()
     op4.write_buffer("weights", packed_p4)
+    t_buffer_io += time.perf_counter() - _t
 
-    p4_total_output = 128 * 40 * 40
-    p4_concat_size = 256 * 40 * 40
-    p4_output_buf_size = p4_total_output + p4_concat_size
-    op4.write_buffer("output", np.zeros(p4_output_buf_size, dtype=np.int8))
+    _t = time.perf_counter()
 
-    t0 = time.perf_counter()
-    op4.run_runlist()
-    t1 = time.perf_counter()
-    print(f" {1000 * (t1 - t0):.0f}ms")
-
-    output_raw_p4 = op4.read_buffer("output", (p4_output_buf_size,), dtype=np.int8)
-    p4_output = output_raw_p4[:p4_total_output].copy()
-    p4 = tiled_to_nchw_int8(p4_output, 128, 40, 40)
-
-    # ===== Phase 5: L7 CBS (128→256, s2, 40→20) =====
-    print("  Phase 5: L7 ...", end="", flush=True)
-
-    op5.write_buffer("input", p4_output)
-
+    # Phase 5 weights
     w_l7, ws_l7, b_l7 = lookup_weight(int8_weights, "l7")
     l7_in_scale = act_scales.get("l6.cv2", 1.0)
     b_l7_i32 = _prescale_bias(b_l7, ws_l7, l7_in_scale)
@@ -426,34 +410,138 @@ def run_backbone_dataflow(
         b_chunk = b_l7_i32[oc_start:oc_end]
         w_tiled = weights_to_tiled_int8_k3(w_chunk)
         packed_chunks_l7.append(np.concatenate([w_tiled, b_chunk.view(np.int8)]))
-    op5.write_buffer("weights", np.concatenate(packed_chunks_l7))
 
+    t_weight_pack += time.perf_counter() - _t
+
+    _t = time.perf_counter()
+    op5.write_buffer("weights", np.concatenate(packed_chunks_l7))
+    t_buffer_io += time.perf_counter() - _t
+
+    # ===== Phase 1: L0→L1→L2(C2f)→L3 =====
+    print("  Phase 1: L0→L1→L2→L3 ...", end="", flush=True)
+
+    _t = time.perf_counter()
+    op1.write_buffer("input", nchw_to_tiled_int8(x_int8))
+    op1.write_buffer("output", np.zeros(op1.buffers["output"], dtype=np.int8))
+    t_buffer_io += time.perf_counter() - _t
+
+    t0 = time.perf_counter()
+    op1.run_runlist()
+    t1 = time.perf_counter()
+    t_npu += t1 - t0
+    print(f" {1000 * (t1 - t0):.0f}ms")
+
+    _t = time.perf_counter()
+    total_output_buf = op1.buffers["output"]
+    output_buf = op1.read_buffer("output", (total_output_buf,), dtype=np.int8)
+    p1_output = output_buf[: op1._total_output].copy()
+    t_buffer_io += time.perf_counter() - _t
+
+    # ===== Phase 2: C2f L4 (64→64, 80×80) =====
+    print("  Phase 2: C2f L4 ...", end="", flush=True)
+
+    _t = time.perf_counter()
+    op2.write_buffer("input", p1_output)
+    p2_total_output = 64 * 80 * 80
+    p2_concat_size = 128 * 80 * 80
+    p2_output_buf_size = p2_total_output + p2_concat_size
+    op2.write_buffer("output", np.zeros(p2_output_buf_size, dtype=np.int8))
+    t_buffer_io += time.perf_counter() - _t
+
+    t0 = time.perf_counter()
+    op2.run_runlist()
+    t1 = time.perf_counter()
+    t_npu += t1 - t0
+    print(f" {1000 * (t1 - t0):.0f}ms")
+
+    _t = time.perf_counter()
+    output_raw_p2 = op2.read_buffer("output", (p2_output_buf_size,), dtype=np.int8)
+    p3_tiled = output_raw_p2[:p2_total_output].copy()
+    t_buffer_io += time.perf_counter() - _t
+
+    # ===== Phase 3: L5 CBS (64→128, s2, 80→40) =====
+    print("  Phase 3: L5 ...", end="", flush=True)
+
+    _t = time.perf_counter()
+    op3.write_buffer("input", p3_tiled)
+    p3_total_output = 128 * 40 * 40
+    op3.write_buffer("output", np.zeros(p3_total_output, dtype=np.int8))
+    t_buffer_io += time.perf_counter() - _t
+
+    t0 = time.perf_counter()
+    op3.run_runlist()
+    t1 = time.perf_counter()
+    t_npu += t1 - t0
+    print(f" {1000 * (t1 - t0):.0f}ms")
+
+    _t = time.perf_counter()
+    p3_output = op3.read_buffer("output", (p3_total_output,), dtype=np.int8).copy()
+    t_buffer_io += time.perf_counter() - _t
+
+    # ===== Phase 4: C2f L6 (128→128, 40×40) =====
+    print("  Phase 4: C2f L6 ...", end="", flush=True)
+
+    _t = time.perf_counter()
+    op4.write_buffer("input", p3_output)
+    p4_total_output = 128 * 40 * 40
+    p4_concat_size = 256 * 40 * 40
+    p4_output_buf_size = p4_total_output + p4_concat_size
+    op4.write_buffer("output", np.zeros(p4_output_buf_size, dtype=np.int8))
+    t_buffer_io += time.perf_counter() - _t
+
+    t0 = time.perf_counter()
+    op4.run_runlist()
+    t1 = time.perf_counter()
+    t_npu += t1 - t0
+    print(f" {1000 * (t1 - t0):.0f}ms")
+
+    _t = time.perf_counter()
+    output_raw_p4 = op4.read_buffer("output", (p4_output_buf_size,), dtype=np.int8)
+    p4_tiled = output_raw_p4[:p4_total_output].copy()
+    t_buffer_io += time.perf_counter() - _t
+
+    # ===== Phase 5: L7 CBS (128→256, s2, 40→20) =====
+    print("  Phase 5: L7 ...", end="", flush=True)
+
+    _t = time.perf_counter()
+    op5.write_buffer("input", p4_tiled)
     p5_total_output = 256 * 20 * 20
     op5.write_buffer("output", np.zeros(p5_total_output, dtype=np.int8))
+    t_buffer_io += time.perf_counter() - _t
 
     t0 = time.perf_counter()
     op5.run_runlist()
     t1 = time.perf_counter()
+    t_npu += t1 - t0
     print(f" {1000 * (t1 - t0):.0f}ms")
 
-    p5_output_raw = op5.read_buffer("output", (p5_total_output,), dtype=np.int8)
-    p5_pre_c2f = tiled_to_nchw_int8(p5_output_raw.copy(), 256, 20, 20)
+    _t = time.perf_counter()
+    p5_tiled = op5.read_buffer("output", (p5_total_output,), dtype=np.int8).copy()
+    t_buffer_io += time.perf_counter() - _t
+
     del ctx
 
-    return p3, p4, p5_pre_c2f
+    timing = {
+        "weight_pack": t_weight_pack,
+        "npu": t_npu,
+        "cpu_ops": 0.0,
+        "buffer_io": t_buffer_io,
+    }
+    # Return tiled buffers: p3 [64,80,80], p4 [128,40,40], p5 [256,20,20]
+    return p3_tiled, p4_tiled, p5_tiled, timing
 
 
-def run_l8_l9_dataflow(l7_out, int8_weights, shifts, act_scales):
+def run_l8_l9_dataflow(l7_out_tiled, int8_weights, shifts, act_scales):
     """Run L8 C2f + SPPF L9 using a shared AIEContext.
 
     Args:
-        l7_out: [1, 256, 20, 20] int8 — L7 CBS output.
+        l7_out_tiled: Flat int8 array in tiled [H, C/8, W, 8] format — L7 CBS output.
         int8_weights: Dict of quantized weight tensors.
         shifts: Dict of per-layer shift values.
         act_scales: Dict of per-layer activation scales.
 
     Returns:
-        (l8_out, p5): L8 output [1, 256, 20, 20] and P5 feature map [1, 256, 20, 20].
+        (l8_out_tiled, p5_tiled): Tiled int8 buffers for L8 and P5 outputs.
     """
 
     def get_shift(name):
@@ -500,12 +588,19 @@ def run_l8_l9_dataflow(l7_out, int8_weights, shifts, act_scales):
     ctx.compile_all()
     ctx.prepare_runtime()
 
-    # ===== L8 C2f =====
-    print("  L8 C2f ...", end="", flush=True)
+    # Timing accumulators
+    t_weight_pack = 0.0
+    t_npu = 0.0
+    t_buffer_io = 0.0
+
+    # ===== Pre-pack ALL weights before any phase runs =====
 
     cv2_oc = 256
     h, w = 20, 20
 
+    _t = time.perf_counter()
+
+    # L8 weights
     w_cv1, ws_cv1_l8, b_cv1 = lookup_weight(int8_weights, "l8.cv1")
     w_bn0cv1, ws_bn0cv1_l8, b_bn0cv1 = lookup_weight(int8_weights, "l8.bn0.cv1")
     w_bn0cv2, ws_bn0cv2_l8, b_bn0cv2 = lookup_weight(int8_weights, "l8.bn0.cv2")
@@ -555,24 +650,15 @@ def run_l8_l9_dataflow(l7_out, int8_weights, shifts, act_scales):
         cv1_chunks + [packed_bn0cv1, packed_bn0cv2] + cv2_chunks
     )
 
-    op_l8.write_buffer("input", nchw_to_tiled_int8(l7_out))
+    t_weight_pack += time.perf_counter() - _t
+
+    _t = time.perf_counter()
     op_l8.write_buffer("weights", packed_weights)
+    t_buffer_io += time.perf_counter() - _t
 
-    total_output = cv2_oc * h * w
-    output_buf_size = op_l8.buffers["output"]
-    op_l8.write_buffer("output", np.zeros(output_buf_size, dtype=np.int8))
+    _t = time.perf_counter()
 
-    t0 = time.perf_counter()
-    op_l8.run_runlist()
-    t1 = time.perf_counter()
-    print(f" {1000 * (t1 - t0):.0f}ms")
-
-    out_flat = op_l8.read_buffer("output", (output_buf_size,), dtype=np.int8)
-    l8_out = tiled_to_nchw_int8(out_flat[:total_output].copy(), cv2_oc, h, w)
-
-    # ===== SPPF L9 =====
-    print("  SPPF L9 ...", end="", flush=True)
-
+    # L9 weights
     w_cv1_l9, ws_cv1_l9, b_cv1_l9 = lookup_weight(int8_weights, "l9.cv1")
     w_cv2_l9, ws_cv2_l9, b_cv2_l9 = lookup_weight(int8_weights, "l9.cv2")
 
@@ -598,42 +684,79 @@ def run_l8_l9_dataflow(l7_out, int8_weights, shifts, act_scales):
 
     packed_weights_l9 = np.concatenate([packed_cv1, packed_cv2])
 
-    op_l9.write_buffer("input", nchw_to_tiled_int8(l8_out))
-    op_l9.write_buffer("weights", packed_weights_l9)
+    t_weight_pack += time.perf_counter() - _t
 
+    _t = time.perf_counter()
+    op_l9.write_buffer("weights", packed_weights_l9)
+    t_buffer_io += time.perf_counter() - _t
+
+    # ===== L8 C2f =====
+    print("  L8 C2f ...", end="", flush=True)
+
+    _t = time.perf_counter()
+    op_l8.write_buffer("input", l7_out_tiled)
+    total_output = cv2_oc * h * w
+    output_buf_size = op_l8.buffers["output"]
+    op_l8.write_buffer("output", np.zeros(output_buf_size, dtype=np.int8))
+    t_buffer_io += time.perf_counter() - _t
+
+    t0 = time.perf_counter()
+    op_l8.run_runlist()
+    t1 = time.perf_counter()
+    t_npu += t1 - t0
+    print(f" {1000 * (t1 - t0):.0f}ms")
+
+    _t = time.perf_counter()
+    out_flat = op_l8.read_buffer("output", (output_buf_size,), dtype=np.int8)
+    l8_out_tiled = out_flat[:total_output].copy()
+    t_buffer_io += time.perf_counter() - _t
+
+    # ===== SPPF L9 =====
+    print("  SPPF L9 ...", end="", flush=True)
+
+    _t = time.perf_counter()
+    op_l9.write_buffer("input", l8_out_tiled)
     output_buf_size_l9 = op_l9.buffers["output"]
     op_l9.write_buffer("output", np.full(output_buf_size_l9, -128, dtype=np.int8))
+    t_buffer_io += time.perf_counter() - _t
 
     t0 = time.perf_counter()
     op_l9.run_runlist()
     t1 = time.perf_counter()
+    t_npu += t1 - t0
     print(f" {1000 * (t1 - t0):.0f}ms")
 
+    _t = time.perf_counter()
     l9_cv2_oc = 256
     l9_total_output = l9_cv2_oc * 20 * 20
     out_flat_l9 = op_l9.read_buffer("output", (output_buf_size_l9,), dtype=np.int8)
-    p5 = tiled_to_nchw_int8(out_flat_l9[:l9_total_output].copy(), l9_cv2_oc, 20, 20)
+    p5_tiled = out_flat_l9[:l9_total_output].copy()
+    t_buffer_io += time.perf_counter() - _t
+
     del ctx
 
-    return l8_out, p5
+    timing = {
+        "weight_pack": t_weight_pack,
+        "npu": t_npu,
+        "cpu_ops": 0.0,
+        "buffer_io": t_buffer_io,
+    }
+    return l8_out_tiled, p5_tiled, timing
 
 
-def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
+def run_neck_dataflow(p3_tiled, p4_tiled, p5_tiled, int8_weights, shifts, act_scales):
     """Run neck (L12+L15, L16+L18, L19+L21) using 3 dataflow PDIs.
 
     Args:
-        p3: [1, 64, 80, 80] int8 — P3 feature map from backbone L4.
-        p4: [1, 128, 40, 40] int8 — P4 feature map from backbone L6.
-        p5: [1, 256, 20, 20] int8 — P5 feature map from SPPF L9.
+        p3_tiled: Flat int8 array in tiled format — P3 [64, 80, 80].
+        p4_tiled: Flat int8 array in tiled format — P4 [128, 40, 40].
+        p5_tiled: Flat int8 array in tiled format — P5 [256, 20, 20].
         int8_weights: Dict of quantized weight tensors.
         shifts: Dict of per-layer shift values (tuples for fused layers).
         act_scales: Dict of per-layer activation scales.
 
     Returns:
-        (det_p3, det_p4, det_p5) — detect head input tensors in NCHW int8.
-        det_p3: [1, 64, 80, 80]
-        det_p4: [1, 128, 40, 40]
-        det_p5: [1, 256, 20, 20]
+        (det_p3_tiled, det_p4_tiled, det_p5_tiled) — detect head inputs in tiled format.
     """
     from iron.operators.conv2d_int8.dataflow_design import (
         _compute_oc_streaming_params,
@@ -645,12 +768,13 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
             return s
         return (s, 7)
 
+    # Timing accumulators
+    t_weight_pack = 0.0
+    t_npu = 0.0
+    t_cpu_ops = 0.0
+    t_buffer_io = 0.0
+
     # ===== Register all 3 neck operators on shared context =====
-
-    # CPU: upsample P5 (20×20→40×40) then concat with P4
-    p5_up = p5.repeat_interleave(2, dim=2).repeat_interleave(2, dim=3)
-    l12_input = torch.cat([p5_up, p4], dim=1)  # [1, 384, 40, 40]
-
     ctx = AIEContext()
 
     l12_cv1_s1, l12_cv1_s2 = get_shift("l12.cv1")
@@ -738,8 +862,9 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
     ctx.compile_all()
     ctx.prepare_runtime()
 
-    # ===== PDI 1: L12+L15 (384ch 40×40 → 64ch 80×80) =====
-    print("  Neck PDI 1: L12+L15 ...", end="", flush=True)
+    # ===== Pre-pack ALL weights before any phase runs =====
+
+    _t = time.perf_counter()
 
     h12, w12 = 40, 40
     h15, w15 = 80, 80
@@ -753,6 +878,7 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
             break
     cv1n = 128 // cv1c
 
+    # PDI 1 weights (L12+L15)
     w12c1, ws12c1, b12c1 = lookup_weight(int8_weights, "l12.cv1")
     w12b1, ws12b1, b12b1 = lookup_weight(int8_weights, "l12.bn0.cv1")
     w12b2, ws12b2, b12b2 = lookup_weight(int8_weights, "l12.bn0.cv2")
@@ -789,39 +915,15 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
             _pack_fused_k1(w15c2, b15c2, ws15c2, l15_cv1_out),
         ]
     )
+    t_weight_pack += time.perf_counter() - _t
 
-    op_n1.write_buffer("input", nchw_to_tiled_int8(l12_input))
+    _t = time.perf_counter()
     op_n1.write_buffer("weights", pw_n1)
+    t_buffer_io += time.perf_counter() - _t
 
-    oT_n1 = op_n1.buffers["output"]
-    s0 = 64 * h15 * w15
-    s1_ = 192 * h12 * w12
-    s2_ = 128 * h12 * w12
-    o3 = s0 + s1_ + s2_
+    _t = time.perf_counter()
 
-    o_buf_n1 = np.zeros(oT_n1, dtype=np.int8)
-    p3t = nchw_to_tiled_int8(p3)
-    for row in range(h15):
-        src = row * 64 * w15
-        dst = o3 + row * 192 * w15 + 128 * w15
-        o_buf_n1[dst : dst + 64 * w15] = p3t[src : src + 64 * w15]
-    op_n1.write_buffer("output", o_buf_n1)
-
-    t0 = time.perf_counter()
-    op_n1.run_runlist()
-    t1 = time.perf_counter()
-    print(f" {1000 * (t1 - t0):.0f}ms")
-
-    out_n1 = op_n1.read_buffer("output", (oT_n1,), dtype=np.int8)
-    det_p3 = tiled_to_nchw_int8(out_n1[:s0].copy(), 64, h15, w15)
-
-    l12_out_offset = s0 + s1_
-    l12_out_tiled = out_n1[l12_out_offset : l12_out_offset + s2_].copy()
-    l12_out = tiled_to_nchw_int8(l12_out_tiled, 128, h12, w12)
-
-    # ===== PDI 2: L16+L18 (64ch 80×80 → 128ch 40×40) =====
-    print("  Neck PDI 2: L16+L18 ...", end="", flush=True)
-
+    # PDI 2 weights (L16+L18)
     l18_h, l18_w = 40, 40
     oc_chunk_l16, n_oc_l16, _ = _compute_oc_streaming_params(64, 64, 80, 2)
     w_l16, ws_l16, b_l16 = lookup_weight(int8_weights, "l16")
@@ -852,35 +954,15 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
             _pack_fused_k1(w18c2, b18c2, ws18c2, l18_cv1_out),
         ]
     )
+    t_weight_pack += time.perf_counter() - _t
 
-    op_n2.write_buffer("input", nchw_to_tiled_int8(det_p3))
+    _t = time.perf_counter()
     op_n2.write_buffer("weights", pw_n2)
+    t_buffer_io += time.perf_counter() - _t
 
-    oT_n2 = op_n2.buffers["output"]
-    l18_output_size = 128 * l18_h * l18_w
-    concat_offset_n2 = l18_output_size
+    _t = time.perf_counter()
 
-    o_buf_n2 = np.zeros(oT_n2, dtype=np.int8)
-    skip_tiled = nchw_to_tiled_int8(l12_out)
-    for row in range(l18_h):
-        src_start = row * 128 * l18_w
-        dst_start = concat_offset_n2 + row * 192 * l18_w + 64 * l18_w
-        o_buf_n2[dst_start : dst_start + 128 * l18_w] = skip_tiled[
-            src_start : src_start + 128 * l18_w
-        ]
-    op_n2.write_buffer("output", o_buf_n2)
-
-    t0 = time.perf_counter()
-    op_n2.run_runlist()
-    t1 = time.perf_counter()
-    print(f" {1000 * (t1 - t0):.0f}ms")
-
-    out_n2 = op_n2.read_buffer("output", (oT_n2,), dtype=np.int8)
-    det_p4 = tiled_to_nchw_int8(out_n2[:l18_output_size].copy(), 128, l18_h, l18_w)
-
-    # ===== PDI 3: L19+L21 (128ch 40×40 → 256ch 20×20) =====
-    print("  Neck PDI 3: L19+L21 ...", end="", flush=True)
-
+    # PDI 3 weights (L19+L21)
     l21_h, l21_w = 20, 20
     l19_oc_chunk, l19_n_oc, _ = _compute_oc_streaming_params(128, 128, 40, 2)
     bn_oc_chunk, bn_n_oc, _ = _compute_oc_streaming_params(128, 128, l21_w, 1)
@@ -937,51 +1019,148 @@ def run_neck_dataflow(p3, p4, p5, int8_weights, shifts, act_scales):
     pw_n3 = np.concatenate(
         l19_chunks + cv1_chunks + [packed_bn0cv1, packed_bn0cv2] + cv2_chunks
     )
+    t_weight_pack += time.perf_counter() - _t
 
-    op_n3.write_buffer("input", nchw_to_tiled_int8(det_p4))
+    _t = time.perf_counter()
     op_n3.write_buffer("weights", pw_n3)
+    t_buffer_io += time.perf_counter() - _t
+
+    # ===== PDI 1: L12+L15 (P5+P4 → 64ch 80×80) =====
+    print("  Neck PDI 1: L12+L15 ...", end="", flush=True)
+
+    oT_n1 = op_n1.buffers["output"]
+    s0 = 64 * h15 * w15
+    s1_ = 192 * h12 * w12
+    s2_ = 128 * h12 * w12
+    s3_ = 192 * h15 * w15
+    o3 = s0 + s1_ + s2_
+    o4 = o3 + s3_
+
+    _t = time.perf_counter()
+    o_buf_n1 = np.zeros(oT_n1, dtype=np.int8)
+    # Pre-fill P3 into L15_concat[128:192ch per row]
+    for row in range(h15):
+        src = row * 64 * w15
+        dst = o3 + row * 192 * w15 + 128 * w15
+        o_buf_n1[dst : dst + 64 * w15] = p3_tiled[src : src + 64 * w15]
+    # Pre-fill P4 into o4[256ch offset per row, stride 384*W]
+    for row in range(h12):
+        src = row * 128 * w12
+        dst = o4 + row * 384 * w12 + 256 * w12
+        o_buf_n1[dst : dst + 128 * w12] = p4_tiled[src : src + 128 * w12]
+    t_cpu_ops += time.perf_counter() - _t
+
+    _t = time.perf_counter()
+    op_n1.write_buffer("input", np.concatenate([p5_tiled, p4_tiled]))
+    op_n1.write_buffer("output", o_buf_n1)
+    t_buffer_io += time.perf_counter() - _t
+
+    t0 = time.perf_counter()
+    op_n1.run_runlist()
+    t1 = time.perf_counter()
+    t_npu += t1 - t0
+    print(f" {1000 * (t1 - t0):.0f}ms")
+
+    _t = time.perf_counter()
+    out_n1 = op_n1.read_buffer("output", (oT_n1,), dtype=np.int8)
+    det_p3_tiled = out_n1[:s0].copy()
+    l12_out_offset = s0 + s1_
+    l12_out_tiled = out_n1[l12_out_offset : l12_out_offset + s2_].copy()
+    t_buffer_io += time.perf_counter() - _t
+
+    # ===== PDI 2: L16+L18 (64ch 80×80 → 128ch 40×40) =====
+    print("  Neck PDI 2: L16+L18 ...", end="", flush=True)
+
+    oT_n2 = op_n2.buffers["output"]
+    l18_output_size = 128 * l18_h * l18_w
+    concat_offset_n2 = l18_output_size
+
+    _t = time.perf_counter()
+    o_buf_n2 = np.zeros(oT_n2, dtype=np.int8)
+    for row in range(l18_h):
+        src_start = row * 128 * l18_w
+        dst_start = concat_offset_n2 + row * 192 * l18_w + 64 * l18_w
+        o_buf_n2[dst_start : dst_start + 128 * l18_w] = l12_out_tiled[
+            src_start : src_start + 128 * l18_w
+        ]
+    t_cpu_ops += time.perf_counter() - _t
+
+    _t = time.perf_counter()
+    op_n2.write_buffer("input", det_p3_tiled)
+    op_n2.write_buffer("output", o_buf_n2)
+    t_buffer_io += time.perf_counter() - _t
+
+    t0 = time.perf_counter()
+    op_n2.run_runlist()
+    t1 = time.perf_counter()
+    t_npu += t1 - t0
+    print(f" {1000 * (t1 - t0):.0f}ms")
+
+    _t = time.perf_counter()
+    out_n2 = op_n2.read_buffer("output", (oT_n2,), dtype=np.int8)
+    det_p4_tiled = out_n2[:l18_output_size].copy()
+    t_buffer_io += time.perf_counter() - _t
+
+    # ===== PDI 3: L19+L21 (128ch 40×40 → 256ch 20×20) =====
+    print("  Neck PDI 3: L19+L21 ...", end="", flush=True)
 
     oT_n3 = op_n3.buffers["output"]
     l21_output_size = 256 * l21_h * l21_w
-    l21_concat_size = 384 * l21_h * l21_w
     concat_offset_n3 = l21_output_size
 
+    _t = time.perf_counter()
     o_buf_n3 = np.zeros(oT_n3, dtype=np.int8)
-    p5_skip_tiled = nchw_to_tiled_int8(p5)
     for row in range(l21_h):
         src_start = row * 256 * l21_w
         dst_start = concat_offset_n3 + row * 384 * l21_w + 128 * l21_w
-        o_buf_n3[dst_start : dst_start + 256 * l21_w] = p5_skip_tiled[
+        o_buf_n3[dst_start : dst_start + 256 * l21_w] = p5_tiled[
             src_start : src_start + 256 * l21_w
         ]
+    t_cpu_ops += time.perf_counter() - _t
+
+    _t = time.perf_counter()
+    op_n3.write_buffer("input", det_p4_tiled)
     op_n3.write_buffer("output", o_buf_n3)
+    t_buffer_io += time.perf_counter() - _t
 
     t0 = time.perf_counter()
     op_n3.run_runlist()
     t1 = time.perf_counter()
+    t_npu += t1 - t0
     print(f" {1000 * (t1 - t0):.0f}ms")
 
+    _t = time.perf_counter()
     out_n3 = op_n3.read_buffer("output", (oT_n3,), dtype=np.int8)
-    det_p5 = tiled_to_nchw_int8(out_n3[:l21_output_size].copy(), 256, l21_h, l21_w)
+    det_p5_tiled = out_n3[:l21_output_size].copy()
+    t_buffer_io += time.perf_counter() - _t
+
     del ctx
 
-    return det_p3, det_p4, det_p5
+    timing = {
+        "weight_pack": t_weight_pack,
+        "npu": t_npu,
+        "cpu_ops": t_cpu_ops,
+        "buffer_io": t_buffer_io,
+    }
+    return det_p3_tiled, det_p4_tiled, det_p5_tiled, timing
 
 
-def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales):
+def run_detect_dataflow(
+    det_p3_tiled, det_p4_tiled, det_p5_tiled, int8_weights, shifts, act_scales
+):
     """Run detection head using 3 dataflow PDIs (one per scale).
 
     Args:
-        det_p3: [1, 64, 80, 80] int8 — detect input for P3.
-        det_p4: [1, 128, 40, 40] int8 — detect input for P4.
-        det_p5: [1, 256, 20, 20] int8 — detect input for P5.
+        det_p3_tiled: Flat int8 array in tiled format — detect input for P3 [64, 80, 80].
+        det_p4_tiled: Flat int8 array in tiled format — detect input for P4 [128, 40, 40].
+        det_p5_tiled: Flat int8 array in tiled format — detect input for P5 [256, 20, 20].
         int8_weights: Dict of quantized weight tensors.
         shifts: Dict of per-layer shift values.
         act_scales: Dict of per-layer activation scales.
 
     Returns:
         Dict {"reg": [reg_p3, reg_p4, reg_p5], "cls": [cls_p3, cls_p4, cls_p5]}.
-        reg tensors: int8, cls tensors: int8.
+        reg tensors: int8 NCHW, cls tensors: int8 NCHW.
     """
     from iron.operators.conv2d_int8.dataflow_design import (
         _compute_oc_streaming_params,
@@ -995,9 +1174,9 @@ def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
         return (s, 7)
 
     scales = [
-        ("p3", det_p3, 64, 80, 80),
-        ("p4", det_p4, 128, 40, 40),
-        ("p5", det_p5, 256, 20, 20),
+        ("p3", det_p3_tiled, 64, 80, 80),
+        ("p4", det_p4_tiled, 128, 40, 40),
+        ("p5", det_p5_tiled, 256, 20, 20),
     ]
 
     # --- Register all 3 detect operators on shared context ---
@@ -1048,9 +1227,13 @@ def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
     ctx.compile_all()
     ctx.prepare_runtime()
 
-    # --- Run each scale sequentially ---
-    reg_outputs = []
-    cls_outputs = []
+    # Timing accumulators
+    t_weight_pack = 0.0
+    t_npu = 0.0
+    t_buffer_io = 0.0
+
+    # ===== Pre-pack ALL weights before any phase runs =====
+    _t = time.perf_counter()
 
     def _pack_oc(wt, b_int32, oc_c, n, k3=True):
         """Pack OC-streamed weight chunks with pre-scaled int32 bias."""
@@ -1062,9 +1245,8 @@ def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
             chunks.append(np.concatenate([pack_fn(ws), bs.view(np.int8)]))
         return np.concatenate(chunks)
 
+    packed_weights_all = []
     for i, (scale_name, det_input, ic, h, w) in enumerate(scales):
-        print(f"  Detect {scale_name} ({ic}ch {h}×{w}) ...", end="", flush=True)
-        op_d = ops[i]
         rcv1_s1, rcv1_s2, rcv2_s1, rcv2_s2, ccv1_s1, ccv1_s2, ccv2_s1, ccv2_s2 = (
             shift_data[i]
         )
@@ -1083,9 +1265,9 @@ def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
 
         det_in_scale = act_scales.get(
             (
-                f"l15.cv2"
+                "l15.cv2"
                 if scale_name == "p3"
-                else f"l18.cv2" if scale_name == "p4" else f"l21.cv2"
+                else "l18.cv2" if scale_name == "p4" else "l21.cv2"
             ),
             1.0,
         )
@@ -1129,17 +1311,39 @@ def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
                 _pack_oc(w_ccv3, b_ccv3_i32, ccv3_oc, ccv3_n, k3=False),
             ]
         )
+        packed_weights_all.append(packed_weights)
 
+    t_weight_pack += time.perf_counter() - _t
+
+    _t = time.perf_counter()
+    for i in range(len(ops)):
+        ops[i].write_buffer("weights", packed_weights_all[i])
+    t_buffer_io += time.perf_counter() - _t
+
+    # --- Run each scale sequentially ---
+    reg_outputs = []
+    cls_outputs = []
+
+    for i, (scale_name, det_input, ic, h, w) in enumerate(scales):
+        print(f"  Detect {scale_name} ({ic}ch {h}×{w}) ...", end="", flush=True)
+        op_d = ops[i]
+
+        reg_out = 64
+        cls_out = 80
+
+        _t = time.perf_counter()
         output_buf_size = op_d.buffers["output"]
-        op_d.write_buffer("input", nchw_to_tiled_int8(det_input))
-        op_d.write_buffer("weights", packed_weights)
+        op_d.write_buffer("input", det_input)
         op_d.write_buffer("output", np.zeros(output_buf_size, dtype=np.int8))
+        t_buffer_io += time.perf_counter() - _t
 
         t0 = time.perf_counter()
         op_d.run_runlist()
         t1 = time.perf_counter()
+        t_npu += t1 - t0
         print(f" {1000 * (t1 - t0):.0f}ms")
 
+        _t = time.perf_counter()
         out_flat = op_d.read_buffer("output", (output_buf_size,), dtype=np.int8)
 
         reg_size = reg_out * h * w
@@ -1147,14 +1351,22 @@ def run_detect_dataflow(det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
         reg_tiled = out_flat[:reg_size]
         cls_tiled = out_flat[reg_size : reg_size + cls_size]
 
+        # Convert to NCHW only here — needed for post-processing
         reg_nchw = tiled_to_nchw_int8(reg_tiled, reg_out, h, w)
         cls_nchw = tiled_to_nchw_int8(cls_tiled, cls_out, h, w)
+        t_buffer_io += time.perf_counter() - _t
 
         reg_outputs.append(reg_nchw)
         cls_outputs.append(cls_nchw)
 
     del ctx
-    return {"reg": reg_outputs, "cls": cls_outputs}
+    timing = {
+        "weight_pack": t_weight_pack,
+        "npu": t_npu,
+        "cpu_ops": 0.0,
+        "buffer_io": t_buffer_io,
+    }
+    return {"reg": reg_outputs, "cls": cls_outputs}, timing
 
 
 def main():
@@ -1206,12 +1418,14 @@ def main():
     x_int8 = torch.clamp(torch.round(x_pad / l0_in_scale), -128, 127).to(torch.int8)
 
     t_backbone = time.time()
-    p3, p4, l7_out = run_backbone_dataflow(x_int8, int8_weights, act_scales, shifts)
+    p3_tiled, p4_tiled, l7_tiled, tm_bb = run_backbone_dataflow(
+        x_int8, int8_weights, act_scales, shifts
+    )
     t_backbone = time.time() - t_backbone
     print(f"\n  Backbone total: {t_backbone:.1f}s")
-    print(f"    P3 (L4 out): {p3.shape}")
-    print(f"    P4 (L6 out): {p4.shape}")
-    print(f"    L7 out:      {l7_out.shape}")
+    print(f"    P3 (L4 out): tiled {len(p3_tiled)} bytes [64, 80, 80]")
+    print(f"    P4 (L6 out): tiled {len(p4_tiled)} bytes [128, 40, 40]")
+    print(f"    L7 out:      tiled {len(l7_tiled)} bytes [256, 20, 20]")
 
     # -- Step 4: Dataflow L8 C2f + SPPF L9 (shared context) --
     print(f"\n{'=' * 70}")
@@ -1219,10 +1433,12 @@ def main():
     print(f"{'=' * 70}")
 
     t_l8_l9 = time.time()
-    l8_out, p5 = run_l8_l9_dataflow(l7_out, int8_weights, shifts, act_scales)
+    l8_tiled, p5_tiled, tm_l8l9 = run_l8_l9_dataflow(
+        l7_tiled, int8_weights, shifts, act_scales
+    )
     t_l8_l9 = time.time() - t_l8_l9
-    print(f"  L8 output: {l8_out.shape}")
-    print(f"  P5 output: {p5.shape}")
+    print(f"  L8 output: tiled {len(l8_tiled)} bytes [256, 20, 20]")
+    print(f"  P5 output: tiled {len(p5_tiled)} bytes [256, 20, 20]")
 
     # -- Step 5: Dataflow Neck (3 PDIs) --
     print(f"\n{'=' * 70}")
@@ -1230,14 +1446,14 @@ def main():
     print(f"{'=' * 70}")
 
     t_neck = time.time()
-    det_p3, det_p4, det_p5 = run_neck_dataflow(
-        p3, p4, p5, int8_weights, shifts, act_scales
+    det_p3_tiled, det_p4_tiled, det_p5_tiled, tm_neck = run_neck_dataflow(
+        p3_tiled, p4_tiled, p5_tiled, int8_weights, shifts, act_scales
     )
     t_neck = time.time() - t_neck
     print(f"\n  Neck total: {t_neck:.1f}s")
-    print(f"    det_p3: {det_p3.shape}")
-    print(f"    det_p4: {det_p4.shape}")
-    print(f"    det_p5: {det_p5.shape}")
+    print(f"    det_p3: tiled {len(det_p3_tiled)} bytes [64, 80, 80]")
+    print(f"    det_p4: tiled {len(det_p4_tiled)} bytes [128, 40, 40]")
+    print(f"    det_p5: tiled {len(det_p5_tiled)} bytes [256, 20, 20]")
 
     # -- Step 6: Dataflow Detect (3 PDIs) --
     print(f"\n{'=' * 70}")
@@ -1245,8 +1461,8 @@ def main():
     print(f"{'=' * 70}")
 
     t_detect = time.time()
-    result = run_detect_dataflow(
-        det_p3, det_p4, det_p5, int8_weights, shifts, act_scales
+    result, tm_det = run_detect_dataflow(
+        det_p3_tiled, det_p4_tiled, det_p5_tiled, int8_weights, shifts, act_scales
     )
     t_detect = time.time() - t_detect
     print(f"\n  Detect total: {t_detect:.1f}s")
@@ -1280,7 +1496,7 @@ def main():
 
     # -- Summary --
     print(f"\n{'=' * 70}")
-    print("Summary")
+    print("Summary (first run, includes context setup)")
     print(f"{'=' * 70}")
     print(f"  Backbone (dataflow):  {t_backbone:.1f}s")
     print(f"  L8+L9 (dataflow):     {t_l8_l9:.1f}s")
@@ -1290,6 +1506,72 @@ def main():
     print(f"  Total inference:      {t_total:.1f}s")
     print(f"  AIE contexts:         4 (was 13)")
     print(f"  Detections (>0.25):   {n_boxes}")
+
+    # -- Steady-state benchmark: frame in → detections out --
+    # Excludes: calibration, shift computation, compilation, weight packing.
+    # Includes: input quantize, context setup, buffer I/O, NPU exec, post-process.
+    n_warmup = 2
+    n_bench = 5
+    print(f"\n{'=' * 70}")
+    print(f"Steady-State Benchmark ({n_warmup} warmup + {n_bench} timed iterations)")
+    print(f"  Timing: frame in (quantize) → detections out (NMS)")
+    print(f"  Excludes: calibration, weight quant, shift computation")
+    print(f"{'=' * 70}")
+
+    pp_bench = YOLOv8nPostProcess(conf_thres=0.25, iou_thres=0.45)
+    latencies = []
+
+    for run_i in range(n_warmup + n_bench):
+        t_start = time.perf_counter()
+
+        # --- Frame in: quantize input ---
+        x_pad_b = F.pad(img_tensor.float(), (0, 0, 0, 0, 0, 5))
+        x_int8_b = torch.clamp(torch.round(x_pad_b / l0_in_scale), -128, 127).to(
+            torch.int8
+        )
+
+        # --- Backbone (5 phases) ---
+        p3_t, p4_t, l7_t, _ = run_backbone_dataflow(
+            x_int8_b, int8_weights, act_scales, shifts
+        )
+
+        # --- L8 C2f + SPPF L9 ---
+        _, p5_t, _ = run_l8_l9_dataflow(l7_t, int8_weights, shifts, act_scales)
+
+        # --- Neck (3 PDIs) ---
+        dp3, dp4, dp5, _ = run_neck_dataflow(
+            p3_t, p4_t, p5_t, int8_weights, shifts, act_scales
+        )
+
+        # --- Detect (3 PDIs) ---
+        res, _ = run_detect_dataflow(dp3, dp4, dp5, int8_weights, shifts, act_scales)
+
+        # --- Detections out: post-process ---
+        dets = pp_bench(res["reg"], res["cls"])
+
+        t_end = time.perf_counter()
+        lat_ms = 1000 * (t_end - t_start)
+        n_det = len(dets["boxes"])
+
+        if run_i < n_warmup:
+            print(f"  Warmup {run_i + 1}: {lat_ms:.1f} ms  ({n_det} dets)")
+        else:
+            latencies.append(lat_ms)
+            print(f"  Run {run_i - n_warmup + 1}:    {lat_ms:.1f} ms  ({n_det} dets)")
+
+    avg_ms = sum(latencies) / len(latencies)
+    min_ms = min(latencies)
+    max_ms = max(latencies)
+    fps = 1000.0 / avg_ms
+
+    print(f"\n{'=' * 70}")
+    print("Results")
+    print(f"{'=' * 70}")
+    print(f"  Latency (avg):  {avg_ms:.1f} ms")
+    print(f"  Latency (min):  {min_ms:.1f} ms")
+    print(f"  Latency (max):  {max_ms:.1f} ms")
+    print(f"  FPS:            {fps:.2f}")
+    print(f"  Detections:     {n_det} (conf>0.25)")
 
 
 if __name__ == "__main__":

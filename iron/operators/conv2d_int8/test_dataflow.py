@@ -11086,7 +11086,9 @@ class AIEDataflowL12L15(AIEOperatorBase):
     def set_up_runtime(self):
         h12, w12 = self.l12_h, self.l12_w
         h15, w15 = h12 * 2, w12 * 2
-        total_in = 384 * h12 * w12
+        p5_size = 256 * (h12 // 2) * (w12 // 2)
+        p4_size = 128 * h12 * w12
+        total_in = p5_size + p4_size
         # Weights
         avail = 65536 - 1040 - 2 * 384 * w12
         cv1c = 128
@@ -11130,13 +11132,15 @@ class AIEDataflowL12L15(AIEOperatorBase):
     ],
 )
 def test_dataflow_l12_l15(h, w):
-    """Combined L12+upsample+L15: 384ch input → 64ch output."""
+    """Combined P5-upsample + L12 + upsample + L15: P5+P4 input → 64ch output."""
     torch.manual_seed(42)
     s, s2 = 10, 7
     h15, w15 = h * 2, w * 2
+    p5_h, p5_w = h // 2, w // 2
 
-    # Input + P3 skip
-    x = torch.randint(-20, 21, (1, 384, h, w), dtype=torch.int8)
+    # Separate P5, P4, P3 inputs
+    p5 = torch.randint(-20, 21, (1, 256, p5_h, p5_w), dtype=torch.int8)
+    p4 = torch.randint(-20, 21, (1, 128, h, w), dtype=torch.int8)
     p3 = torch.randint(-20, 21, (1, 64, h15, w15), dtype=torch.int8)
 
     # L12 weights
@@ -11158,7 +11162,10 @@ def test_dataflow_l12_l15(h, w):
     w15c2 = torch.randint(-50, 51, (64, 96, 1, 1), dtype=torch.int8)
     b15c2 = torch.randint(-500, 501, (64,), dtype=torch.int32)
 
-    # CPU ref: L12
+    # CPU ref: upsample P5 + concat P4 → L12 input
+    p5_up = p5.repeat_interleave(2, dim=2).repeat_interleave(2, dim=3)
+    x = torch.cat([p5_up, p4], dim=1)  # (1, 384, h, w)
+    # L12
     rc1 = conv2d_int8_pade_silu_reference(x, w12c1, b12c1, s, s2, stride=1, padding=0)
     h1, h2_ = rc1[:, :64], rc1[:, 64:]
     rb1 = conv2d_int8_pade_silu_reference(h2_, w12b1, b12b1, s, s2, stride=1, padding=1)
@@ -11228,16 +11235,24 @@ def test_dataflow_l12_l15(h, w):
     s2_ = 128 * h * w
     s3_ = 192 * h15 * w15
     o3 = s0 + s1_ + s2_  # L15_concat offset
+    o4 = o3 + s3_  # L15_c2f_concat / L12 input staging
 
-    # Pre-fill P3 into L15_concat[128:192ch]
+    # Pre-fill O buffer: P3 into L15_concat[128:192ch], P4 into o4[256ch offset]
     o_buf = np.zeros(oT, dtype=np.int8)
     p3t = nchw_to_tiled_int8(p3)
     for row in range(h15):
         src = row * 64 * w15
         dst = o3 + row * 192 * w15 + 128 * w15
         o_buf[dst : dst + 64 * w15] = p3t[src : src + 64 * w15]
+    p4t = nchw_to_tiled_int8(p4)
+    for row in range(h):
+        src = row * 128 * w
+        dst = o4 + row * 384 * w + 256 * w
+        o_buf[dst : dst + 128 * w] = p4t[src : src + 128 * w]
 
-    op.write_buffer("input", nchw_to_tiled_int8(x))
+    # NPU input: P5 ++ P4 (flat concat)
+    p5t = nchw_to_tiled_int8(p5)
+    op.write_buffer("input", np.concatenate([p5t, p4t]))
     op.write_buffer("weights", pw)
     op.write_buffer("output", o_buf)
 

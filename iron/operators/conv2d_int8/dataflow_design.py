@@ -1501,13 +1501,15 @@ def my_dataflow_l12_l15(
     l15_cv2_s1,
     l15_cv2_s2,
 ):
-    """Combined L12 C2f + Upsample 2x + L15 C2f in one PDI.
+    """Combined P5-upsample + L12 C2f + Upsample 2x + L15 C2f in one PDI.
 
-    I  = L12 input (384ch, l12_h x l12_w)
+    I  = P5 (256ch, l12_h/2 x l12_w/2) ++ P4 (128ch, l12_h x l12_w)
     O  = [L15_final | L12_concat | L12_out | L15_concat | L15_c2f_concat]
+         Host pre-fills P4(128ch) into O[o4, 128ch offset per row, stride 384*W].
          Host pre-fills P3(64ch) into L15_concat[128:192ch per row].
 
-    TG1-3: L12 C2f (384->128) -> L12_out
+    TG0:   Upsample P5 2x → O[o4, 256ch per row, stride 384*W]
+    TG1-3: L12 C2f (384->128) reads from O[o4] -> L12_out
     TG4:   Upsample 2x (L12_out -> L15_concat[0:128ch])
     TG5-7: L15 C2f (192->64) -> L15_final
 
@@ -1553,6 +1555,14 @@ def my_dataflow_l12_l15(
     ups_ir = l12_cv2_oc * l12_w
     ups_or = l12_cv2_oc * l15_w
 
+    # P5/P4 pre-upsample params (fused into this PDI)
+    p5_ch = 256
+    p5_h, p5_w = l12_h // 2, l12_w // 2
+    p5_size = p5_ch * p5_h * p5_w
+    p4_ch = 128
+    p4_size = p4_ch * l12_h * l12_w
+    assert l12_h % 2 == 0 and l12_w % 2 == 0, "L12 dims must be even for P5 upsample"
+
     # DDR layout
     s0 = l15_cv2_oc * l15_h * l15_w  # L15 final
     s1 = l12_cv2_ic * l12_h * l12_w  # L12 concat
@@ -1561,7 +1571,8 @@ def my_dataflow_l12_l15(
     s4 = l15_cv2_ic * l15_h * l15_w  # L15 c2f concat
     o0, o1, o2, o3, o4 = 0, s0, s0 + s1, s0 + s1 + s2, s0 + s1 + s2 + s3
     oT = o4 + s4
-    total_input = l12_ic * l12_h * l12_w
+    total_input = p5_size + p4_size
+    total_l12_input = l12_ic * l12_h * l12_w
     l12_cv1_tw = l12_cv1_n * l12_cv1_wc
     l12_tw = l12_cv1_tw + 2 * l12_bn_wt + l12_cv2_wt
     l15_tw = l15_c1w + 2 * l15_bw + l15_c2w
@@ -1683,6 +1694,17 @@ def my_dataflow_l12_l15(
         return fn
 
     def _ups(oi, oo, kf):
+        # Phase 1: P5 upsample (p5_h input rows → l12_h output rows)
+        for _ in range_(p5_h):
+            ei = oi.acquire(1)
+            eo = oo.acquire(1)
+            kf(ei, eo, p5_w, p5_ch)
+            oo.release(1)
+            eo = oo.acquire(1)
+            kf(ei, eo, p5_w, p5_ch)
+            oo.release(1)
+            oi.release(1)
+        # Phase 2: L12→L15 upsample (l12_h input rows → l15_h output rows)
         for _ in range_(l12_h):
             ei = oi.acquire(1)
             eo = oo.acquire(1)
@@ -1779,11 +1801,20 @@ def my_dataflow_l12_l15(
     rt = Runtime()
     with rt.sequence(t(total_input), t(wT), t(oT)) as (I, W, O):
         rt.start(w0, w1, w2, w3, w4, w5, w6, w7, w8)
-        # TG1: L12 cv1
+        # TG0: Upsample P5 from I[0:p5_size] → O[o4, 256ch per row, stride 384*W]
         tg = rt.task_group()
-        rt.fill(
-            f12i.prod(), I, _of(total_input, 0, l12_cv1_n, total_input), task_group=tg
+        rt.fill(fui.prod(), I, _ct(total_input, 0, p5_size), task_group=tg)
+        rt.drain(
+            fuo.cons(),
+            O,
+            _sr(oT, o4, l12_h, p5_ch * l12_w, l12_ic * l12_w),
+            wait=True,
+            task_group=tg,
         )
+        rt.finish_task_group(tg)
+        # TG1: L12 cv1 (reads from O[o4] — concatenated P5_up + P4)
+        tg = rt.task_group()
+        rt.fill(f12i.prod(), O, _of(oT, o4, l12_cv1_n, total_l12_input), task_group=tg)
         rt.fill(f12cw.prod(), W, _ct(wT, wo, l12_cv1_tw), task_group=tg)
         rt.drain(
             f12co.cons(),
