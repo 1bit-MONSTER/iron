@@ -1,6 +1,1077 @@
 # IRONCLAD Trends
 
 
+## M_128-K_128-num_aie_columns_1-tile_size_input_32-tile_size_output_128
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.31 (n/a)</td><td>0.25 (n/a)</td><td>0.24 (n/a)</td><td>0.20 (n/a)</td><td>0.04 (n/a)</td><td>0.30 (n/a)</td><td>0.25 (n/a)</td><td>0.23 (n/a)</td><td>0.20 (n/a)</td><td>0.04 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_1792-K_896-N_1152-num_aie_columns_8-b_col_maj_False-c_col_maj_True-m_64-k_32-n_48-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>4.36 (n/a)</td><td>4.24 (n/a)</td><td>4.25 (n/a)</td><td>4.12 (n/a)</td><td>0.10 (n/a)</td><td>2281.90 (n/a)</td><td>2221.40 (n/a)</td><td>2210.40 (n/a)</td><td>2154.90 (n/a)</td><td>52.75 (n/a)</td><td>1716.69 (n/a)</td><td>1666.08 (n/a)</td><td>1673.63 (n/a)</td><td>1621.16 (n/a)</td><td>39.58 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_192-K_384-N_64-num_aie_columns_4-b_col_maj_False-c_col_maj_False-m_48-k_96-n_16-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>1.16 (n/a)</td><td>1.00 (n/a)</td><td>1.04 (n/a)</td><td>0.71 (n/a)</td><td>0.19 (n/a)</td><td>312.30 (n/a)</td><td>229.02 (n/a)</td><td>212.50 (n/a)</td><td>190.70 (n/a)</td><td>49.99 (n/a)</td><td>49.49 (n/a)</td><td>42.58 (n/a)</td><td>44.41 (n/a)</td><td>30.22 (n/a)</td><td>7.90 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_192-K_384-N_64-num_aie_columns_4-b_col_maj_True-c_col_maj_True-m_48-k_96-n_16-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>1.45 (n/a)</td><td>0.95 (n/a)</td><td>0.87 (n/a)</td><td>0.67 (n/a)</td><td>0.32 (n/a)</td><td>329.00 (n/a)</td><td>253.24 (n/a)</td><td>253.10 (n/a)</td><td>152.50 (n/a)</td><td>76.37 (n/a)</td><td>61.89 (n/a)</td><td>40.53 (n/a)</td><td>37.29 (n/a)</td><td>28.69 (n/a)</td><td>13.85 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_2048-N_2048-num_aie_columns_1-b_col_maj_False-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.51 (n/a)</td><td>0.51 (n/a)</td><td>0.51 (n/a)</td><td>0.51 (n/a)</td><td>0.00 (n/a)</td><td>49281.90 (n/a)</td><td>49249.08 (n/a)</td><td>49246.60 (n/a)</td><td>49225.10 (n/a)</td><td>21.96 (n/a)</td><td>349.01 (n/a)</td><td>348.84 (n/a)</td><td>348.85 (n/a)</td><td>348.60 (n/a)</td><td>0.16 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_2048-N_2048-num_aie_columns_2-b_col_maj_False-c_col_maj_True-m_8-k_16-n_32-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.21 (n/a)</td><td>0.21 (n/a)</td><td>0.21 (n/a)</td><td>0.00 (n/a)</td><td>119435.50 (n/a)</td><td>118866.76 (n/a)</td><td>118898.80 (n/a)</td><td>118189.90 (n/a)</td><td>451.51 (n/a)</td><td>145.36 (n/a)</td><td>144.53 (n/a)</td><td>144.49 (n/a)</td><td>143.84 (n/a)</td><td>0.55 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_2048-N_2048-num_aie_columns_2-b_col_maj_True-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.89 (n/a)</td><td>0.88 (n/a)</td><td>0.88 (n/a)</td><td>0.87 (n/a)</td><td>0.01 (n/a)</td><td>28925.50 (n/a)</td><td>28602.44 (n/a)</td><td>28633.00 (n/a)</td><td>28278.40 (n/a)</td><td>270.55 (n/a)</td><td>607.53 (n/a)</td><td>600.69 (n/a)</td><td>600.00 (n/a)</td><td>593.93 (n/a)</td><td>5.69 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_2048-N_2048-num_aie_columns_8-b_col_maj_False-c_col_maj_False-m_32-k_32-n_128-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>3.60 (n/a)</td><td>3.40 (n/a)</td><td>3.34 (n/a)</td><td>3.33 (n/a)</td><td>0.12 (n/a)</td><td>7556.40 (n/a)</td><td>7399.40 (n/a)</td><td>7537.50 (n/a)</td><td>6988.80 (n/a)</td><td>242.66 (n/a)</td><td>2458.21 (n/a)</td><td>2323.87 (n/a)</td><td>2279.26 (n/a)</td><td>2273.56 (n/a)</td><td>78.94 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_2048-N_2048-num_aie_columns_8-b_col_maj_True-c_col_maj_False-m_128-k_32-n_32-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>3.11 (n/a)</td><td>2.87 (n/a)</td><td>2.88 (n/a)</td><td>2.69 (n/a)</td><td>0.17 (n/a)</td><td>9359.90 (n/a)</td><td>8795.62 (n/a)</td><td>8727.00 (n/a)</td><td>8103.10 (n/a)</td><td>510.86 (n/a)</td><td>2120.15 (n/a)</td><td>1958.57 (n/a)</td><td>1968.58 (n/a)</td><td>1835.47 (n/a)</td><td>115.14 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_2048-N_2048-num_aie_columns_8-b_col_maj_True-c_col_maj_True-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>3.47 (n/a)</td><td>3.41 (n/a)</td><td>3.41 (n/a)</td><td>3.31 (n/a)</td><td>0.06 (n/a)</td><td>7598.50 (n/a)</td><td>7386.04 (n/a)</td><td>7377.50 (n/a)</td><td>7257.10 (n/a)</td><td>138.59 (n/a)</td><td>2367.32 (n/a)</td><td>2326.64 (n/a)</td><td>2328.68 (n/a)</td><td>2260.96 (n/a)</td><td>43.22 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_2048-N_8192-num_aie_columns_2-b_col_maj_False-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.77 (n/a)</td><td>0.77 (n/a)</td><td>0.77 (n/a)</td><td>0.77 (n/a)</td><td>0.00 (n/a)</td><td>97856.40 (n/a)</td><td>97740.50 (n/a)</td><td>97708.70 (n/a)</td><td>97695.50 (n/a)</td><td>66.70 (n/a)</td><td>703.40 (n/a)</td><td>703.08 (n/a)</td><td>703.31 (n/a)</td><td>702.25 (n/a)</td><td>0.48 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_2048-N_8192-num_aie_columns_2-b_col_maj_False-c_col_maj_True-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.73 (n/a)</td><td>0.73 (n/a)</td><td>0.73 (n/a)</td><td>0.73 (n/a)</td><td>0.00 (n/a)</td><td>102959.80 (n/a)</td><td>102892.58 (n/a)</td><td>102899.70 (n/a)</td><td>102807.80 (n/a)</td><td>56.56 (n/a)</td><td>668.43 (n/a)</td><td>667.88 (n/a)</td><td>667.83 (n/a)</td><td>667.44 (n/a)</td><td>0.37 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_2048-N_8192-num_aie_columns_2-b_col_maj_True-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.69 (n/a)</td><td>0.69 (n/a)</td><td>0.69 (n/a)</td><td>0.69 (n/a)</td><td>0.00 (n/a)</td><td>110103.40 (n/a)</td><td>109848.26 (n/a)</td><td>109884.90 (n/a)</td><td>109591.10 (n/a)</td><td>201.45 (n/a)</td><td>627.05 (n/a)</td><td>625.59 (n/a)</td><td>625.38 (n/a)</td><td>624.14 (n/a)</td><td>1.15 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_64-N_2048-num_aie_columns_2-b_col_maj_False-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>7.50 (n/a)</td><td>6.74 (n/a)</td><td>6.87 (n/a)</td><td>5.68 (n/a)</td><td>0.67 (n/a)</td><td>1568.50 (n/a)</td><td>1334.42 (n/a)</td><td>1296.70 (n/a)</td><td>1188.80 (n/a)</td><td>142.20 (n/a)</td><td>451.59 (n/a)</td><td>405.73 (n/a)</td><td>414.01 (n/a)</td><td>342.29 (n/a)</td><td>40.16 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_64-N_2048-num_aie_columns_2-b_col_maj_False-c_col_maj_True-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>7.16 (n/a)</td><td>6.82 (n/a)</td><td>6.84 (n/a)</td><td>6.40 (n/a)</td><td>0.27 (n/a)</td><td>1391.90 (n/a)</td><td>1308.28 (n/a)</td><td>1303.80 (n/a)</td><td>1245.10 (n/a)</td><td>53.35 (n/a)</td><td>431.20 (n/a)</td><td>410.91 (n/a)</td><td>411.77 (n/a)</td><td>385.71 (n/a)</td><td>16.44 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_64-N_2048-num_aie_columns_2-b_col_maj_True-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>6.99 (n/a)</td><td>6.22 (n/a)</td><td>6.55 (n/a)</td><td>5.05 (n/a)</td><td>0.82 (n/a)</td><td>1766.60 (n/a)</td><td>1454.82 (n/a)</td><td>1361.30 (n/a)</td><td>1275.10 (n/a)</td><td>207.33 (n/a)</td><td>421.05 (n/a)</td><td>374.67 (n/a)</td><td>394.39 (n/a)</td><td>303.90 (n/a)</td><td>49.58 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_64-N_8192-num_aie_columns_2-b_col_maj_False-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>8.38 (n/a)</td><td>7.80 (n/a)</td><td>7.72 (n/a)</td><td>7.23 (n/a)</td><td>0.42 (n/a)</td><td>4819.60 (n/a)</td><td>4482.74 (n/a)</td><td>4514.60 (n/a)</td><td>4161.20 (n/a)</td><td>242.60 (n/a)</td><td>516.07 (n/a)</td><td>480.18 (n/a)</td><td>475.68 (n/a)</td><td>445.57 (n/a)</td><td>26.00 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_64-N_8192-num_aie_columns_2-b_col_maj_False-c_col_maj_True-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>7.77 (n/a)</td><td>7.69 (n/a)</td><td>7.73 (n/a)</td><td>7.60 (n/a)</td><td>0.08 (n/a)</td><td>4589.90 (n/a)</td><td>4533.42 (n/a)</td><td>4511.60 (n/a)</td><td>4487.60 (n/a)</td><td>45.68 (n/a)</td><td>478.54 (n/a)</td><td>473.74 (n/a)</td><td>476.00 (n/a)</td><td>467.88 (n/a)</td><td>4.76 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_64-N_8192-num_aie_columns_2-b_col_maj_True-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>7.64 (n/a)</td><td>7.09 (n/a)</td><td>7.19 (n/a)</td><td>6.55 (n/a)</td><td>0.45 (n/a)</td><td>5325.50 (n/a)</td><td>4930.76 (n/a)</td><td>4848.70 (n/a)</td><td>4564.20 (n/a)</td><td>317.51 (n/a)</td><td>470.51 (n/a)</td><td>436.97 (n/a)</td><td>442.90 (n/a)</td><td>403.25 (n/a)</td><td>27.92 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_8192-N_2048-num_aie_columns_2-b_col_maj_False-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.78 (n/a)</td><td>0.78 (n/a)</td><td>0.78 (n/a)</td><td>0.78 (n/a)</td><td>0.00 (n/a)</td><td>96979.30 (n/a)</td><td>96964.76 (n/a)</td><td>96967.70 (n/a)</td><td>96934.10 (n/a)</td><td>18.45 (n/a)</td><td>708.93 (n/a)</td><td>708.71 (n/a)</td><td>708.68 (n/a)</td><td>708.60 (n/a)</td><td>0.13 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_8192-N_2048-num_aie_columns_2-b_col_maj_False-c_col_maj_True-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.74 (n/a)</td><td>0.74 (n/a)</td><td>0.74 (n/a)</td><td>0.74 (n/a)</td><td>0.00 (n/a)</td><td>102262.80 (n/a)</td><td>101963.28 (n/a)</td><td>101984.80 (n/a)</td><td>101656.90 (n/a)</td><td>265.96 (n/a)</td><td>675.99 (n/a)</td><td>673.97 (n/a)</td><td>673.82 (n/a)</td><td>671.99 (n/a)</td><td>1.76 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_8192-N_2048-num_aie_columns_2-b_col_maj_True-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.70 (n/a)</td><td>0.70 (n/a)</td><td>0.70 (n/a)</td><td>0.70 (n/a)</td><td>0.00 (n/a)</td><td>108595.10 (n/a)</td><td>108438.42 (n/a)</td><td>108380.90 (n/a)</td><td>108272.90 (n/a)</td><td>140.80 (n/a)</td><td>634.69 (n/a)</td><td>633.72 (n/a)</td><td>634.06 (n/a)</td><td>632.80 (n/a)</td><td>0.82 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_8192-num_aie_columns_1-tile_size_input_1-tile_size_output_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>13.50 (n/a)</td><td>13.19 (n/a)</td><td>13.25 (n/a)</td><td>12.49 (n/a)</td><td>0.41 (n/a)</td><td>13.49 (n/a)</td><td>13.19 (n/a)</td><td>13.25 (n/a)</td><td>12.48 (n/a)</td><td>0.41 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_8192-num_aie_columns_2-tile_size_input_1-tile_size_output_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>24.94 (n/a)</td><td>24.49 (n/a)</td><td>24.42 (n/a)</td><td>24.13 (n/a)</td><td>0.30 (n/a)</td><td>24.92 (n/a)</td><td>24.47 (n/a)</td><td>24.40 (n/a)</td><td>24.12 (n/a)</td><td>0.30 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_8192-num_aie_columns_4-tile_size_input_1-tile_size_output_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>43.20 (n/a)</td><td>40.52 (n/a)</td><td>40.57 (n/a)</td><td>38.38 (n/a)</td><td>1.93 (n/a)</td><td>43.17 (n/a)</td><td>40.50 (n/a)</td><td>40.55 (n/a)</td><td>38.36 (n/a)</td><td>1.93 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-K_8192-num_aie_columns_8-tile_size_input_1-tile_size_output_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>46.37 (n/a)</td><td>43.38 (n/a)</td><td>43.57 (n/a)</td><td>40.28 (n/a)</td><td>2.49 (n/a)</td><td>46.34 (n/a)</td><td>43.35 (n/a)</td><td>43.54 (n/a)</td><td>40.26 (n/a)</td><td>2.49 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_128-aie_columns_1-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>4.65 (n/a)</td><td>4.03 (n/a)</td><td>3.92 (n/a)</td><td>3.39 (n/a)</td><td>0.48 (n/a)</td><td>309.50 (n/a)</td><td>263.16 (n/a)</td><td>267.20 (n/a)</td><td>225.70 (n/a)</td><td>31.68 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_128-aie_columns_1-channels_2-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>5.15 (n/a)</td><td>4.75 (n/a)</td><td>4.90 (n/a)</td><td>4.08 (n/a)</td><td>0.43 (n/a)</td><td>256.80 (n/a)</td><td>222.50 (n/a)</td><td>214.10 (n/a)</td><td>203.70 (n/a)</td><td>21.45 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_128-aie_columns_2-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>5.76 (n/a)</td><td>4.76 (n/a)</td><td>4.64 (n/a)</td><td>4.04 (n/a)</td><td>0.76 (n/a)</td><td>259.40 (n/a)</td><td>224.80 (n/a)</td><td>225.90 (n/a)</td><td>182.10 (n/a)</td><td>34.81 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_128-aie_columns_2-channels_2-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>5.50 (n/a)</td><td>4.66 (n/a)</td><td>4.50 (n/a)</td><td>4.36 (n/a)</td><td>0.47 (n/a)</td><td>240.80 (n/a)</td><td>226.50 (n/a)</td><td>233.10 (n/a)</td><td>190.60 (n/a)</td><td>20.50 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_256-aie_columns_1-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>8.31 (n/a)</td><td>7.59 (n/a)</td><td>7.65 (n/a)</td><td>6.83 (n/a)</td><td>0.53 (n/a)</td><td>306.90 (n/a)</td><td>277.54 (n/a)</td><td>274.10 (n/a)</td><td>252.50 (n/a)</td><td>19.69 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_256-aie_columns_1-channels_2-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>8.68 (n/a)</td><td>7.41 (n/a)</td><td>7.18 (n/a)</td><td>6.40 (n/a)</td><td>0.96 (n/a)</td><td>327.80 (n/a)</td><td>286.72 (n/a)</td><td>292.20 (n/a)</td><td>241.60 (n/a)</td><td>36.21 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_256-aie_columns_2-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>9.68 (n/a)</td><td>8.36 (n/a)</td><td>8.46 (n/a)</td><td>7.05 (n/a)</td><td>1.14 (n/a)</td><td>297.40 (n/a)</td><td>254.62 (n/a)</td><td>247.80 (n/a)</td><td>216.70 (n/a)</td><td>35.31 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_256-aie_columns_2-channels_2-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>9.00 (n/a)</td><td>8.46 (n/a)</td><td>8.41 (n/a)</td><td>7.95 (n/a)</td><td>0.47 (n/a)</td><td>263.90 (n/a)</td><td>248.48 (n/a)</td><td>249.50 (n/a)</td><td>232.90 (n/a)</td><td>13.85 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_256-aie_columns_4-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>8.81 (n/a)</td><td>7.72 (n/a)</td><td>8.37 (n/a)</td><td>5.72 (n/a)</td><td>1.36 (n/a)</td><td>366.60 (n/a)</td><td>279.48 (n/a)</td><td>250.70 (n/a)</td><td>238.00 (n/a)</td><td>55.50 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_256-aie_columns_4-channels_2-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>8.77 (n/a)</td><td>7.59 (n/a)</td><td>7.90 (n/a)</td><td>5.52 (n/a)</td><td>1.22 (n/a)</td><td>379.90 (n/a)</td><td>283.32 (n/a)</td><td>265.30 (n/a)</td><td>239.30 (n/a)</td><td>55.20 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_512-aie_columns_1-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>11.54 (n/a)</td><td>11.18 (n/a)</td><td>11.05 (n/a)</td><td>10.90 (n/a)</td><td>0.32 (n/a)</td><td>384.90 (n/a)</td><td>375.30 (n/a)</td><td>379.40 (n/a)</td><td>363.50 (n/a)</td><td>10.68 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_512-aie_columns_1-channels_2-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>12.92 (n/a)</td><td>11.37 (n/a)</td><td>11.55 (n/a)</td><td>10.18 (n/a)</td><td>1.13 (n/a)</td><td>412.00 (n/a)</td><td>371.92 (n/a)</td><td>363.20 (n/a)</td><td>324.60 (n/a)</td><td>36.43 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_512-aie_columns_2-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>12.07 (n/a)</td><td>10.99 (n/a)</td><td>11.15 (n/a)</td><td>8.90 (n/a)</td><td>1.24 (n/a)</td><td>471.00 (n/a)</td><td>386.20 (n/a)</td><td>376.20 (n/a)</td><td>347.60 (n/a)</td><td>49.23 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_512-aie_columns_2-channels_2-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>13.36 (n/a)</td><td>13.06 (n/a)</td><td>13.28 (n/a)</td><td>12.27 (n/a)</td><td>0.46 (n/a)</td><td>341.90 (n/a)</td><td>321.46 (n/a)</td><td>315.70 (n/a)</td><td>313.90 (n/a)</td><td>11.72 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_512-aie_columns_4-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>14.51 (n/a)</td><td>12.72 (n/a)</td><td>12.22 (n/a)</td><td>11.90 (n/a)</td><td>1.06 (n/a)</td><td>352.40 (n/a)</td><td>331.36 (n/a)</td><td>343.40 (n/a)</td><td>289.00 (n/a)</td><td>25.52 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_512-aie_columns_4-channels_2-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>13.24 (n/a)</td><td>11.33 (n/a)</td><td>11.57 (n/a)</td><td>9.58 (n/a)</td><td>1.43 (n/a)</td><td>437.90 (n/a)</td><td>374.88 (n/a)</td><td>362.40 (n/a)</td><td>316.70 (n/a)</td><td>47.60 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_512-aie_columns_8-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>12.60 (n/a)</td><td>11.34 (n/a)</td><td>11.35 (n/a)</td><td>9.27 (n/a)</td><td>1.30 (n/a)</td><td>452.20 (n/a)</td><td>374.24 (n/a)</td><td>369.70 (n/a)</td><td>332.80 (n/a)</td><td>47.12 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_512-aie_columns_8-channels_2-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>15.35 (n/a)</td><td>11.97 (n/a)</td><td>12.43 (n/a)</td><td>9.05 (n/a)</td><td>2.53 (n/a)</td><td>463.20 (n/a)</td><td>363.32 (n/a)</td><td>337.30 (n/a)</td><td>273.20 (n/a)</td><td>77.85 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_64-aie_columns_1-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>2.82 (n/a)</td><td>2.55 (n/a)</td><td>2.54 (n/a)</td><td>2.41 (n/a)</td><td>0.16 (n/a)</td><td>217.30 (n/a)</td><td>206.52 (n/a)</td><td>206.70 (n/a)</td><td>186.10 (n/a)</td><td>12.52 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_2048-N_64-aie_columns_1-channels_2-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>3.43 (n/a)</td><td>2.67 (n/a)</td><td>2.69 (n/a)</td><td>1.89 (n/a)</td><td>0.68 (n/a)</td><td>277.30 (n/a)</td><td>207.18 (n/a)</td><td>195.20 (n/a)</td><td>152.80 (n/a)</td><td>54.25 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_384-K_1536-N_1792-num_aie_columns_4-b_col_maj_True-c_col_maj_False-m_32-k_48-n_64-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>4.11 (n/a)</td><td>3.78 (n/a)</td><td>3.71 (n/a)</td><td>3.56 (n/a)</td><td>0.22 (n/a)</td><td>2267.20 (n/a)</td><td>2140.10 (n/a)</td><td>2175.20 (n/a)</td><td>1963.30 (n/a)</td><td>124.05 (n/a)</td><td>1076.72 (n/a)</td><td>990.50 (n/a)</td><td>971.85 (n/a)</td><td>932.38 (n/a)</td><td>58.95 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_64-K_512-N_256-num_aie_columns_4-b_col_maj_True-c_col_maj_False-m_16-k_64-n_64-trace_size_0-partition_N_4
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.35 (n/a)</td><td>0.32 (n/a)</td><td>0.31 (n/a)</td><td>0.28 (n/a)</td><td>0.03 (n/a)</td><td>4456.70 (n/a)</td><td>3961.14 (n/a)</td><td>3978.20 (n/a)</td><td>3529.50 (n/a)</td><td>348.75 (n/a)</td><td>19.01 (n/a)</td><td>17.05 (n/a)</td><td>16.87 (n/a)</td><td>15.06 (n/a)</td><td>1.49 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_64-N_128-aie_columns_1-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.31 (n/a)</td><td>0.22 (n/a)</td><td>0.20 (n/a)</td><td>0.18 (n/a)</td><td>0.05 (n/a)</td><td>178.60 (n/a)</td><td>155.64 (n/a)</td><td>161.20 (n/a)</td><td>106.30 (n/a)</td><td>29.01 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_64-N_128-aie_columns_2-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.22 (n/a)</td><td>0.19 (n/a)</td><td>0.20 (n/a)</td><td>0.16 (n/a)</td><td>0.02 (n/a)</td><td>202.10 (n/a)</td><td>170.30 (n/a)</td><td>163.70 (n/a)</td><td>152.20 (n/a)</td><td>19.14 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_64-N_256-aie_columns_1-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.50 (n/a)</td><td>0.35 (n/a)</td><td>0.37 (n/a)</td><td>0.18 (n/a)</td><td>0.12 (n/a)</td><td>368.80 (n/a)</td><td>208.54 (n/a)</td><td>175.00 (n/a)</td><td>129.90 (n/a)</td><td>93.18 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_64-N_256-aie_columns_2-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.53 (n/a)</td><td>0.39 (n/a)</td><td>0.37 (n/a)</td><td>0.33 (n/a)</td><td>0.08 (n/a)</td><td>200.00 (n/a)</td><td>171.54 (n/a)</td><td>178.80 (n/a)</td><td>124.00 (n/a)</td><td>29.90 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_64-N_256-aie_columns_4-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.49 (n/a)</td><td>0.38 (n/a)</td><td>0.37 (n/a)</td><td>0.30 (n/a)</td><td>0.08 (n/a)</td><td>219.80 (n/a)</td><td>179.04 (n/a)</td><td>176.60 (n/a)</td><td>133.10 (n/a)</td><td>36.52 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_64-N_512-aie_columns_1-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.96 (n/a)</td><td>0.73 (n/a)</td><td>0.70 (n/a)</td><td>0.55 (n/a)</td><td>0.15 (n/a)</td><td>240.00 (n/a)</td><td>185.60 (n/a)</td><td>187.70 (n/a)</td><td>136.90 (n/a)</td><td>37.47 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_64-N_512-aie_columns_2-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>1.18 (n/a)</td><td>0.74 (n/a)</td><td>0.67 (n/a)</td><td>0.38 (n/a)</td><td>0.32 (n/a)</td><td>343.20 (n/a)</td><td>206.10 (n/a)</td><td>194.30 (n/a)</td><td>110.90 (n/a)</td><td>91.25 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_64-N_512-aie_columns_4-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.82 (n/a)</td><td>0.76 (n/a)</td><td>0.74 (n/a)</td><td>0.73 (n/a)</td><td>0.04 (n/a)</td><td>179.50 (n/a)</td><td>172.88 (n/a)</td><td>176.30 (n/a)</td><td>160.10 (n/a)</td><td>8.18 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_64-N_512-aie_columns_8-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.77 (n/a)</td><td>0.69 (n/a)</td><td>0.69 (n/a)</td><td>0.64 (n/a)</td><td>0.05 (n/a)</td><td>204.10 (n/a)</td><td>190.36 (n/a)</td><td>189.30 (n/a)</td><td>170.30 (n/a)</td><td>12.99 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_64-N_64-aie_columns_1-channels_1-m_64-n_64-s_8
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.11 (n/a)</td><td>0.11 (n/a)</td><td>0.09 (n/a)</td><td>0.02 (n/a)</td><td>176.30 (n/a)</td><td>151.86 (n/a)</td><td>151.80 (n/a)</td><td>122.20 (n/a)</td><td>22.34 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_8192-K_2048-num_aie_columns_1-tile_size_input_4-tile_size_output_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>13.50 (n/a)</td><td>12.93 (n/a)</td><td>13.23 (n/a)</td><td>12.21 (n/a)</td><td>0.59 (n/a)</td><td>13.49 (n/a)</td><td>12.92 (n/a)</td><td>13.22 (n/a)</td><td>12.21 (n/a)</td><td>0.59 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_8192-K_2048-num_aie_columns_2-tile_size_input_4-tile_size_output_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>24.96 (n/a)</td><td>24.53 (n/a)</td><td>24.59 (n/a)</td><td>24.07 (n/a)</td><td>0.35 (n/a)</td><td>24.95 (n/a)</td><td>24.51 (n/a)</td><td>24.58 (n/a)</td><td>24.05 (n/a)</td><td>0.35 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_8192-K_2048-num_aie_columns_4-tile_size_input_4-tile_size_output_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>41.97 (n/a)</td><td>39.46 (n/a)</td><td>38.92 (n/a)</td><td>37.78 (n/a)</td><td>1.59 (n/a)</td><td>41.95 (n/a)</td><td>39.44 (n/a)</td><td>38.89 (n/a)</td><td>37.75 (n/a)</td><td>1.59 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_8192-K_2048-num_aie_columns_8-tile_size_input_4-tile_size_output_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>44.38 (n/a)</td><td>43.19 (n/a)</td><td>43.04 (n/a)</td><td>42.33 (n/a)</td><td>0.79 (n/a)</td><td>44.35 (n/a)</td><td>43.17 (n/a)</td><td>43.01 (n/a)</td><td>42.31 (n/a)</td><td>0.79 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## M_896-K_1792-N_640-num_aie_columns_8-b_col_maj_False-c_col_maj_True-m_32-k_64-n_80-trace_size_0-partition_N_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th><th>Throughput (max)</th><th>Throughput (mean)</th><th>Throughput (median)</th><th>Throughput (min)</th><th>Throughput (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>4.99 (n/a)</td><td>4.41 (n/a)</td><td>4.82 (n/a)</td><td>3.64 (n/a)</td><td>0.68 (n/a)</td><td>1826.70 (n/a)</td><td>1538.14 (n/a)</td><td>1378.70 (n/a)</td><td>1332.90 (n/a)</td><td>250.12 (n/a)</td><td>1541.88 (n/a)</td><td>1363.42 (n/a)</td><td>1490.69 (n/a)</td><td>1125.11 (n/a)</td><td>209.65 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
 ## axpy_1_cols_2_channels_1024_tile_1024_10.0
 
 <table>
@@ -2381,6 +3452,23 @@
 </table>
 
 
+## embedding_dim_2048-hidden_dim_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>0.00 (n/a)</td><td>4491.67 (n/a)</td><td>4307.64 (n/a)</td><td>4466.26 (n/a)</td><td>3961.23 (n/a)</td><td>242.15 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
 ## gelu_1_cols_1_channels_1024_tile_1024
 
 <table>
@@ -4561,6 +5649,4052 @@ _No metrics available._
 </tr>
 <tr>
 <td><code>dc66da7</code> — 2026-03-25 19:32:44</td><td>4.99 (n/a)</td><td>4.16 (n/a)</td><td>4.37 (n/a)</td><td>3.20 (n/a)</td><td>0.71 (n/a)</td><td>2075.90 (n/a)</td><td>1637.70 (n/a)</td><td>1522.30 (n/a)</td><td>1333.70 (n/a)</td><td>297.70 (n/a)</td><td>1540.97 (n/a)</td><td>1286.54 (n/a)</td><td>1350.07 (n/a)</td><td>990.03 (n/a)</td><td>218.89 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_1-num_channels_1-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>237.10 (n/a)</td><td>168.77 (n/a)</td><td>169.80 (n/a)</td><td>115.00 (n/a)</td><td>30.74 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_1-num_channels_1-tile_size_1024-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>189.70 (n/a)</td><td>165.24 (n/a)</td><td>163.50 (n/a)</td><td>153.00 (n/a)</td><td>14.68 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_1-num_channels_1-tile_size_1024-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>192.70 (n/a)</td><td>164.46 (n/a)</td><td>182.50 (n/a)</td><td>111.80 (n/a)</td><td>35.58 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_1-num_channels_1-tile_size_1024-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.00 (n/a)</td><td>220.40 (n/a)</td><td>188.64 (n/a)</td><td>182.90 (n/a)</td><td>166.20 (n/a)</td><td>24.52 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_1-num_channels_2-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>216.70 (n/a)</td><td>157.16 (n/a)</td><td>150.00 (n/a)</td><td>94.20 (n/a)</td><td>29.31 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_1-num_channels_2-tile_size_512-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>195.80 (n/a)</td><td>164.26 (n/a)</td><td>175.50 (n/a)</td><td>117.80 (n/a)</td><td>33.38 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_1-num_channels_2-tile_size_512-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>192.40 (n/a)</td><td>165.90 (n/a)</td><td>183.60 (n/a)</td><td>125.60 (n/a)</td><td>31.85 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_1-num_channels_2-tile_size_512-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>276.60 (n/a)</td><td>192.64 (n/a)</td><td>173.50 (n/a)</td><td>139.00 (n/a)</td><td>53.81 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_1-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>192.50 (n/a)</td><td>152.75 (n/a)</td><td>152.55 (n/a)</td><td>131.30 (n/a)</td><td>20.14 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_1-tile_size_1024-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>205.70 (n/a)</td><td>156.38 (n/a)</td><td>145.60 (n/a)</td><td>139.50 (n/a)</td><td>27.80 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_1-tile_size_1024-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>180.00 (n/a)</td><td>143.00 (n/a)</td><td>141.20 (n/a)</td><td>119.40 (n/a)</td><td>22.71 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_2-num_channels_1-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>236.30 (n/a)</td><td>171.80 (n/a)</td><td>170.15 (n/a)</td><td>97.90 (n/a)</td><td>38.72 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_2-num_channels_1-tile_size_512-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>258.80 (n/a)</td><td>176.52 (n/a)</td><td>168.60 (n/a)</td><td>133.20 (n/a)</td><td>49.44 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_2-num_channels_1-tile_size_512-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>195.60 (n/a)</td><td>158.38 (n/a)</td><td>153.20 (n/a)</td><td>124.40 (n/a)</td><td>29.79 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_2-num_channels_1-tile_size_512-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>190.90 (n/a)</td><td>162.02 (n/a)</td><td>175.90 (n/a)</td><td>130.70 (n/a)</td><td>28.91 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_2-num_channels_2-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>238.40 (n/a)</td><td>170.38 (n/a)</td><td>169.50 (n/a)</td><td>122.90 (n/a)</td><td>34.17 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_2-num_channels_2-tile_size_256-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>186.40 (n/a)</td><td>167.60 (n/a)</td><td>163.90 (n/a)</td><td>150.80 (n/a)</td><td>13.88 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_2-num_channels_2-tile_size_256-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>216.30 (n/a)</td><td>164.64 (n/a)</td><td>160.50 (n/a)</td><td>132.30 (n/a)</td><td>31.93 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_2-num_channels_2-tile_size_256-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>206.70 (n/a)</td><td>191.90 (n/a)</td><td>194.00 (n/a)</td><td>176.20 (n/a)</td><td>12.83 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_2-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>206.80 (n/a)</td><td>151.45 (n/a)</td><td>150.85 (n/a)</td><td>108.10 (n/a)</td><td>31.70 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_2-tile_size_512-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>178.30 (n/a)</td><td>144.84 (n/a)</td><td>143.70 (n/a)</td><td>112.20 (n/a)</td><td>25.88 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_2-tile_size_512-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>198.30 (n/a)</td><td>157.26 (n/a)</td><td>149.00 (n/a)</td><td>123.90 (n/a)</td><td>28.27 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_4-num_channels_1-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>273.70 (n/a)</td><td>182.18 (n/a)</td><td>181.00 (n/a)</td><td>127.10 (n/a)</td><td>33.43 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_4-num_channels_1-tile_size_256-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>170.20 (n/a)</td><td>154.02 (n/a)</td><td>149.30 (n/a)</td><td>131.60 (n/a)</td><td>16.24 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_4-num_channels_1-tile_size_256-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>226.50 (n/a)</td><td>187.48 (n/a)</td><td>192.00 (n/a)</td><td>142.20 (n/a)</td><td>35.26 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_4-num_channels_1-tile_size_256-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>240.90 (n/a)</td><td>208.94 (n/a)</td><td>213.40 (n/a)</td><td>151.20 (n/a)</td><td>34.59 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_4-num_channels_2-tile_size_128
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>277.60 (n/a)</td><td>197.29 (n/a)</td><td>184.40 (n/a)</td><td>127.00 (n/a)</td><td>38.52 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_4-num_channels_2-tile_size_128-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>216.60 (n/a)</td><td>172.54 (n/a)</td><td>186.40 (n/a)</td><td>120.80 (n/a)</td><td>43.09 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_4-num_channels_2-tile_size_128-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.01 (n/a)</td><td>273.90 (n/a)</td><td>198.80 (n/a)</td><td>194.40 (n/a)</td><td>134.20 (n/a)</td><td>49.65 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_4-num_channels_2-tile_size_128-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>331.70 (n/a)</td><td>227.42 (n/a)</td><td>211.30 (n/a)</td><td>162.40 (n/a)</td><td>63.69 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_4-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>237.30 (n/a)</td><td>174.97 (n/a)</td><td>169.85 (n/a)</td><td>126.30 (n/a)</td><td>30.87 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_4-tile_size_256-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>294.90 (n/a)</td><td>200.10 (n/a)</td><td>188.50 (n/a)</td><td>152.70 (n/a)</td><td>55.50 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_4-tile_size_256-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>251.00 (n/a)</td><td>192.74 (n/a)</td><td>182.50 (n/a)</td><td>167.30 (n/a)</td><td>33.52 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_8-num_channels_1-tile_size_128
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>360.80 (n/a)</td><td>193.38 (n/a)</td><td>182.30 (n/a)</td><td>121.60 (n/a)</td><td>46.23 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_8-num_channels_1-tile_size_128-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>177.90 (n/a)</td><td>155.46 (n/a)</td><td>155.90 (n/a)</td><td>130.20 (n/a)</td><td>17.17 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_8-num_channels_1-tile_size_128-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>197.70 (n/a)</td><td>172.82 (n/a)</td><td>179.20 (n/a)</td><td>132.70 (n/a)</td><td>26.82 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_8-num_channels_1-tile_size_128-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>249.10 (n/a)</td><td>217.56 (n/a)</td><td>225.00 (n/a)</td><td>186.10 (n/a)</td><td>26.63 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_8-num_channels_2-tile_size_64
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>364.00 (n/a)</td><td>242.78 (n/a)</td><td>229.90 (n/a)</td><td>140.40 (n/a)</td><td>64.54 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_8-num_channels_2-tile_size_64-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.01 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>258.90 (n/a)</td><td>211.70 (n/a)</td><td>227.80 (n/a)</td><td>135.90 (n/a)</td><td>53.74 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_8-num_channels_2-tile_size_64-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>318.90 (n/a)</td><td>232.06 (n/a)</td><td>221.80 (n/a)</td><td>187.00 (n/a)</td><td>51.72 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_8-tile_size_128
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>316.60 (n/a)</td><td>208.29 (n/a)</td><td>201.15 (n/a)</td><td>116.20 (n/a)</td><td>66.11 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_8-tile_size_128-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>300.70 (n/a)</td><td>220.20 (n/a)</td><td>196.40 (n/a)</td><td>165.20 (n/a)</td><td>62.32 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_aie_columns_8-tile_size_128-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.00 (n/a)</td><td>199.80 (n/a)</td><td>182.64 (n/a)</td><td>189.90 (n/a)</td><td>151.20 (n/a)</td><td>19.14 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_1-num_channels_1-bypass_False-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>229.70 (n/a)</td><td>178.16 (n/a)</td><td>164.50 (n/a)</td><td>132.40 (n/a)</td><td>39.43 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_1-num_channels_1-bypass_True-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>231.80 (n/a)</td><td>184.52 (n/a)</td><td>199.10 (n/a)</td><td>122.50 (n/a)</td><td>47.87 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_16-num_channels_2-bypass_False-tile_size_64
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.01 (n/a)</td><td>357.60 (n/a)</td><td>251.32 (n/a)</td><td>221.40 (n/a)</td><td>148.90 (n/a)</td><td>92.95 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_16-num_channels_2-bypass_True-tile_size_64
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>234.00 (n/a)</td><td>188.68 (n/a)</td><td>197.50 (n/a)</td><td>128.30 (n/a)</td><td>39.60 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_2-num_channels_1-bypass_False-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>239.30 (n/a)</td><td>173.70 (n/a)</td><td>173.30 (n/a)</td><td>110.20 (n/a)</td><td>49.95 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_2-num_channels_1-bypass_True-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>253.30 (n/a)</td><td>179.62 (n/a)</td><td>171.00 (n/a)</td><td>118.00 (n/a)</td><td>48.70 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_2-num_channels_2-bypass_False-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>174.20 (n/a)</td><td>154.22 (n/a)</td><td>153.70 (n/a)</td><td>131.50 (n/a)</td><td>16.61 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_2-num_channels_2-bypass_True-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>216.20 (n/a)</td><td>171.62 (n/a)</td><td>186.50 (n/a)</td><td>123.10 (n/a)</td><td>37.70 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_4-num_channels_1-bypass_False-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>231.70 (n/a)</td><td>181.44 (n/a)</td><td>172.60 (n/a)</td><td>123.60 (n/a)</td><td>47.91 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_4-num_channels_1-bypass_True-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>196.20 (n/a)</td><td>181.64 (n/a)</td><td>183.80 (n/a)</td><td>165.20 (n/a)</td><td>11.59 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_4-num_channels_2-bypass_False-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>241.50 (n/a)</td><td>187.64 (n/a)</td><td>190.80 (n/a)</td><td>127.00 (n/a)</td><td>41.32 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_4-num_channels_2-bypass_True-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>196.80 (n/a)</td><td>182.28 (n/a)</td><td>175.60 (n/a)</td><td>174.20 (n/a)</td><td>10.48 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_8-num_channels_1-bypass_False-tile_size_128
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.01 (n/a)</td><td>315.30 (n/a)</td><td>207.32 (n/a)</td><td>195.50 (n/a)</td><td>141.40 (n/a)</td><td>65.28 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_8-num_channels_1-bypass_True-tile_size_128
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>189.50 (n/a)</td><td>168.88 (n/a)</td><td>169.10 (n/a)</td><td>137.20 (n/a)</td><td>21.55 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_8-num_channels_2-bypass_False-tile_size_128
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>0.00 (n/a)</td><td>313.70 (n/a)</td><td>224.14 (n/a)</td><td>224.00 (n/a)</td><td>158.50 (n/a)</td><td>56.82 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_1024-num_cores_8-num_channels_2-bypass_True-tile_size_128
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>198.80 (n/a)</td><td>162.28 (n/a)</td><td>172.50 (n/a)</td><td>106.20 (n/a)</td><td>34.31 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>242.60 (n/a)</td><td>171.32 (n/a)</td><td>166.55 (n/a)</td><td>129.40 (n/a)</td><td>29.12 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>210.70 (n/a)</td><td>156.18 (n/a)</td><td>151.90 (n/a)</td><td>120.10 (n/a)</td><td>38.10 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.06 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>192.10 (n/a)</td><td>145.84 (n/a)</td><td>135.70 (n/a)</td><td>120.20 (n/a)</td><td>27.51 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.08 (n/a)</td><td>0.07 (n/a)</td><td>0.07 (n/a)</td><td>0.02 (n/a)</td><td>184.00 (n/a)</td><td>158.26 (n/a)</td><td>169.10 (n/a)</td><td>112.30 (n/a)</td><td>29.74 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>259.00 (n/a)</td><td>179.34 (n/a)</td><td>173.40 (n/a)</td><td>119.70 (n/a)</td><td>32.91 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>198.80 (n/a)</td><td>156.66 (n/a)</td><td>154.90 (n/a)</td><td>120.70 (n/a)</td><td>34.70 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>211.30 (n/a)</td><td>173.72 (n/a)</td><td>169.10 (n/a)</td><td>153.10 (n/a)</td><td>22.22 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.09 (n/a)</td><td>0.06 (n/a)</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.02 (n/a)</td><td>226.00 (n/a)</td><td>172.04 (n/a)</td><td>176.40 (n/a)</td><td>113.60 (n/a)</td><td>41.95 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_1-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.10 (n/a)</td><td>0.08 (n/a)</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.02 (n/a)</td><td>194.80 (n/a)</td><td>159.39 (n/a)</td><td>167.15 (n/a)</td><td>117.80 (n/a)</td><td>27.42 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_1-tile_size_2048-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.08 (n/a)</td><td>0.07 (n/a)</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.00 (n/a)</td><td>193.20 (n/a)</td><td>172.22 (n/a)</td><td>167.10 (n/a)</td><td>162.20 (n/a)</td><td>12.51 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_1-tile_size_2048-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.10 (n/a)</td><td>0.08 (n/a)</td><td>0.08 (n/a)</td><td>0.06 (n/a)</td><td>0.02 (n/a)</td><td>213.70 (n/a)</td><td>163.06 (n/a)</td><td>154.00 (n/a)</td><td>123.30 (n/a)</td><td>34.93 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>400.30 (n/a)</td><td>183.56 (n/a)</td><td>176.85 (n/a)</td><td>125.60 (n/a)</td><td>50.95 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>0.01 (n/a)</td><td>363.50 (n/a)</td><td>210.48 (n/a)</td><td>162.10 (n/a)</td><td>120.10 (n/a)</td><td>108.33 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>215.90 (n/a)</td><td>158.84 (n/a)</td><td>149.50 (n/a)</td><td>123.20 (n/a)</td><td>35.88 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.09 (n/a)</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.02 (n/a)</td><td>210.50 (n/a)</td><td>162.80 (n/a)</td><td>167.50 (n/a)</td><td>114.30 (n/a)</td><td>35.40 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.08 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>225.90 (n/a)</td><td>173.93 (n/a)</td><td>185.10 (n/a)</td><td>104.00 (n/a)</td><td>30.65 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>172.40 (n/a)</td><td>150.54 (n/a)</td><td>156.90 (n/a)</td><td>119.20 (n/a)</td><td>21.50 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>315.60 (n/a)</td><td>189.80 (n/a)</td><td>152.50 (n/a)</td><td>115.10 (n/a)</td><td>79.17 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>230.00 (n/a)</td><td>199.96 (n/a)</td><td>207.00 (n/a)</td><td>158.90 (n/a)</td><td>27.70 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_2-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.09 (n/a)</td><td>0.07 (n/a)</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.01 (n/a)</td><td>205.70 (n/a)</td><td>171.51 (n/a)</td><td>178.25 (n/a)</td><td>135.20 (n/a)</td><td>24.50 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_2-tile_size_1024-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.01 (n/a)</td><td>237.20 (n/a)</td><td>192.68 (n/a)</td><td>183.80 (n/a)</td><td>178.80 (n/a)</td><td>25.00 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_2-tile_size_1024-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.08 (n/a)</td><td>0.07 (n/a)</td><td>0.07 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>282.30 (n/a)</td><td>196.58 (n/a)</td><td>187.80 (n/a)</td><td>153.40 (n/a)</td><td>51.31 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>239.40 (n/a)</td><td>169.43 (n/a)</td><td>169.10 (n/a)</td><td>113.20 (n/a)</td><td>26.56 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>241.50 (n/a)</td><td>173.06 (n/a)</td><td>180.90 (n/a)</td><td>109.10 (n/a)</td><td>48.38 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.00 (n/a)</td><td>164.30 (n/a)</td><td>153.64 (n/a)</td><td>152.50 (n/a)</td><td>145.60 (n/a)</td><td>7.69 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>297.90 (n/a)</td><td>207.20 (n/a)</td><td>206.80 (n/a)</td><td>138.40 (n/a)</td><td>58.89 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>298.20 (n/a)</td><td>194.04 (n/a)</td><td>196.00 (n/a)</td><td>128.10 (n/a)</td><td>36.68 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>200.50 (n/a)</td><td>162.04 (n/a)</td><td>167.80 (n/a)</td><td>109.60 (n/a)</td><td>35.74 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.08 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>239.30 (n/a)</td><td>168.10 (n/a)</td><td>159.30 (n/a)</td><td>108.90 (n/a)</td><td>60.14 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>298.80 (n/a)</td><td>218.78 (n/a)</td><td>209.60 (n/a)</td><td>164.00 (n/a)</td><td>49.41 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_4-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.10 (n/a)</td><td>0.07 (n/a)</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.01 (n/a)</td><td>212.90 (n/a)</td><td>183.44 (n/a)</td><td>187.40 (n/a)</td><td>127.60 (n/a)</td><td>26.07 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_4-tile_size_512-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.09 (n/a)</td><td>0.08 (n/a)</td><td>0.08 (n/a)</td><td>0.06 (n/a)</td><td>0.01 (n/a)</td><td>208.10 (n/a)</td><td>162.12 (n/a)</td><td>155.90 (n/a)</td><td>134.00 (n/a)</td><td>27.45 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_4-tile_size_512-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.09 (n/a)</td><td>0.07 (n/a)</td><td>0.07 (n/a)</td><td>0.07 (n/a)</td><td>0.01 (n/a)</td><td>183.50 (n/a)</td><td>169.86 (n/a)</td><td>174.10 (n/a)</td><td>143.90 (n/a)</td><td>15.31 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>334.90 (n/a)</td><td>202.76 (n/a)</td><td>195.95 (n/a)</td><td>109.90 (n/a)</td><td>49.08 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.03 (n/a)</td><td>0.00 (n/a)</td><td>203.20 (n/a)</td><td>186.60 (n/a)</td><td>188.20 (n/a)</td><td>162.10 (n/a)</td><td>16.32 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>260.40 (n/a)</td><td>218.38 (n/a)</td><td>224.20 (n/a)</td><td>178.10 (n/a)</td><td>36.44 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>334.50 (n/a)</td><td>240.80 (n/a)</td><td>239.80 (n/a)</td><td>183.10 (n/a)</td><td>57.93 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>330.60 (n/a)</td><td>222.22 (n/a)</td><td>221.50 (n/a)</td><td>155.50 (n/a)</td><td>47.35 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.03 (n/a)</td><td>0.02 (n/a)</td><td>0.00 (n/a)</td><td>233.50 (n/a)</td><td>210.94 (n/a)</td><td>205.00 (n/a)</td><td>196.20 (n/a)</td><td>15.42 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>0.04 (n/a)</td><td>0.02 (n/a)</td><td>0.01 (n/a)</td><td>354.20 (n/a)</td><td>251.44 (n/a)</td><td>221.90 (n/a)</td><td>176.00 (n/a)</td><td>75.49 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_8-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.10 (n/a)</td><td>0.06 (n/a)</td><td>0.06 (n/a)</td><td>0.04 (n/a)</td><td>0.02 (n/a)</td><td>333.60 (n/a)</td><td>204.03 (n/a)</td><td>192.80 (n/a)</td><td>123.70 (n/a)</td><td>58.42 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_8-tile_size_256-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.08 (n/a)</td><td>0.07 (n/a)</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.01 (n/a)</td><td>211.20 (n/a)</td><td>182.34 (n/a)</td><td>183.50 (n/a)</td><td>151.80 (n/a)</td><td>27.56 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_aie_columns_8-tile_size_256-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.08 (n/a)</td><td>0.07 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>333.90 (n/a)</td><td>190.38 (n/a)</td><td>173.60 (n/a)</td><td>107.30 (n/a)</td><td>89.84 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_1-num_channels_1-bypass_False-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.02 (n/a)</td><td>0.02 (n/a)</td><td>358.50 (n/a)</td><td>194.56 (n/a)</td><td>166.70 (n/a)</td><td>129.70 (n/a)</td><td>93.23 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_1-num_channels_1-bypass_True-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>187.40 (n/a)</td><td>159.72 (n/a)</td><td>165.70 (n/a)</td><td>122.10 (n/a)</td><td>27.68 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_16-num_channels_2-bypass_False-tile_size_128
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>309.00 (n/a)</td><td>210.88 (n/a)</td><td>188.50 (n/a)</td><td>145.00 (n/a)</td><td>63.70 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_16-num_channels_2-bypass_True-tile_size_128
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>256.60 (n/a)</td><td>205.66 (n/a)</td><td>189.80 (n/a)</td><td>177.70 (n/a)</td><td>32.05 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_2-num_channels_1-bypass_False-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.06 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>208.20 (n/a)</td><td>163.02 (n/a)</td><td>140.80 (n/a)</td><td>127.70 (n/a)</td><td>39.80 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_2-num_channels_1-bypass_True-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>208.80 (n/a)</td><td>152.66 (n/a)</td><td>151.50 (n/a)</td><td>115.30 (n/a)</td><td>35.53 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_2-num_channels_2-bypass_False-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>236.50 (n/a)</td><td>166.96 (n/a)</td><td>157.40 (n/a)</td><td>123.10 (n/a)</td><td>42.13 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_2-num_channels_2-bypass_True-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.06 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>186.60 (n/a)</td><td>149.02 (n/a)</td><td>146.40 (n/a)</td><td>121.60 (n/a)</td><td>25.10 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_4-num_channels_1-bypass_False-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.01 (n/a)</td><td>180.40 (n/a)</td><td>164.54 (n/a)</td><td>172.20 (n/a)</td><td>130.80 (n/a)</td><td>19.75 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_4-num_channels_1-bypass_True-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>228.40 (n/a)</td><td>169.84 (n/a)</td><td>172.20 (n/a)</td><td>121.70 (n/a)</td><td>41.95 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_4-num_channels_2-bypass_False-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>210.40 (n/a)</td><td>178.52 (n/a)</td><td>173.60 (n/a)</td><td>153.10 (n/a)</td><td>20.89 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_4-num_channels_2-bypass_True-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>209.00 (n/a)</td><td>171.46 (n/a)</td><td>160.40 (n/a)</td><td>144.60 (n/a)</td><td>25.41 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_8-num_channels_1-bypass_False-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.00 (n/a)</td><td>194.80 (n/a)</td><td>176.36 (n/a)</td><td>172.60 (n/a)</td><td>161.40 (n/a)</td><td>15.22 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_8-num_channels_1-bypass_True-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>206.70 (n/a)</td><td>163.72 (n/a)</td><td>149.80 (n/a)</td><td>129.80 (n/a)</td><td>32.91 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_8-num_channels_2-bypass_False-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>0.01 (n/a)</td><td>235.20 (n/a)</td><td>182.66 (n/a)</td><td>170.60 (n/a)</td><td>134.50 (n/a)</td><td>42.92 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_2048-num_cores_8-num_channels_2-bypass_True-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>189.30 (n/a)</td><td>170.86 (n/a)</td><td>183.10 (n/a)</td><td>145.90 (n/a)</td><td>20.14 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_32768-num_aie_columns_2-num_channels_2-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>1.01 (n/a)</td><td>0.90 (n/a)</td><td>0.95 (n/a)</td><td>0.73 (n/a)</td><td>0.12 (n/a)</td><td>178.50 (n/a)</td><td>148.56 (n/a)</td><td>137.60 (n/a)</td><td>129.30 (n/a)</td><td>21.54 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_32768-num_aie_columns_2-num_channels_2-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>1.00 (n/a)</td><td>0.78 (n/a)</td><td>0.75 (n/a)</td><td>0.64 (n/a)</td><td>0.13 (n/a)</td><td>205.10 (n/a)</td><td>172.12 (n/a)</td><td>175.50 (n/a)</td><td>131.50 (n/a)</td><td>26.41 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_32768-num_aie_columns_2-num_channels_2-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>1.11 (n/a)</td><td>0.87 (n/a)</td><td>0.83 (n/a)</td><td>0.67 (n/a)</td><td>0.17 (n/a)</td><td>196.30 (n/a)</td><td>154.66 (n/a)</td><td>158.30 (n/a)</td><td>117.60 (n/a)</td><td>29.52 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_1-num_channels_1-tile_size_4096
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.14 (n/a)</td><td>0.10 (n/a)</td><td>0.10 (n/a)</td><td>0.05 (n/a)</td><td>0.02 (n/a)</td><td>306.00 (n/a)</td><td>167.02 (n/a)</td><td>160.90 (n/a)</td><td>121.20 (n/a)</td><td>35.98 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_1-num_channels_1-tile_size_4096-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.09 (n/a)</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.02 (n/a)</td><td>212.70 (n/a)</td><td>169.56 (n/a)</td><td>162.70 (n/a)</td><td>119.80 (n/a)</td><td>41.69 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_1-num_channels_1-tile_size_4096-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.10 (n/a)</td><td>0.11 (n/a)</td><td>0.07 (n/a)</td><td>0.02 (n/a)</td><td>218.50 (n/a)</td><td>162.44 (n/a)</td><td>145.90 (n/a)</td><td>124.50 (n/a)</td><td>37.18 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_1-num_channels_1-tile_size_4096-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.20 (n/a)</td><td>0.17 (n/a)</td><td>0.17 (n/a)</td><td>0.13 (n/a)</td><td>0.02 (n/a)</td><td>183.40 (n/a)</td><td>147.84 (n/a)</td><td>146.70 (n/a)</td><td>125.90 (n/a)</td><td>21.83 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_1-num_channels_2-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.15 (n/a)</td><td>0.10 (n/a)</td><td>0.10 (n/a)</td><td>0.07 (n/a)</td><td>0.02 (n/a)</td><td>238.90 (n/a)</td><td>169.77 (n/a)</td><td>163.50 (n/a)</td><td>111.00 (n/a)</td><td>35.96 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_1-num_channels_2-tile_size_2048-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.07 (n/a)</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.01 (n/a)</td><td>203.40 (n/a)</td><td>161.98 (n/a)</td><td>153.40 (n/a)</td><td>141.90 (n/a)</td><td>24.31 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_1-num_channels_2-tile_size_2048-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.14 (n/a)</td><td>0.11 (n/a)</td><td>0.11 (n/a)</td><td>0.09 (n/a)</td><td>0.02 (n/a)</td><td>191.20 (n/a)</td><td>149.50 (n/a)</td><td>151.90 (n/a)</td><td>121.30 (n/a)</td><td>28.46 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_1-num_channels_2-tile_size_2048-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.16 (n/a)</td><td>0.12 (n/a)</td><td>0.13 (n/a)</td><td>0.08 (n/a)</td><td>0.03 (n/a)</td><td>266.40 (n/a)</td><td>177.98 (n/a)</td><td>157.70 (n/a)</td><td>130.20 (n/a)</td><td>55.58 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_1-tile_size_4096
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.19 (n/a)</td><td>0.15 (n/a)</td><td>0.15 (n/a)</td><td>0.07 (n/a)</td><td>0.04 (n/a)</td><td>360.80 (n/a)</td><td>181.32 (n/a)</td><td>161.95 (n/a)</td><td>126.70 (n/a)</td><td>67.92 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_1-tile_size_4096-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.19 (n/a)</td><td>0.14 (n/a)</td><td>0.13 (n/a)</td><td>0.12 (n/a)</td><td>0.03 (n/a)</td><td>196.90 (n/a)</td><td>174.86 (n/a)</td><td>184.70 (n/a)</td><td>128.40 (n/a)</td><td>26.76 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_1-tile_size_4096-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.19 (n/a)</td><td>0.15 (n/a)</td><td>0.14 (n/a)</td><td>0.12 (n/a)</td><td>0.04 (n/a)</td><td>212.20 (n/a)</td><td>170.66 (n/a)</td><td>173.00 (n/a)</td><td>130.20 (n/a)</td><td>39.54 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_2-num_channels_1-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.12 (n/a)</td><td>0.09 (n/a)</td><td>0.10 (n/a)</td><td>0.05 (n/a)</td><td>0.02 (n/a)</td><td>321.10 (n/a)</td><td>186.40 (n/a)</td><td>171.45 (n/a)</td><td>131.50 (n/a)</td><td>49.27 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_2-num_channels_1-tile_size_2048-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.01 (n/a)</td><td>209.80 (n/a)</td><td>165.38 (n/a)</td><td>153.90 (n/a)</td><td>143.40 (n/a)</td><td>26.12 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_2-num_channels_1-tile_size_2048-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.09 (n/a)</td><td>0.09 (n/a)</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>320.50 (n/a)</td><td>199.12 (n/a)</td><td>190.20 (n/a)</td><td>129.90 (n/a)</td><td>72.88 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_2-num_channels_1-tile_size_2048-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.16 (n/a)</td><td>0.13 (n/a)</td><td>0.12 (n/a)</td><td>0.11 (n/a)</td><td>0.02 (n/a)</td><td>183.60 (n/a)</td><td>162.50 (n/a)</td><td>166.20 (n/a)</td><td>127.20 (n/a)</td><td>23.24 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_2-num_channels_2-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.14 (n/a)</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.07 (n/a)</td><td>0.02 (n/a)</td><td>233.10 (n/a)</td><td>176.52 (n/a)</td><td>185.50 (n/a)</td><td>118.50 (n/a)</td><td>31.62 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_2-num_channels_2-tile_size_1024-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.08 (n/a)</td><td>0.07 (n/a)</td><td>0.07 (n/a)</td><td>0.06 (n/a)</td><td>0.01 (n/a)</td><td>170.40 (n/a)</td><td>155.06 (n/a)</td><td>152.80 (n/a)</td><td>135.30 (n/a)</td><td>13.68 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_2-num_channels_2-tile_size_1024-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.09 (n/a)</td><td>0.11 (n/a)</td><td>0.05 (n/a)</td><td>0.03 (n/a)</td><td>358.30 (n/a)</td><td>198.02 (n/a)</td><td>153.40 (n/a)</td><td>124.40 (n/a)</td><td>94.38 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_2-num_channels_2-tile_size_1024-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.10 (n/a)</td><td>0.11 (n/a)</td><td>0.06 (n/a)</td><td>0.02 (n/a)</td><td>289.90 (n/a)</td><td>189.62 (n/a)</td><td>167.90 (n/a)</td><td>142.70 (n/a)</td><td>58.23 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_2-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.18 (n/a)</td><td>0.13 (n/a)</td><td>0.13 (n/a)</td><td>0.10 (n/a)</td><td>0.03 (n/a)</td><td>257.80 (n/a)</td><td>192.45 (n/a)</td><td>192.35 (n/a)</td><td>137.70 (n/a)</td><td>40.78 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_2-tile_size_2048-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.19 (n/a)</td><td>0.17 (n/a)</td><td>0.18 (n/a)</td><td>0.15 (n/a)</td><td>0.02 (n/a)</td><td>162.90 (n/a)</td><td>143.20 (n/a)</td><td>134.70 (n/a)</td><td>126.90 (n/a)</td><td>16.35 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_2-tile_size_2048-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.16 (n/a)</td><td>0.13 (n/a)</td><td>0.14 (n/a)</td><td>0.09 (n/a)</td><td>0.03 (n/a)</td><td>259.90 (n/a)</td><td>195.00 (n/a)</td><td>170.80 (n/a)</td><td>153.50 (n/a)</td><td>49.66 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_4-num_channels_1-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.14 (n/a)</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.04 (n/a)</td><td>0.02 (n/a)</td><td>367.00 (n/a)</td><td>177.76 (n/a)</td><td>174.30 (n/a)</td><td>121.00 (n/a)</td><td>40.77 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_4-num_channels_1-tile_size_1024-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.08 (n/a)</td><td>0.06 (n/a)</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.01 (n/a)</td><td>220.60 (n/a)</td><td>167.90 (n/a)</td><td>157.20 (n/a)</td><td>132.20 (n/a)</td><td>33.66 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_4-num_channels_1-tile_size_1024-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.11 (n/a)</td><td>0.11 (n/a)</td><td>0.09 (n/a)</td><td>0.01 (n/a)</td><td>172.50 (n/a)</td><td>150.66 (n/a)</td><td>151.00 (n/a)</td><td>129.30 (n/a)</td><td>18.66 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_4-num_channels_1-tile_size_1024-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.15 (n/a)</td><td>0.12 (n/a)</td><td>0.12 (n/a)</td><td>0.08 (n/a)</td><td>0.03 (n/a)</td><td>238.90 (n/a)</td><td>168.28 (n/a)</td><td>156.60 (n/a)</td><td>119.50 (n/a)</td><td>50.58 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_4-num_channels_2-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.12 (n/a)</td><td>0.08 (n/a)</td><td>0.08 (n/a)</td><td>0.05 (n/a)</td><td>0.02 (n/a)</td><td>344.40 (n/a)</td><td>216.51 (n/a)</td><td>202.20 (n/a)</td><td>134.60 (n/a)</td><td>58.13 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_4-num_channels_2-tile_size_512-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.06 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>279.10 (n/a)</td><td>205.14 (n/a)</td><td>175.40 (n/a)</td><td>163.20 (n/a)</td><td>49.52 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_4-num_channels_2-tile_size_512-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.12 (n/a)</td><td>0.10 (n/a)</td><td>0.10 (n/a)</td><td>0.08 (n/a)</td><td>0.02 (n/a)</td><td>213.40 (n/a)</td><td>172.30 (n/a)</td><td>159.20 (n/a)</td><td>140.70 (n/a)</td><td>29.95 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_4-num_channels_2-tile_size_512-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.08 (n/a)</td><td>0.08 (n/a)</td><td>0.06 (n/a)</td><td>0.02 (n/a)</td><td>292.80 (n/a)</td><td>224.26 (n/a)</td><td>224.00 (n/a)</td><td>165.10 (n/a)</td><td>49.74 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_4-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.15 (n/a)</td><td>0.15 (n/a)</td><td>0.08 (n/a)</td><td>0.05 (n/a)</td><td>292.30 (n/a)</td><td>185.72 (n/a)</td><td>162.25 (n/a)</td><td>115.60 (n/a)</td><td>67.21 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_4-tile_size_1024-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.15 (n/a)</td><td>0.13 (n/a)</td><td>0.13 (n/a)</td><td>0.11 (n/a)</td><td>0.01 (n/a)</td><td>218.90 (n/a)</td><td>195.50 (n/a)</td><td>193.80 (n/a)</td><td>166.10 (n/a)</td><td>21.25 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_4-tile_size_1024-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.18 (n/a)</td><td>0.15 (n/a)</td><td>0.14 (n/a)</td><td>0.13 (n/a)</td><td>0.02 (n/a)</td><td>183.00 (n/a)</td><td>166.20 (n/a)</td><td>172.50 (n/a)</td><td>137.30 (n/a)</td><td>18.84 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_8-num_channels_1-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.12 (n/a)</td><td>0.09 (n/a)</td><td>0.09 (n/a)</td><td>0.05 (n/a)</td><td>0.02 (n/a)</td><td>330.60 (n/a)</td><td>194.59 (n/a)</td><td>187.70 (n/a)</td><td>131.70 (n/a)</td><td>43.70 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_8-num_channels_1-tile_size_512-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.09 (n/a)</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.02 (n/a)</td><td>263.20 (n/a)</td><td>198.80 (n/a)</td><td>199.00 (n/a)</td><td>117.10 (n/a)</td><td>54.38 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_8-num_channels_1-tile_size_512-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.09 (n/a)</td><td>0.07 (n/a)</td><td>0.01 (n/a)</td><td>230.40 (n/a)</td><td>188.02 (n/a)</td><td>177.50 (n/a)</td><td>158.10 (n/a)</td><td>30.91 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_8-num_channels_1-tile_size_512-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.10 (n/a)</td><td>0.10 (n/a)</td><td>0.08 (n/a)</td><td>0.01 (n/a)</td><td>208.80 (n/a)</td><td>178.68 (n/a)</td><td>170.50 (n/a)</td><td>161.50 (n/a)</td><td>20.62 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_8-num_channels_2-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.08 (n/a)</td><td>0.08 (n/a)</td><td>0.04 (n/a)</td><td>0.02 (n/a)</td><td>383.50 (n/a)</td><td>220.24 (n/a)</td><td>216.20 (n/a)</td><td>152.00 (n/a)</td><td>51.74 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_8-num_channels_2-tile_size_256-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.06 (n/a)</td><td>0.05 (n/a)</td><td>0.05 (n/a)</td><td>0.04 (n/a)</td><td>0.01 (n/a)</td><td>237.70 (n/a)</td><td>206.26 (n/a)</td><td>215.50 (n/a)</td><td>178.90 (n/a)</td><td>25.19 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_8-num_channels_2-tile_size_256-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.09 (n/a)</td><td>0.07 (n/a)</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>0.02 (n/a)</td><td>362.70 (n/a)</td><td>265.26 (n/a)</td><td>227.00 (n/a)</td><td>188.20 (n/a)</td><td>79.25 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_8-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.19 (n/a)</td><td>0.13 (n/a)</td><td>0.13 (n/a)</td><td>0.08 (n/a)</td><td>0.03 (n/a)</td><td>319.90 (n/a)</td><td>202.00 (n/a)</td><td>189.10 (n/a)</td><td>132.40 (n/a)</td><td>58.76 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_8-tile_size_512-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.18 (n/a)</td><td>0.12 (n/a)</td><td>0.11 (n/a)</td><td>0.07 (n/a)</td><td>0.05 (n/a)</td><td>352.10 (n/a)</td><td>243.10 (n/a)</td><td>233.50 (n/a)</td><td>136.00 (n/a)</td><td>96.57 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_aie_columns_8-tile_size_512-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.15 (n/a)</td><td>0.11 (n/a)</td><td>0.10 (n/a)</td><td>0.08 (n/a)</td><td>0.03 (n/a)</td><td>317.10 (n/a)</td><td>242.70 (n/a)</td><td>234.40 (n/a)</td><td>162.60 (n/a)</td><td>60.52 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_1-num_channels_1-bypass_False-tile_size_4096
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.09 (n/a)</td><td>0.01 (n/a)</td><td>190.00 (n/a)</td><td>170.92 (n/a)</td><td>177.00 (n/a)</td><td>149.40 (n/a)</td><td>18.21 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_1-num_channels_1-bypass_True-tile_size_4096
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.07 (n/a)</td><td>0.03 (n/a)</td><td>231.50 (n/a)</td><td>175.92 (n/a)</td><td>189.00 (n/a)</td><td>122.90 (n/a)</td><td>46.26 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_16-num_channels_2-bypass_False-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.09 (n/a)</td><td>0.08 (n/a)</td><td>0.08 (n/a)</td><td>0.07 (n/a)</td><td>0.01 (n/a)</td><td>233.80 (n/a)</td><td>204.04 (n/a)</td><td>217.00 (n/a)</td><td>173.00 (n/a)</td><td>28.45 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_16-num_channels_2-bypass_True-tile_size_256
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.08 (n/a)</td><td>0.08 (n/a)</td><td>0.06 (n/a)</td><td>0.02 (n/a)</td><td>255.90 (n/a)</td><td>207.66 (n/a)</td><td>207.40 (n/a)</td><td>155.30 (n/a)</td><td>35.81 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_2-num_channels_1-bypass_False-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.10 (n/a)</td><td>0.10 (n/a)</td><td>0.08 (n/a)</td><td>0.01 (n/a)</td><td>202.10 (n/a)</td><td>170.56 (n/a)</td><td>160.50 (n/a)</td><td>149.50 (n/a)</td><td>21.45 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_2-num_channels_1-bypass_True-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.09 (n/a)</td><td>0.09 (n/a)</td><td>0.08 (n/a)</td><td>0.01 (n/a)</td><td>207.60 (n/a)</td><td>184.52 (n/a)</td><td>187.40 (n/a)</td><td>156.00 (n/a)</td><td>18.72 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_2-num_channels_2-bypass_False-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.15 (n/a)</td><td>0.11 (n/a)</td><td>0.09 (n/a)</td><td>0.08 (n/a)</td><td>0.03 (n/a)</td><td>201.10 (n/a)</td><td>162.82 (n/a)</td><td>174.40 (n/a)</td><td>108.30 (n/a)</td><td>35.05 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_2-num_channels_2-bypass_True-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.11 (n/a)</td><td>0.11 (n/a)</td><td>0.08 (n/a)</td><td>0.02 (n/a)</td><td>208.20 (n/a)</td><td>158.00 (n/a)</td><td>150.00 (n/a)</td><td>127.30 (n/a)</td><td>33.88 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_4-num_channels_1-bypass_False-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.09 (n/a)</td><td>0.01 (n/a)</td><td>185.70 (n/a)</td><td>171.72 (n/a)</td><td>172.90 (n/a)</td><td>151.50 (n/a)</td><td>13.32 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_4-num_channels_1-bypass_True-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.09 (n/a)</td><td>0.09 (n/a)</td><td>0.04 (n/a)</td><td>0.04 (n/a)</td><td>366.30 (n/a)</td><td>205.70 (n/a)</td><td>182.60 (n/a)</td><td>124.10 (n/a)</td><td>98.36 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_4-num_channels_2-bypass_False-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.12 (n/a)</td><td>0.09 (n/a)</td><td>0.10 (n/a)</td><td>0.06 (n/a)</td><td>0.03 (n/a)</td><td>289.20 (n/a)</td><td>186.22 (n/a)</td><td>160.10 (n/a)</td><td>132.80 (n/a)</td><td>61.64 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_4-num_channels_2-bypass_True-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.11 (n/a)</td><td>0.11 (n/a)</td><td>0.09 (n/a)</td><td>0.02 (n/a)</td><td>183.20 (n/a)</td><td>150.88 (n/a)</td><td>145.60 (n/a)</td><td>129.50 (n/a)</td><td>21.96 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_8-num_channels_1-bypass_False-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.12 (n/a)</td><td>0.09 (n/a)</td><td>0.08 (n/a)</td><td>0.06 (n/a)</td><td>0.02 (n/a)</td><td>287.30 (n/a)</td><td>204.34 (n/a)</td><td>216.80 (n/a)</td><td>141.40 (n/a)</td><td>57.46 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_8-num_channels_1-bypass_True-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.12 (n/a)</td><td>0.09 (n/a)</td><td>0.08 (n/a)</td><td>0.07 (n/a)</td><td>0.02 (n/a)</td><td>222.20 (n/a)</td><td>187.10 (n/a)</td><td>198.70 (n/a)</td><td>133.40 (n/a)</td><td>37.89 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_8-num_channels_2-bypass_False-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.12 (n/a)</td><td>0.09 (n/a)</td><td>0.08 (n/a)</td><td>0.07 (n/a)</td><td>0.02 (n/a)</td><td>233.70 (n/a)</td><td>198.44 (n/a)</td><td>217.90 (n/a)</td><td>131.10 (n/a)</td><td>40.68 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_4096-num_cores_8-num_channels_2-bypass_True-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.09 (n/a)</td><td>0.08 (n/a)</td><td>0.01 (n/a)</td><td>210.00 (n/a)</td><td>188.70 (n/a)</td><td>190.40 (n/a)</td><td>156.90 (n/a)</td><td>21.33 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_1-num_channels_1-tile_size_8192
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.18 (n/a)</td><td>0.16 (n/a)</td><td>0.16 (n/a)</td><td>0.12 (n/a)</td><td>0.02 (n/a)</td><td>273.10 (n/a)</td><td>214.21 (n/a)</td><td>208.00 (n/a)</td><td>177.40 (n/a)</td><td>31.49 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_1-num_channels_1-tile_size_8192-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.17 (n/a)</td><td>0.12 (n/a)</td><td>0.09 (n/a)</td><td>0.08 (n/a)</td><td>0.04 (n/a)</td><td>271.00 (n/a)</td><td>201.92 (n/a)</td><td>234.50 (n/a)</td><td>125.60 (n/a)</td><td>69.01 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_1-num_channels_1-tile_size_8192-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.26 (n/a)</td><td>0.18 (n/a)</td><td>0.17 (n/a)</td><td>0.13 (n/a)</td><td>0.05 (n/a)</td><td>246.80 (n/a)</td><td>189.60 (n/a)</td><td>194.60 (n/a)</td><td>127.90 (n/a)</td><td>44.22 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_1-num_channels_2-tile_size_4096
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.24 (n/a)</td><td>0.18 (n/a)</td><td>0.19 (n/a)</td><td>0.12 (n/a)</td><td>0.03 (n/a)</td><td>269.50 (n/a)</td><td>186.98 (n/a)</td><td>175.80 (n/a)</td><td>137.10 (n/a)</td><td>31.64 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_1-num_channels_2-tile_size_4096-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.15 (n/a)</td><td>0.12 (n/a)</td><td>0.12 (n/a)</td><td>0.09 (n/a)</td><td>0.02 (n/a)</td><td>245.40 (n/a)</td><td>176.80 (n/a)</td><td>168.50 (n/a)</td><td>144.30 (n/a)</td><td>41.02 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_1-num_channels_2-tile_size_4096-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.27 (n/a)</td><td>0.21 (n/a)</td><td>0.19 (n/a)</td><td>0.15 (n/a)</td><td>0.05 (n/a)</td><td>214.30 (n/a)</td><td>161.08 (n/a)</td><td>172.40 (n/a)</td><td>119.60 (n/a)</td><td>40.00 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_1-num_channels_2-tile_size_4096-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.32 (n/a)</td><td>0.23 (n/a)</td><td>0.25 (n/a)</td><td>0.16 (n/a)</td><td>0.06 (n/a)</td><td>260.00 (n/a)</td><td>185.78 (n/a)</td><td>166.00 (n/a)</td><td>128.10 (n/a)</td><td>52.49 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_1-tile_size_8192
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.34 (n/a)</td><td>0.30 (n/a)</td><td>0.30 (n/a)</td><td>0.26 (n/a)</td><td>0.03 (n/a)</td><td>190.40 (n/a)</td><td>166.56 (n/a)</td><td>161.60 (n/a)</td><td>145.70 (n/a)</td><td>16.91 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_1-tile_size_8192-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.36 (n/a)</td><td>0.28 (n/a)</td><td>0.29 (n/a)</td><td>0.21 (n/a)</td><td>0.06 (n/a)</td><td>234.90 (n/a)</td><td>179.52 (n/a)</td><td>171.20 (n/a)</td><td>136.80 (n/a)</td><td>38.08 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_1-tile_size_8192-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.37 (n/a)</td><td>0.29 (n/a)</td><td>0.29 (n/a)</td><td>0.24 (n/a)</td><td>0.06 (n/a)</td><td>207.70 (n/a)</td><td>171.94 (n/a)</td><td>171.20 (n/a)</td><td>132.40 (n/a)</td><td>31.34 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_2-num_channels_1-tile_size_4096
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.27 (n/a)</td><td>0.19 (n/a)</td><td>0.18 (n/a)</td><td>0.15 (n/a)</td><td>0.03 (n/a)</td><td>212.20 (n/a)</td><td>176.30 (n/a)</td><td>181.95 (n/a)</td><td>119.30 (n/a)</td><td>23.80 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_2-num_channels_1-tile_size_4096-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.16 (n/a)</td><td>0.12 (n/a)</td><td>0.12 (n/a)</td><td>0.11 (n/a)</td><td>0.02 (n/a)</td><td>189.50 (n/a)</td><td>171.52 (n/a)</td><td>180.30 (n/a)</td><td>127.40 (n/a)</td><td>25.08 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_2-num_channels_1-tile_size_4096-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.29 (n/a)</td><td>0.23 (n/a)</td><td>0.21 (n/a)</td><td>0.18 (n/a)</td><td>0.05 (n/a)</td><td>183.40 (n/a)</td><td>151.10 (n/a)</td><td>158.30 (n/a)</td><td>112.20 (n/a)</td><td>33.06 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_2-num_channels_1-tile_size_4096-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.35 (n/a)</td><td>0.27 (n/a)</td><td>0.28 (n/a)</td><td>0.21 (n/a)</td><td>0.05 (n/a)</td><td>196.40 (n/a)</td><td>153.72 (n/a)</td><td>148.50 (n/a)</td><td>117.40 (n/a)</td><td>28.72 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_2-num_channels_2-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.26 (n/a)</td><td>0.20 (n/a)</td><td>0.20 (n/a)</td><td>0.14 (n/a)</td><td>0.03 (n/a)</td><td>237.90 (n/a)</td><td>173.00 (n/a)</td><td>167.90 (n/a)</td><td>125.50 (n/a)</td><td>31.63 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_2-num_channels_2-tile_size_2048-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.10 (n/a)</td><td>0.11 (n/a)</td><td>0.08 (n/a)</td><td>0.01 (n/a)</td><td>248.20 (n/a)</td><td>209.64 (n/a)</td><td>195.00 (n/a)</td><td>184.40 (n/a)</td><td>29.22 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_2-num_channels_2-tile_size_2048-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.28 (n/a)</td><td>0.22 (n/a)</td><td>0.21 (n/a)</td><td>0.18 (n/a)</td><td>0.04 (n/a)</td><td>186.30 (n/a)</td><td>155.60 (n/a)</td><td>152.50 (n/a)</td><td>117.60 (n/a)</td><td>30.29 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_2-num_channels_2-tile_size_2048-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.26 (n/a)</td><td>0.22 (n/a)</td><td>0.22 (n/a)</td><td>0.17 (n/a)</td><td>0.04 (n/a)</td><td>222.60 (n/a)</td><td>174.54 (n/a)</td><td>166.00 (n/a)</td><td>139.70 (n/a)</td><td>34.32 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_2-tile_size_4096
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.39 (n/a)</td><td>0.34 (n/a)</td><td>0.37 (n/a)</td><td>0.28 (n/a)</td><td>0.04 (n/a)</td><td>178.70 (n/a)</td><td>145.76 (n/a)</td><td>133.10 (n/a)</td><td>127.60 (n/a)</td><td>20.46 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_2-tile_size_4096-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.30 (n/a)</td><td>0.26 (n/a)</td><td>0.26 (n/a)</td><td>0.20 (n/a)</td><td>0.04 (n/a)</td><td>243.80 (n/a)</td><td>195.38 (n/a)</td><td>187.40 (n/a)</td><td>163.90 (n/a)</td><td>31.13 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_2-tile_size_4096-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.34 (n/a)</td><td>0.28 (n/a)</td><td>0.29 (n/a)</td><td>0.21 (n/a)</td><td>0.05 (n/a)</td><td>231.00 (n/a)</td><td>179.36 (n/a)</td><td>172.00 (n/a)</td><td>144.00 (n/a)</td><td>34.57 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_4-num_channels_1-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.28 (n/a)</td><td>0.19 (n/a)</td><td>0.19 (n/a)</td><td>0.11 (n/a)</td><td>0.04 (n/a)</td><td>299.20 (n/a)</td><td>180.81 (n/a)</td><td>173.10 (n/a)</td><td>117.50 (n/a)</td><td>41.18 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_4-num_channels_1-tile_size_2048-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.17 (n/a)</td><td>0.13 (n/a)</td><td>0.15 (n/a)</td><td>0.07 (n/a)</td><td>0.04 (n/a)</td><td>295.00 (n/a)</td><td>175.14 (n/a)</td><td>138.90 (n/a)</td><td>127.00 (n/a)</td><td>71.05 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_4-num_channels_1-tile_size_2048-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.24 (n/a)</td><td>0.22 (n/a)</td><td>0.22 (n/a)</td><td>0.18 (n/a)</td><td>0.02 (n/a)</td><td>183.00 (n/a)</td><td>153.38 (n/a)</td><td>146.00 (n/a)</td><td>139.00 (n/a)</td><td>18.28 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_4-num_channels_1-tile_size_2048-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.32 (n/a)</td><td>0.24 (n/a)</td><td>0.22 (n/a)</td><td>0.19 (n/a)</td><td>0.06 (n/a)</td><td>197.30 (n/a)</td><td>160.96 (n/a)</td><td>167.30 (n/a)</td><td>115.70 (n/a)</td><td>34.34 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_4-num_channels_2-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.23 (n/a)</td><td>0.18 (n/a)</td><td>0.18 (n/a)</td><td>0.11 (n/a)</td><td>0.03 (n/a)</td><td>289.00 (n/a)</td><td>192.38 (n/a)</td><td>177.50 (n/a)</td><td>141.00 (n/a)</td><td>39.56 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_4-num_channels_2-tile_size_1024-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.15 (n/a)</td><td>0.12 (n/a)</td><td>0.12 (n/a)</td><td>0.10 (n/a)</td><td>0.02 (n/a)</td><td>220.40 (n/a)</td><td>177.46 (n/a)</td><td>178.10 (n/a)</td><td>138.60 (n/a)</td><td>29.82 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_4-num_channels_2-tile_size_1024-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.27 (n/a)</td><td>0.19 (n/a)</td><td>0.20 (n/a)</td><td>0.10 (n/a)</td><td>0.06 (n/a)</td><td>318.80 (n/a)</td><td>192.32 (n/a)</td><td>164.50 (n/a)</td><td>121.50 (n/a)</td><td>77.90 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_4-num_channels_2-tile_size_1024-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.22 (n/a)</td><td>0.19 (n/a)</td><td>0.17 (n/a)</td><td>0.17 (n/a)</td><td>0.03 (n/a)</td><td>207.70 (n/a)</td><td>188.18 (n/a)</td><td>205.10 (n/a)</td><td>155.70 (n/a)</td><td>25.68 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_4-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.39 (n/a)</td><td>0.32 (n/a)</td><td>0.32 (n/a)</td><td>0.26 (n/a)</td><td>0.05 (n/a)</td><td>192.30 (n/a)</td><td>158.07 (n/a)</td><td>156.60 (n/a)</td><td>126.40 (n/a)</td><td>25.80 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_4-tile_size_2048-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.31 (n/a)</td><td>0.26 (n/a)</td><td>0.27 (n/a)</td><td>0.19 (n/a)</td><td>0.05 (n/a)</td><td>263.50 (n/a)</td><td>194.30 (n/a)</td><td>182.40 (n/a)</td><td>158.50 (n/a)</td><td>41.87 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_4-tile_size_2048-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.34 (n/a)</td><td>0.26 (n/a)</td><td>0.25 (n/a)</td><td>0.23 (n/a)</td><td>0.04 (n/a)</td><td>211.10 (n/a)</td><td>189.36 (n/a)</td><td>198.80 (n/a)</td><td>144.70 (n/a)</td><td>27.59 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_8-num_channels_1-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.23 (n/a)</td><td>0.18 (n/a)</td><td>0.18 (n/a)</td><td>0.12 (n/a)</td><td>0.03 (n/a)</td><td>265.50 (n/a)</td><td>184.07 (n/a)</td><td>177.75 (n/a)</td><td>142.50 (n/a)</td><td>30.19 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_8-num_channels_1-tile_size_1024-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.12 (n/a)</td><td>0.12 (n/a)</td><td>0.10 (n/a)</td><td>0.01 (n/a)</td><td>204.80 (n/a)</td><td>176.16 (n/a)</td><td>167.90 (n/a)</td><td>163.90 (n/a)</td><td>16.96 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_8-num_channels_1-tile_size_1024-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.18 (n/a)</td><td>0.18 (n/a)</td><td>0.16 (n/a)</td><td>0.02 (n/a)</td><td>206.10 (n/a)</td><td>180.54 (n/a)</td><td>179.60 (n/a)</td><td>155.10 (n/a)</td><td>20.20 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_8-num_channels_1-tile_size_1024-weighted_True
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.25 (n/a)</td><td>0.20 (n/a)</td><td>0.19 (n/a)</td><td>0.16 (n/a)</td><td>0.04 (n/a)</td><td>211.30 (n/a)</td><td>175.10 (n/a)</td><td>180.40 (n/a)</td><td>137.80 (n/a)</td><td>31.90 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_8-num_channels_2-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.20 (n/a)</td><td>0.15 (n/a)</td><td>0.15 (n/a)</td><td>0.09 (n/a)</td><td>0.03 (n/a)</td><td>359.10 (n/a)</td><td>228.51 (n/a)</td><td>220.50 (n/a)</td><td>165.50 (n/a)</td><td>49.89 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_8-num_channels_2-tile_size_512-group_size_32
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.12 (n/a)</td><td>0.10 (n/a)</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.01 (n/a)</td><td>232.70 (n/a)</td><td>208.04 (n/a)</td><td>216.60 (n/a)</td><td>175.20 (n/a)</td><td>22.31 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_8-num_channels_2-tile_size_512-weighted_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.20 (n/a)</td><td>0.18 (n/a)</td><td>0.18 (n/a)</td><td>0.16 (n/a)</td><td>0.01 (n/a)</td><td>204.60 (n/a)</td><td>185.36 (n/a)</td><td>187.10 (n/a)</td><td>166.10 (n/a)</td><td>13.79 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_8-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.38 (n/a)</td><td>0.29 (n/a)</td><td>0.27 (n/a)</td><td>0.21 (n/a)</td><td>0.05 (n/a)</td><td>236.60 (n/a)</td><td>177.54 (n/a)</td><td>180.75 (n/a)</td><td>130.50 (n/a)</td><td>33.08 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_8-tile_size_1024-scalar_factor_10.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.33 (n/a)</td><td>0.27 (n/a)</td><td>0.31 (n/a)</td><td>0.19 (n/a)</td><td>0.06 (n/a)</td><td>255.30 (n/a)</td><td>188.82 (n/a)</td><td>158.70 (n/a)</td><td>149.90 (n/a)</td><td>49.10 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_aie_columns_8-tile_size_1024-scalar_factor_3.0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.39 (n/a)</td><td>0.27 (n/a)</td><td>0.25 (n/a)</td><td>0.15 (n/a)</td><td>0.09 (n/a)</td><td>333.90 (n/a)</td><td>201.62 (n/a)</td><td>199.20 (n/a)</td><td>125.70 (n/a)</td><td>81.17 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_1-num_channels_1-bypass_False-tile_size_8192
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.23 (n/a)</td><td>0.19 (n/a)</td><td>0.19 (n/a)</td><td>0.16 (n/a)</td><td>0.03 (n/a)</td><td>210.10 (n/a)</td><td>171.48 (n/a)</td><td>168.40 (n/a)</td><td>140.90 (n/a)</td><td>24.94 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_1-num_channels_1-bypass_True-tile_size_8192
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.18 (n/a)</td><td>0.19 (n/a)</td><td>0.14 (n/a)</td><td>0.02 (n/a)</td><td>228.60 (n/a)</td><td>180.94 (n/a)</td><td>173.30 (n/a)</td><td>158.70 (n/a)</td><td>27.49 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_16-num_channels_2-bypass_False-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.16 (n/a)</td><td>0.13 (n/a)</td><td>0.12 (n/a)</td><td>0.08 (n/a)</td><td>0.03 (n/a)</td><td>391.80 (n/a)</td><td>270.68 (n/a)</td><td>262.90 (n/a)</td><td>207.20 (n/a)</td><td>73.62 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_16-num_channels_2-bypass_True-tile_size_512
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.30 (n/a)</td><td>0.19 (n/a)</td><td>0.16 (n/a)</td><td>0.14 (n/a)</td><td>0.06 (n/a)</td><td>227.60 (n/a)</td><td>186.38 (n/a)</td><td>199.50 (n/a)</td><td>110.80 (n/a)</td><td>45.30 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_2-num_channels_1-bypass_False-tile_size_4096
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.27 (n/a)</td><td>0.21 (n/a)</td><td>0.20 (n/a)</td><td>0.16 (n/a)</td><td>0.05 (n/a)</td><td>211.30 (n/a)</td><td>163.06 (n/a)</td><td>160.40 (n/a)</td><td>121.10 (n/a)</td><td>38.04 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_2-num_channels_1-bypass_True-tile_size_4096
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.26 (n/a)</td><td>0.21 (n/a)</td><td>0.21 (n/a)</td><td>0.13 (n/a)</td><td>0.05 (n/a)</td><td>246.70 (n/a)</td><td>163.62 (n/a)</td><td>155.30 (n/a)</td><td>124.00 (n/a)</td><td>49.56 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_2-num_channels_2-bypass_False-tile_size_4096
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.28 (n/a)</td><td>0.20 (n/a)</td><td>0.19 (n/a)</td><td>0.14 (n/a)</td><td>0.06 (n/a)</td><td>234.80 (n/a)</td><td>172.20 (n/a)</td><td>172.50 (n/a)</td><td>116.50 (n/a)</td><td>47.32 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_2-num_channels_2-bypass_True-tile_size_4096
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.22 (n/a)</td><td>0.19 (n/a)</td><td>0.20 (n/a)</td><td>0.14 (n/a)</td><td>0.03 (n/a)</td><td>234.50 (n/a)</td><td>179.12 (n/a)</td><td>166.10 (n/a)</td><td>149.30 (n/a)</td><td>32.86 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_4-num_channels_1-bypass_False-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.27 (n/a)</td><td>0.19 (n/a)</td><td>0.18 (n/a)</td><td>0.14 (n/a)</td><td>0.05 (n/a)</td><td>237.00 (n/a)</td><td>181.42 (n/a)</td><td>179.50 (n/a)</td><td>119.70 (n/a)</td><td>43.31 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_4-num_channels_1-bypass_True-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.23 (n/a)</td><td>0.19 (n/a)</td><td>0.19 (n/a)</td><td>0.14 (n/a)</td><td>0.04 (n/a)</td><td>229.20 (n/a)</td><td>175.44 (n/a)</td><td>175.80 (n/a)</td><td>141.10 (n/a)</td><td>35.40 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_4-num_channels_2-bypass_False-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.27 (n/a)</td><td>0.20 (n/a)</td><td>0.19 (n/a)</td><td>0.13 (n/a)</td><td>0.05 (n/a)</td><td>260.50 (n/a)</td><td>176.60 (n/a)</td><td>176.10 (n/a)</td><td>119.40 (n/a)</td><td>52.61 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_4-num_channels_2-bypass_True-tile_size_2048
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.27 (n/a)</td><td>0.20 (n/a)</td><td>0.18 (n/a)</td><td>0.17 (n/a)</td><td>0.04 (n/a)</td><td>190.40 (n/a)</td><td>168.28 (n/a)</td><td>182.90 (n/a)</td><td>122.00 (n/a)</td><td>28.20 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_8-num_channels_1-bypass_False-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.22 (n/a)</td><td>0.17 (n/a)</td><td>0.17 (n/a)</td><td>0.11 (n/a)</td><td>0.05 (n/a)</td><td>286.40 (n/a)</td><td>199.84 (n/a)</td><td>187.90 (n/a)</td><td>146.00 (n/a)</td><td>57.43 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_8-num_channels_1-bypass_True-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.28 (n/a)</td><td>0.22 (n/a)</td><td>0.25 (n/a)</td><td>0.15 (n/a)</td><td>0.06 (n/a)</td><td>215.90 (n/a)</td><td>160.06 (n/a)</td><td>131.60 (n/a)</td><td>116.70 (n/a)</td><td>49.63 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_8-num_channels_2-bypass_False-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.22 (n/a)</td><td>0.18 (n/a)</td><td>0.17 (n/a)</td><td>0.14 (n/a)</td><td>0.03 (n/a)</td><td>228.30 (n/a)</td><td>185.64 (n/a)</td><td>188.70 (n/a)</td><td>148.90 (n/a)</td><td>33.22 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## input_length_8192-num_cores_8-num_channels_2-bypass_True-tile_size_1024
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.25 (n/a)</td><td>0.18 (n/a)</td><td>0.18 (n/a)</td><td>0.15 (n/a)</td><td>0.04 (n/a)</td><td>221.60 (n/a)</td><td>184.56 (n/a)</td><td>181.50 (n/a)</td><td>133.00 (n/a)</td><td>37.05 (n/a)</td>
 </tr>
 </tbody>
 </table>
@@ -11124,6 +16258,1026 @@ _No metrics available._
 </tr>
 <tr>
 <td><code>dc66da7</code> — 2026-03-25 19:32:44</td><td>0.22 (n/a)</td><td>0.18 (n/a)</td><td>0.16 (n/a)</td><td>0.14 (n/a)</td><td>0.03 (n/a)</td><td>243.40 (n/a)</td><td>204.46 (n/a)</td><td>214.60 (n/a)</td><td>157.60 (n/a)</td><td>37.02 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_16-aie_columns_1-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.12 (n/a)</td><td>0.12 (n/a)</td><td>0.10 (n/a)</td><td>0.01 (n/a)</td><td>208.70 (n/a)</td><td>179.36 (n/a)</td><td>178.00 (n/a)</td><td>152.60 (n/a)</td><td>22.19 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_16-aie_columns_1-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.06 (n/a)</td><td>0.03 (n/a)</td><td>333.50 (n/a)</td><td>223.84 (n/a)</td><td>217.60 (n/a)</td><td>154.80 (n/a)</td><td>67.26 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_16-aie_columns_2-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.12 (n/a)</td><td>0.11 (n/a)</td><td>0.11 (n/a)</td><td>0.10 (n/a)</td><td>0.01 (n/a)</td><td>212.80 (n/a)</td><td>187.68 (n/a)</td><td>182.60 (n/a)</td><td>168.50 (n/a)</td><td>19.42 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_16-aie_columns_2-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.12 (n/a)</td><td>0.12 (n/a)</td><td>0.11 (n/a)</td><td>0.01 (n/a)</td><td>190.70 (n/a)</td><td>171.92 (n/a)</td><td>171.40 (n/a)</td><td>154.60 (n/a)</td><td>13.37 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_16-aie_columns_4-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.14 (n/a)</td><td>0.12 (n/a)</td><td>0.11 (n/a)</td><td>0.10 (n/a)</td><td>0.02 (n/a)</td><td>204.10 (n/a)</td><td>180.14 (n/a)</td><td>185.50 (n/a)</td><td>145.10 (n/a)</td><td>21.65 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_16-aie_columns_4-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.16 (n/a)</td><td>0.12 (n/a)</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.03 (n/a)</td><td>221.20 (n/a)</td><td>178.90 (n/a)</td><td>197.50 (n/a)</td><td>130.80 (n/a)</td><td>38.52 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_16-aie_columns_8-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.16 (n/a)</td><td>0.12 (n/a)</td><td>0.11 (n/a)</td><td>0.09 (n/a)</td><td>0.03 (n/a)</td><td>223.70 (n/a)</td><td>181.58 (n/a)</td><td>188.40 (n/a)</td><td>129.30 (n/a)</td><td>35.97 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_16-aie_columns_8-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.16 (n/a)</td><td>0.10 (n/a)</td><td>0.10 (n/a)</td><td>0.06 (n/a)</td><td>0.04 (n/a)</td><td>355.80 (n/a)</td><td>220.88 (n/a)</td><td>211.30 (n/a)</td><td>131.50 (n/a)</td><td>83.97 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_32-aie_columns_1-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.17 (n/a)</td><td>0.14 (n/a)</td><td>0.13 (n/a)</td><td>0.11 (n/a)</td><td>0.03 (n/a)</td><td>219.40 (n/a)</td><td>182.86 (n/a)</td><td>191.10 (n/a)</td><td>140.60 (n/a)</td><td>34.74 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_32-aie_columns_1-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.14 (n/a)</td><td>0.13 (n/a)</td><td>0.13 (n/a)</td><td>0.12 (n/a)</td><td>0.01 (n/a)</td><td>209.10 (n/a)</td><td>192.06 (n/a)</td><td>190.70 (n/a)</td><td>175.50 (n/a)</td><td>13.96 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_32-aie_columns_2-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.20 (n/a)</td><td>0.15 (n/a)</td><td>0.15 (n/a)</td><td>0.11 (n/a)</td><td>0.03 (n/a)</td><td>219.80 (n/a)</td><td>165.16 (n/a)</td><td>160.90 (n/a)</td><td>125.70 (n/a)</td><td>37.41 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_32-aie_columns_2-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.19 (n/a)</td><td>0.15 (n/a)</td><td>0.15 (n/a)</td><td>0.14 (n/a)</td><td>0.02 (n/a)</td><td>171.10 (n/a)</td><td>161.90 (n/a)</td><td>168.90 (n/a)</td><td>131.80 (n/a)</td><td>16.86 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_32-aie_columns_4-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.16 (n/a)</td><td>0.14 (n/a)</td><td>0.15 (n/a)</td><td>0.12 (n/a)</td><td>0.02 (n/a)</td><td>206.50 (n/a)</td><td>173.54 (n/a)</td><td>159.10 (n/a)</td><td>150.80 (n/a)</td><td>27.15 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_32-aie_columns_4-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.15 (n/a)</td><td>0.13 (n/a)</td><td>0.15 (n/a)</td><td>0.09 (n/a)</td><td>0.03 (n/a)</td><td>288.10 (n/a)</td><td>200.06 (n/a)</td><td>168.80 (n/a)</td><td>166.70 (n/a)</td><td>52.36 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_32-aie_columns_8-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.14 (n/a)</td><td>0.12 (n/a)</td><td>0.13 (n/a)</td><td>0.11 (n/a)</td><td>0.01 (n/a)</td><td>225.10 (n/a)</td><td>198.90 (n/a)</td><td>192.20 (n/a)</td><td>181.70 (n/a)</td><td>19.53 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_32-aie_columns_8-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.14 (n/a)</td><td>0.11 (n/a)</td><td>0.11 (n/a)</td><td>0.10 (n/a)</td><td>0.02 (n/a)</td><td>256.10 (n/a)</td><td>219.86 (n/a)</td><td>224.40 (n/a)</td><td>178.10 (n/a)</td><td>28.35 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_8-aie_columns_1-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.14 (n/a)</td><td>0.12 (n/a)</td><td>0.12 (n/a)</td><td>0.09 (n/a)</td><td>0.02 (n/a)</td><td>201.20 (n/a)</td><td>158.24 (n/a)</td><td>149.70 (n/a)</td><td>132.30 (n/a)</td><td>26.62 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_8-aie_columns_1-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.12 (n/a)</td><td>0.11 (n/a)</td><td>0.11 (n/a)</td><td>0.10 (n/a)</td><td>0.01 (n/a)</td><td>190.00 (n/a)</td><td>175.62 (n/a)</td><td>175.50 (n/a)</td><td>155.20 (n/a)</td><td>13.82 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_8-aie_columns_2-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.10 (n/a)</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.01 (n/a)</td><td>208.90 (n/a)</td><td>188.62 (n/a)</td><td>187.60 (n/a)</td><td>171.10 (n/a)</td><td>14.37 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_8-aie_columns_2-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.08 (n/a)</td><td>0.02 (n/a)</td><td>225.60 (n/a)</td><td>190.06 (n/a)</td><td>198.10 (n/a)</td><td>142.50 (n/a)</td><td>33.36 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_8-aie_columns_4-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.11 (n/a)</td><td>0.10 (n/a)</td><td>0.09 (n/a)</td><td>0.01 (n/a)</td><td>197.70 (n/a)</td><td>172.90 (n/a)</td><td>176.30 (n/a)</td><td>139.60 (n/a)</td><td>21.02 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_8-aie_columns_4-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.11 (n/a)</td><td>0.11 (n/a)</td><td>0.09 (n/a)</td><td>0.01 (n/a)</td><td>203.00 (n/a)</td><td>176.18 (n/a)</td><td>174.90 (n/a)</td><td>162.00 (n/a)</td><td>16.36 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_8-aie_columns_8-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.11 (n/a)</td><td>0.09 (n/a)</td><td>0.08 (n/a)</td><td>0.08 (n/a)</td><td>0.01 (n/a)</td><td>245.60 (n/a)</td><td>208.56 (n/a)</td><td>220.10 (n/a)</td><td>171.90 (n/a)</td><td>31.68 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_128-angle_rows_8-aie_columns_8-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.10 (n/a)</td><td>0.08 (n/a)</td><td>0.08 (n/a)</td><td>0.06 (n/a)</td><td>0.02 (n/a)</td><td>325.00 (n/a)</td><td>235.40 (n/a)</td><td>221.70 (n/a)</td><td>186.70 (n/a)</td><td>52.58 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_512-angle_rows_32-aie_columns_1-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.69 (n/a)</td><td>0.55 (n/a)</td><td>0.50 (n/a)</td><td>0.43 (n/a)</td><td>0.11 (n/a)</td><td>230.90 (n/a)</td><td>185.40 (n/a)</td><td>195.40 (n/a)</td><td>142.30 (n/a)</td><td>35.02 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_512-angle_rows_32-aie_columns_2-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.68 (n/a)</td><td>0.61 (n/a)</td><td>0.61 (n/a)</td><td>0.55 (n/a)</td><td>0.06 (n/a)</td><td>179.50 (n/a)</td><td>161.60 (n/a)</td><td>161.20 (n/a)</td><td>145.50 (n/a)</td><td>14.78 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_512-angle_rows_32-aie_columns_4-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.59 (n/a)</td><td>0.48 (n/a)</td><td>0.46 (n/a)</td><td>0.37 (n/a)</td><td>0.09 (n/a)</td><td>267.80 (n/a)</td><td>211.64 (n/a)</td><td>215.50 (n/a)</td><td>167.40 (n/a)</td><td>38.83 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_512-angle_rows_32-aie_columns_8-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.66 (n/a)</td><td>0.52 (n/a)</td><td>0.50 (n/a)</td><td>0.43 (n/a)</td><td>0.10 (n/a)</td><td>229.00 (n/a)</td><td>195.00 (n/a)</td><td>197.00 (n/a)</td><td>148.90 (n/a)</td><td>34.37 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_512-angle_rows_8-aie_columns_1-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.58 (n/a)</td><td>0.47 (n/a)</td><td>0.45 (n/a)</td><td>0.39 (n/a)</td><td>0.08 (n/a)</td><td>188.60 (n/a)</td><td>160.54 (n/a)</td><td>162.60 (n/a)</td><td>128.00 (n/a)</td><td>24.95 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_512-angle_rows_8-aie_columns_2-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.46 (n/a)</td><td>0.39 (n/a)</td><td>0.38 (n/a)</td><td>0.33 (n/a)</td><td>0.06 (n/a)</td><td>224.20 (n/a)</td><td>194.10 (n/a)</td><td>194.40 (n/a)</td><td>161.30 (n/a)</td><td>27.66 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_512-angle_rows_8-aie_columns_4-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.53 (n/a)</td><td>0.46 (n/a)</td><td>0.47 (n/a)</td><td>0.37 (n/a)</td><td>0.06 (n/a)</td><td>200.60 (n/a)</td><td>164.02 (n/a)</td><td>158.10 (n/a)</td><td>139.70 (n/a)</td><td>22.37 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_32-cols_512-angle_rows_8-aie_columns_8-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.43 (n/a)</td><td>0.35 (n/a)</td><td>0.33 (n/a)</td><td>0.29 (n/a)</td><td>0.07 (n/a)</td><td>257.00 (n/a)</td><td>216.08 (n/a)</td><td>225.60 (n/a)</td><td>169.70 (n/a)</td><td>41.52 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_16-aie_columns_1-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.26 (n/a)</td><td>0.20 (n/a)</td><td>0.19 (n/a)</td><td>0.17 (n/a)</td><td>0.03 (n/a)</td><td>222.60 (n/a)</td><td>184.76 (n/a)</td><td>190.70 (n/a)</td><td>143.60 (n/a)</td><td>28.93 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_16-aie_columns_1-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.20 (n/a)</td><td>0.20 (n/a)</td><td>0.18 (n/a)</td><td>0.01 (n/a)</td><td>200.00 (n/a)</td><td>188.92 (n/a)</td><td>186.40 (n/a)</td><td>177.80 (n/a)</td><td>9.48 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_16-aie_columns_2-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.26 (n/a)</td><td>0.21 (n/a)</td><td>0.20 (n/a)</td><td>0.16 (n/a)</td><td>0.04 (n/a)</td><td>236.40 (n/a)</td><td>182.72 (n/a)</td><td>181.30 (n/a)</td><td>142.00 (n/a)</td><td>34.64 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_16-aie_columns_2-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.28 (n/a)</td><td>0.23 (n/a)</td><td>0.27 (n/a)</td><td>0.17 (n/a)</td><td>0.05 (n/a)</td><td>222.30 (n/a)</td><td>164.76 (n/a)</td><td>138.50 (n/a)</td><td>131.70 (n/a)</td><td>41.46 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_16-aie_columns_4-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.19 (n/a)</td><td>0.17 (n/a)</td><td>0.16 (n/a)</td><td>0.14 (n/a)</td><td>0.02 (n/a)</td><td>260.00 (n/a)</td><td>223.00 (n/a)</td><td>225.90 (n/a)</td><td>198.80 (n/a)</td><td>24.30 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_16-aie_columns_4-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.17 (n/a)</td><td>0.17 (n/a)</td><td>0.13 (n/a)</td><td>0.03 (n/a)</td><td>278.70 (n/a)</td><td>227.14 (n/a)</td><td>216.40 (n/a)</td><td>176.00 (n/a)</td><td>47.09 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_16-aie_columns_8-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.19 (n/a)</td><td>0.20 (n/a)</td><td>0.16 (n/a)</td><td>0.02 (n/a)</td><td>228.10 (n/a)</td><td>191.96 (n/a)</td><td>187.00 (n/a)</td><td>174.50 (n/a)</td><td>21.50 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_16-aie_columns_8-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.24 (n/a)</td><td>0.21 (n/a)</td><td>0.21 (n/a)</td><td>0.18 (n/a)</td><td>0.03 (n/a)</td><td>207.40 (n/a)</td><td>176.62 (n/a)</td><td>172.90 (n/a)</td><td>155.10 (n/a)</td><td>22.40 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_32-aie_columns_1-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.26 (n/a)</td><td>0.23 (n/a)</td><td>0.24 (n/a)</td><td>0.19 (n/a)</td><td>0.03 (n/a)</td><td>213.90 (n/a)</td><td>178.08 (n/a)</td><td>173.00 (n/a)</td><td>157.30 (n/a)</td><td>21.20 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_32-aie_columns_1-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.33 (n/a)</td><td>0.24 (n/a)</td><td>0.20 (n/a)</td><td>0.18 (n/a)</td><td>0.07 (n/a)</td><td>227.80 (n/a)</td><td>182.78 (n/a)</td><td>203.90 (n/a)</td><td>123.80 (n/a)</td><td>45.15 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_32-aie_columns_2-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.29 (n/a)</td><td>0.23 (n/a)</td><td>0.22 (n/a)</td><td>0.18 (n/a)</td><td>0.05 (n/a)</td><td>228.60 (n/a)</td><td>181.44 (n/a)</td><td>187.10 (n/a)</td><td>139.30 (n/a)</td><td>35.16 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_32-aie_columns_2-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.29 (n/a)</td><td>0.23 (n/a)</td><td>0.22 (n/a)</td><td>0.20 (n/a)</td><td>0.04 (n/a)</td><td>208.70 (n/a)</td><td>179.58 (n/a)</td><td>185.50 (n/a)</td><td>143.50 (n/a)</td><td>25.79 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_32-aie_columns_4-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.29 (n/a)</td><td>0.23 (n/a)</td><td>0.23 (n/a)</td><td>0.14 (n/a)</td><td>0.06 (n/a)</td><td>289.30 (n/a)</td><td>193.66 (n/a)</td><td>175.90 (n/a)</td><td>142.60 (n/a)</td><td>60.98 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_32-aie_columns_4-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.22 (n/a)</td><td>0.21 (n/a)</td><td>0.21 (n/a)</td><td>0.19 (n/a)</td><td>0.01 (n/a)</td><td>217.60 (n/a)</td><td>198.46 (n/a)</td><td>193.40 (n/a)</td><td>183.40 (n/a)</td><td>13.80 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_32-aie_columns_8-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.27 (n/a)</td><td>0.21 (n/a)</td><td>0.20 (n/a)</td><td>0.18 (n/a)</td><td>0.04 (n/a)</td><td>233.50 (n/a)</td><td>199.26 (n/a)</td><td>204.20 (n/a)</td><td>151.30 (n/a)</td><td>32.27 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_32-aie_columns_8-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.18 (n/a)</td><td>0.19 (n/a)</td><td>0.12 (n/a)</td><td>0.04 (n/a)</td><td>340.90 (n/a)</td><td>232.86 (n/a)</td><td>214.00 (n/a)</td><td>193.60 (n/a)</td><td>61.39 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_8-aie_columns_1-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.19 (n/a)</td><td>0.16 (n/a)</td><td>0.18 (n/a)</td><td>0.10 (n/a)</td><td>0.04 (n/a)</td><td>354.80 (n/a)</td><td>228.80 (n/a)</td><td>191.30 (n/a)</td><td>178.70 (n/a)</td><td>74.54 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_8-aie_columns_1-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.18 (n/a)</td><td>0.17 (n/a)</td><td>0.16 (n/a)</td><td>0.02 (n/a)</td><td>220.70 (n/a)</td><td>197.92 (n/a)</td><td>206.80 (n/a)</td><td>162.40 (n/a)</td><td>22.29 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_8-aie_columns_2-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.20 (n/a)</td><td>0.19 (n/a)</td><td>0.19 (n/a)</td><td>0.16 (n/a)</td><td>0.02 (n/a)</td><td>219.90 (n/a)</td><td>187.10 (n/a)</td><td>181.70 (n/a)</td><td>172.10 (n/a)</td><td>19.69 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_8-aie_columns_2-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.19 (n/a)</td><td>0.19 (n/a)</td><td>0.17 (n/a)</td><td>0.02 (n/a)</td><td>210.00 (n/a)</td><td>184.26 (n/a)</td><td>179.50 (n/a)</td><td>164.00 (n/a)</td><td>19.14 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_8-aie_columns_4-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.19 (n/a)</td><td>0.19 (n/a)</td><td>0.18 (n/a)</td><td>0.01 (n/a)</td><td>198.20 (n/a)</td><td>183.64 (n/a)</td><td>184.00 (n/a)</td><td>166.70 (n/a)</td><td>12.86 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_8-aie_columns_4-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.23 (n/a)</td><td>0.20 (n/a)</td><td>0.20 (n/a)</td><td>0.17 (n/a)</td><td>0.02 (n/a)</td><td>205.50 (n/a)</td><td>176.78 (n/a)</td><td>171.90 (n/a)</td><td>152.90 (n/a)</td><td>19.75 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_8-aie_columns_8-method_type_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.23 (n/a)</td><td>0.18 (n/a)</td><td>0.16 (n/a)</td><td>0.11 (n/a)</td><td>0.05 (n/a)</td><td>315.30 (n/a)</td><td>211.92 (n/a)</td><td>215.10 (n/a)</td><td>153.60 (n/a)</td><td>65.36 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## rows_64-cols_128-angle_rows_8-aie_columns_8-method_type_1
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.25 (n/a)</td><td>0.21 (n/a)</td><td>0.23 (n/a)</td><td>0.14 (n/a)</td><td>0.05 (n/a)</td><td>248.40 (n/a)</td><td>178.14 (n/a)</td><td>149.70 (n/a)</td><td>137.80 (n/a)</td><td>48.18 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## seq_len_16384-dim_64-num_heads_1-num_pipelines_4-num_kv_heads_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.21 (n/a)</td><td>0.21 (n/a)</td><td>0.21 (n/a)</td><td>0.00 (n/a)</td><td>40661.90 (n/a)</td><td>40631.06 (n/a)</td><td>40652.40 (n/a)</td><td>40589.90 (n/a)</td><td>35.33 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## seq_len_16384-dim_64-num_heads_1-num_pipelines_8-num_kv_heads_0
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.21 (n/a)</td><td>0.21 (n/a)</td><td>0.21 (n/a)</td><td>0.21 (n/a)</td><td>0.00 (n/a)</td><td>40701.40 (n/a)</td><td>40589.46 (n/a)</td><td>40574.70 (n/a)</td><td>40515.30 (n/a)</td><td>69.69 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## seq_len_16384-dim_64-num_heads_8-num_pipelines_8-num_kv_heads_2
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.13 (n/a)</td><td>0.13 (n/a)</td><td>0.13 (n/a)</td><td>0.13 (n/a)</td><td>0.00 (n/a)</td><td>320359.20 (n/a)</td><td>320066.68 (n/a)</td><td>320207.90 (n/a)</td><td>319427.30 (n/a)</td><td>369.87 (n/a)</td>
+</tr>
+</tbody>
+</table>
+
+
+## seq_len_256-embedding_dim_2048-hidden_dim_2048-prio_accuracy_False
+
+<table>
+<thead>
+<tr>
+<th>Commit/Date</th>
+<th>Bandwidth (max)</th><th>Bandwidth (mean)</th><th>Bandwidth (median)</th><th>Bandwidth (min)</th><th>Bandwidth (stddev)</th><th>Latency (max)</th><th>Latency (mean)</th><th>Latency (median)</th><th>Latency (min)</th><th>Latency (stddev)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2371174</code> — 2026-04-06 17:48:13</td><td>0.24 (n/a)</td><td>0.18 (n/a)</td><td>0.18 (n/a)</td><td>0.14 (n/a)</td><td>0.04 (n/a)</td><td>15030.98 (n/a)</td><td>12082.78 (n/a)</td><td>11654.61 (n/a)</td><td>8717.79 (n/a)</td><td>2448.83 (n/a)</td>
 </tr>
 </tbody>
 </table>
