@@ -1,7 +1,7 @@
 
 # IRONCLAD
 
-Tested on `2026_04_02_22_46_45` at commit `2734927`.
+Tested on `2026_04_06_17_35_36` at commit `2371174`.
 
 <table>
     <thead>
@@ -14,662 +14,392 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
     <tbody>
         <tr>
             <td>
-                axpy_1_cols_2_channels_2048_tile_2048_3.0
+                M_128-K_128-num_aie_columns_1-tile_size_input_32-tile_size_output_128
             </td>
             <td>
                 ✅
                 5/5
-            </td>
-            <td>
-                180.94
-            </td>
-            <td>
-                0.07
             </td>
             <td>
                 n/a
             </td>
+            <td>
+                0.20
+            </td>
+            <td>
+                0.19
+            </td>
         </tr>
         <tr>
             <td>
-                axpy_2_cols_2_channels_2048_tile_1024_3.0
+                M_1792-K_896-N_1152-num_aie_columns_8-b_col_maj_False-c_col_maj_True-m_64-k_32-n_48-trace_size_0-partition_N_1
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                164.12
+                2202.18
             </td>
             <td>
-                0.08
+                4.30
             </td>
             <td>
-                n/a
+                1690.34
             </td>
         </tr>
         <tr>
             <td>
-                axpy_4_cols_2_channels_2048_tile_512_3.0
+                M_192-K_384-N_64-num_aie_columns_4-b_col_maj_False-c_col_maj_False-m_48-k_96-n_16-trace_size_0-partition_N_1
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                158.20
+                221.86
             </td>
             <td>
-                0.08
+                1.01
             </td>
             <td>
-                n/a
+                42.97
             </td>
         </tr>
         <tr>
             <td>
-                axpy_8_cols_2_channels_2048_tile_256_3.0
+                M_192-K_384-N_64-num_aie_columns_4-b_col_maj_True-c_col_maj_True-m_48-k_96-n_16-trace_size_0-partition_N_1
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                188.12
+                258.16
             </td>
             <td>
-                0.07
+                0.92
             </td>
             <td>
-                n/a
+                39.34
             </td>
         </tr>
         <tr>
             <td>
-                dequant_1_cols_1_channels_2048_tile_2048
+                M_2048-K_2048-N_2048-num_aie_columns_1-b_col_maj_False-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                160.70
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_1_cols_2_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                166.34
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_2_cols_1_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                169.18
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_2_cols_2_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                195.54
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_4_cols_1_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                217.30
-            </td>
-            <td>
-                0.02
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_4_cols_2_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                192.86
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_8_cols_1_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                177.64
-            </td>
-            <td>
-                0.03
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                dequant_8_cols_2_channels_2048_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                235.36
-            </td>
-            <td>
-                0.02
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_1_cols_2_channels_2048_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                182.28
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_2_cols_2_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                156.32
-            </td>
-            <td>
-                0.08
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_4_cols_2_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                170.92
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_add_8_cols_2_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                187.52
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_1_cols_2_channels_2048_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                142.36
-            </td>
-            <td>
-                0.09
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_2_cols_2_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                146.50
-            </td>
-            <td>
-                0.09
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_4_cols_2_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                137.62
-            </td>
-            <td>
-                0.09
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                eltwise_mul_8_cols_2_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                157.62
-            </td>
-            <td>
-                0.08
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_1_cols_1_channels_2048_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                150.34
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_1_cols_2_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                146.10
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_2_cols_1_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                151.34
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_2_cols_2_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                138.62
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_4_cols_1_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                168.64
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_4_cols_2_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                207.90
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_8_cols_1_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                204.90
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gelu_8_cols_2_channels_2048_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                213.20
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gemm_1792x896x1152_64x32x48_8cols_ccolmaj
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                2162.46
-            </td>
-            <td>
-                4.41
-            </td>
-            <td>
-                1732.78
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gemm_192x384x64_48x96x16_4cols
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                351.92
-            </td>
-            <td>
-                0.66
-            </td>
-            <td>
-                27.96
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gemm_192x384x64_48x96x16_4cols_bcolmaj_ccolmaj
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                262.98
-            </td>
-            <td>
-                0.90
-            </td>
-            <td>
-                38.29
-            </td>
-        </tr>
-        <tr>
-            <td>
-                gemm_2048x2048x2048_64x64x64_1cols
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                49302.64
+                49267.24
             </td>
             <td>
                 0.51
             </td>
             <td>
-                348.46
+                348.71
             </td>
         </tr>
         <tr>
             <td>
-                gemm_2048x2048x2048_64x64x64_2cols_bcolmaj
+                M_2048-K_2048-N_2048-num_aie_columns_2-b_col_maj_True-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                28554.56
+                28613.18
             </td>
             <td>
                 0.88
             </td>
             <td>
-                601.66
+                600.45
             </td>
         </tr>
         <tr>
             <td>
-                gemm_2048x2048x2048_64x64x64_8cols_bcolmaj_ccolmaj
+                M_2048-K_2048-N_2048-num_aie_columns_8-b_col_maj_True-c_col_maj_True-m_64-k_64-n_64-trace_size_0-partition_N_1
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                7403.52
+                7588.74
             </td>
             <td>
-                3.40
+                3.32
             </td>
             <td>
-                2322.97
+                2265.04
             </td>
         </tr>
         <tr>
             <td>
-                gemm_384x1536x1792_32x48x64_4cols_bcolmaj
+                M_2048-K_8192-num_aie_columns_1-tile_size_input_1-tile_size_output_2048
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                2383.62
+                n/a
             </td>
             <td>
-                3.41
+                12.04
             </td>
             <td>
-                893.63
+                12.03
             </td>
         </tr>
         <tr>
             <td>
-                gemm_896x1792x640_32x64x80_8cols_ccolmaj
+                M_2048-K_8192-num_aie_columns_2-tile_size_input_1-tile_size_output_1024
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                1724.40
+                n/a
             </td>
             <td>
-                4.16
+                22.76
             </td>
             <td>
-                1286.52
+                22.75
             </td>
         </tr>
         <tr>
             <td>
-                layer_norm_1_cols_1_channels_2048_tile_2048
+                M_2048-K_8192-num_aie_columns_4-tile_size_input_1-tile_size_output_512
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                153.94
+                n/a
+            </td>
+            <td>
+                39.16
+            </td>
+            <td>
+                39.13
+            </td>
+        </tr>
+        <tr>
+            <td>
+                M_2048-K_8192-num_aie_columns_8-tile_size_input_1-tile_size_output_256
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                n/a
+            </td>
+            <td>
+                43.13
+            </td>
+            <td>
+                43.11
+            </td>
+        </tr>
+        <tr>
+            <td>
+                M_2048-N_64-aie_columns_1-channels_1-m_64-n_64-s_8
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                165.90
+            </td>
+            <td>
+                3.18
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                M_2048-N_64-aie_columns_1-channels_2-m_64-n_64-s_8
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                183.64
+            </td>
+            <td>
+                2.87
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                M_384-K_1536-N_1792-num_aie_columns_4-b_col_maj_True-c_col_maj_False-m_32-k_48-n_64-trace_size_0-partition_N_1
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                2209.64
+            </td>
+            <td>
+                3.69
+            </td>
+            <td>
+                967.76
+            </td>
+        </tr>
+        <tr>
+            <td>
+                M_64-K_512-N_256-num_aie_columns_4-b_col_maj_True-c_col_maj_False-m_16-k_64-n_64-trace_size_0-partition_N_4
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                3501.08
+            </td>
+            <td>
+                0.37
+            </td>
+            <td>
+                19.91
+            </td>
+        </tr>
+        <tr>
+            <td>
+                M_8192-K_2048-num_aie_columns_1-tile_size_input_4-tile_size_output_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                n/a
+            </td>
+            <td>
+                12.54
+            </td>
+            <td>
+                12.53
+            </td>
+        </tr>
+        <tr>
+            <td>
+                M_8192-K_2048-num_aie_columns_2-tile_size_input_4-tile_size_output_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                n/a
+            </td>
+            <td>
+                24.22
+            </td>
+            <td>
+                24.20
+            </td>
+        </tr>
+        <tr>
+            <td>
+                M_8192-K_2048-num_aie_columns_4-tile_size_input_4-tile_size_output_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                n/a
+            </td>
+            <td>
+                36.37
+            </td>
+            <td>
+                36.35
+            </td>
+        </tr>
+        <tr>
+            <td>
+                M_8192-K_2048-num_aie_columns_8-tile_size_input_4-tile_size_output_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                n/a
+            </td>
+            <td>
+                40.24
+            </td>
+            <td>
+                40.21
+            </td>
+        </tr>
+        <tr>
+            <td>
+                M_896-K_1792-N_640-num_aie_columns_8-b_col_maj_False-c_col_maj_True-m_32-k_64-n_80-trace_size_0-partition_N_1
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                1508.44
+            </td>
+            <td>
+                4.76
+            </td>
+            <td>
+                1472.17
+            </td>
+        </tr>
+        <tr>
+            <td>
+                embedding_dim_2048-hidden_dim_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                3798.40
+            </td>
+            <td>
+                0.00
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048
+            </td>
+            <td>
+                ✅
+                30/30
+            </td>
+            <td>
+                169.45
             </td>
             <td>
                 0.05
@@ -680,122 +410,14 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                layer_norm_1_cols_2_channels_2048_tile_1024
+                input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-group_size_32
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                163.32
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                layer_norm_2_cols_1_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                158.06
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                layer_norm_2_cols_2_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                171.22
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                layer_norm_4_cols_1_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                180.72
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                layer_norm_4_cols_2_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                183.66
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                layer_norm_8_cols_1_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                177.08
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                layer_norm_8_cols_2_channels_2048_tile_128
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                224.00
+                139.04
             </td>
             <td>
                 0.04
@@ -806,179 +428,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                matrix_vector_mul_128x128_32tsi_128tso_1col
+                input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-weighted_False
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                n/a
+                167.44
             </td>
             <td>
-                0.20
-            </td>
-            <td>
-                0.20
-            </td>
-        </tr>
-        <tr>
-            <td>
-                matrix_vector_mul_2048x8192_1tsi_1024tso_2col
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                n/a
-            </td>
-            <td>
-                24.39
-            </td>
-            <td>
-                24.37
-            </td>
-        </tr>
-        <tr>
-            <td>
-                matrix_vector_mul_2048x8192_1tsi_2048tso_1col
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                n/a
-            </td>
-            <td>
-                12.25
-            </td>
-            <td>
-                12.24
-            </td>
-        </tr>
-        <tr>
-            <td>
-                matrix_vector_mul_2048x8192_1tsi_256tso_8col
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                n/a
-            </td>
-            <td>
-                41.75
-            </td>
-            <td>
-                41.73
-            </td>
-        </tr>
-        <tr>
-            <td>
-                matrix_vector_mul_2048x8192_1tsi_512tso_4col
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                n/a
-            </td>
-            <td>
-                37.15
-            </td>
-            <td>
-                37.13
-            </td>
-        </tr>
-        <tr>
-            <td>
-                matrix_vector_mul_8192x2048_4tsi_1024tso_1col
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                n/a
-            </td>
-            <td>
-                12.89
-            </td>
-            <td>
-                12.88
-            </td>
-        </tr>
-        <tr>
-            <td>
-                matrix_vector_mul_8192x2048_4tsi_1024tso_2col
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                n/a
-            </td>
-            <td>
-                23.62
-            </td>
-            <td>
-                23.61
-            </td>
-        </tr>
-        <tr>
-            <td>
-                matrix_vector_mul_8192x2048_4tsi_1024tso_4col
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                n/a
-            </td>
-            <td>
-                39.98
-            </td>
-            <td>
-                39.96
-            </td>
-        </tr>
-        <tr>
-            <td>
-                matrix_vector_mul_8192x2048_4tsi_1024tso_8col
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                n/a
-            </td>
-            <td>
-                41.15
-            </td>
-            <td>
-                41.12
-            </td>
-        </tr>
-        <tr>
-            <td>
-                mem_copy_16_cores_2_chans_2048_tile_128_False
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                214.20
-            </td>
-            <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -986,14 +446,14 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                mem_copy_1_cores_1_chans_2048_tile_2048_False
+                input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-weighted_True
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                151.10
+                196.94
             </td>
             <td>
                 0.06
@@ -1004,14 +464,14 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                mem_copy_2_cores_1_chans_2048_tile_1024_False
+                input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024
             </td>
             <td>
                 ✅
-                5/5
+                25/25
             </td>
             <td>
-                153.24
+                191.25
             </td>
             <td>
                 0.05
@@ -1022,14 +482,212 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                mem_copy_2_cores_2_chans_2048_tile_1024_False
+                input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-group_size_32
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                146.84
+                163.36
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-weighted_False
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                181.14
+            </td>
+            <td>
+                0.05
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-weighted_True
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                213.66
+            </td>
+            <td>
+                0.05
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_1-tile_size_2048
+            </td>
+            <td>
+                ✅
+                10/10
+            </td>
+            <td>
+                174.28
+            </td>
+            <td>
+                0.07
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_1-tile_size_2048-scalar_factor_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                178.04
+            </td>
+            <td>
+                0.07
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024
+            </td>
+            <td>
+                ✅
+                30/30
+            </td>
+            <td>
+                181.61
+            </td>
+            <td>
+                0.05
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-group_size_32
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                181.26
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-weighted_False
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                179.76
+            </td>
+            <td>
+                0.05
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-weighted_True
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                233.46
+            </td>
+            <td>
+                0.05
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512
+            </td>
+            <td>
+                ✅
+                25/25
+            </td>
+            <td>
+                169.50
+            </td>
+            <td>
+                0.05
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-group_size_32
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                180.20
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-weighted_False
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                145.42
             </td>
             <td>
                 0.06
@@ -1040,14 +698,14 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                mem_copy_4_cores_1_chans_2048_tile_512_False
+                input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-weighted_True
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                165.62
+                174.54
             </td>
             <td>
                 0.05
@@ -1058,14 +716,50 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                mem_copy_4_cores_2_chans_2048_tile_512_False
+                input_length_2048-num_aie_columns_2-tile_size_1024
+            </td>
+            <td>
+                ✅
+                10/10
+            </td>
+            <td>
+                165.61
+            </td>
+            <td>
+                0.08
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_2-tile_size_1024-scalar_factor_3.0
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                164.42
+                196.46
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512
+            </td>
+            <td>
+                ✅
+                30/30
+            </td>
+            <td>
+                178.34
             </td>
             <td>
                 0.05
@@ -1076,14 +770,32 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                mem_copy_8_cores_1_chans_2048_tile_256_False
+                input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-group_size_32
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                172.56
+                167.66
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-weighted_False
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                165.44
             </td>
             <td>
                 0.05
@@ -1094,14 +806,14 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                mem_copy_8_cores_2_chans_2048_tile_256_False
+                input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-weighted_True
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                161.46
+                189.36
             </td>
             <td>
                 0.05
@@ -1112,68 +824,14 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                mha
+                input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256
             </td>
             <td>
                 ✅
-                5/5
+                25/25
             </td>
             <td>
-                47516.68
-            </td>
-            <td>
-                0.18
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                relu_1_cols_1_channels_2048_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                176.08
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                relu_2_cols_1_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                163.04
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                relu_4_cols_1_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                201.46
+                198.57
             </td>
             <td>
                 0.04
@@ -1184,14 +842,32 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                relu_8_cols_1_channels_2048_tile_256
+                input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-group_size_32
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                197.16
+                191.10
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-weighted_False
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                220.72
             </td>
             <td>
                 0.04
@@ -1202,14 +878,230 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rms_norm_1_cols_1_channels_2048_tile_2048
+                input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-weighted_True
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                161.84
+                243.34
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_4-tile_size_512
+            </td>
+            <td>
+                ✅
+                10/10
+            </td>
+            <td>
+                178.17
+            </td>
+            <td>
+                0.07
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_4-tile_size_512-scalar_factor_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                193.30
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256
+            </td>
+            <td>
+                ✅
+                30/30
+            </td>
+            <td>
+                191.06
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256-group_size_32
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                190.10
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256-weighted_False
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                196.66
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256-weighted_True
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                241.36
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128
+            </td>
+            <td>
+                ✅
+                25/25
+            </td>
+            <td>
+                229.70
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128-group_size_32
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                217.34
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128-weighted_False
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                250.82
+            </td>
+            <td>
+                0.03
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_8-tile_size_256
+            </td>
+            <td>
+                ✅
+                10/10
+            </td>
+            <td>
+                192.23
+            </td>
+            <td>
+                0.07
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_aie_columns_8-tile_size_256-scalar_factor_3.0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                216.72
+            </td>
+            <td>
+                0.06
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_cores_1-num_channels_1-bypass_False-tile_size_2048
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                167.24
             </td>
             <td>
                 0.05
@@ -1220,14 +1112,32 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rms_norm_1_cols_2_channels_2048_tile_1024
+                input_length_2048-num_cores_16-num_channels_2-bypass_False-tile_size_128
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                170.58
+                199.46
+            </td>
+            <td>
+                0.04
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                input_length_2048-num_cores_2-num_channels_1-bypass_False-tile_size_1024
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                165.52
             </td>
             <td>
                 0.05
@@ -1238,17 +1148,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rms_norm_2_cols_1_channels_2048_tile_1024
+                input_length_2048-num_cores_2-num_channels_2-bypass_False-tile_size_1024
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                183.10
+                141.44
             </td>
             <td>
-                0.04
+                0.06
             </td>
             <td>
                 n/a
@@ -1256,14 +1166,14 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rms_norm_2_cols_2_channels_2048_tile_512
+                input_length_2048-num_cores_4-num_channels_1-bypass_False-tile_size_512
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                188.50
+                153.28
             </td>
             <td>
                 0.05
@@ -1274,14 +1184,14 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rms_norm_4_cols_1_channels_2048_tile_512
+                input_length_2048-num_cores_4-num_channels_2-bypass_False-tile_size_512
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                158.84
+                187.94
             </td>
             <td>
                 0.05
@@ -1292,17 +1202,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rms_norm_4_cols_2_channels_2048_tile_256
+                input_length_2048-num_cores_8-num_channels_1-bypass_False-tile_size_256
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                200.46
+                168.14
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -1310,17 +1220,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rms_norm_8_cols_1_channels_2048_tile_256
+                input_length_2048-num_cores_8-num_channels_2-bypass_False-tile_size_256
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                198.82
+                164.62
             </td>
             <td>
-                0.04
+                0.05
             </td>
             <td>
                 n/a
@@ -1328,17 +1238,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rms_norm_8_cols_2_channels_2048_tile_128
+                input_length_32768-num_aie_columns_2-num_channels_2-tile_size_1024
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                249.58
+                163.46
             </td>
             <td>
-                0.04
+                0.82
             </td>
             <td>
                 n/a
@@ -1346,17 +1256,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rope_1c_32rows_512cols_32arows_0m
+                input_length_32768-num_aie_columns_2-num_channels_2-tile_size_2048
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                159.44
+                163.26
             </td>
             <td>
-                0.64
+                0.81
             </td>
             <td>
                 n/a
@@ -1364,17 +1274,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rope_1c_32rows_512cols_8arows_0m
+                input_length_32768-num_aie_columns_2-num_channels_2-tile_size_512
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                145.40
+                150.24
             </td>
             <td>
-                0.53
+                0.88
             </td>
             <td>
                 n/a
@@ -1382,17 +1292,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rope_2c_32rows_512cols_32arows_0m
+                rows_32-cols_512-angle_rows_32-aie_columns_1-method_type_0
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                184.90
+                173.44
             </td>
             <td>
-                0.54
+                0.58
             </td>
             <td>
                 n/a
@@ -1400,17 +1310,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rope_2c_32rows_512cols_8arows_0m
+                rows_32-cols_512-angle_rows_32-aie_columns_2-method_type_0
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                164.22
+                215.90
             </td>
             <td>
-                0.45
+                0.46
             </td>
             <td>
                 n/a
@@ -1418,17 +1328,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rope_4c_32rows_512cols_32arows_0m
+                rows_32-cols_512-angle_rows_32-aie_columns_4-method_type_0
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                185.58
+                205.70
             </td>
             <td>
-                0.55
+                0.52
             </td>
             <td>
                 n/a
@@ -1436,17 +1346,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rope_4c_32rows_512cols_8arows_0m
+                rows_32-cols_512-angle_rows_32-aie_columns_8-method_type_0
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                199.74
+                192.90
             </td>
             <td>
-                0.38
+                0.52
             </td>
             <td>
                 n/a
@@ -1454,17 +1364,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rope_8c_32rows_512cols_32arows_0m
+                rows_32-cols_512-angle_rows_8-aie_columns_1-method_type_0
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                192.54
+                215.46
             </td>
             <td>
-                0.53
+                0.39
             </td>
             <td>
                 n/a
@@ -1472,14 +1382,32 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                rope_8c_32rows_512cols_8arows_0m
+                rows_32-cols_512-angle_rows_8-aie_columns_2-method_type_0
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                190.92
+                174.02
+            </td>
+            <td>
+                0.44
+            </td>
+            <td>
+                n/a
+            </td>
+        </tr>
+        <tr>
+            <td>
+                rows_32-cols_512-angle_rows_8-aie_columns_4-method_type_0
+            </td>
+            <td>
+                ✅
+                5/5
+            </td>
+            <td>
+                192.90
             </td>
             <td>
                 0.41
@@ -1490,17 +1418,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                sigmoid_1_cols_1_channels_2048_tile_2048
+                rows_32-cols_512-angle_rows_8-aie_columns_8-method_type_0
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                140.78
+                208.88
             </td>
             <td>
-                0.06
+                0.35
             </td>
             <td>
                 n/a
@@ -1508,17 +1436,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                sigmoid_2_cols_1_channels_2048_tile_1024
+                seq_len_16384-dim_64-num_heads_1-num_pipelines_8-num_kv_heads_0
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                137.08
+                40601.56
             </td>
             <td>
-                0.06
+                0.21
             </td>
             <td>
                 n/a
@@ -1526,377 +1454,17 @@ Tested on `2026_04_02_22_46_45` at commit `2734927`.
         </tr>
         <tr>
             <td>
-                sigmoid_4_cols_1_channels_2048_tile_512
+                seq_len_256-embedding_dim_2048-hidden_dim_2048-prio_accuracy_False
             </td>
             <td>
                 ✅
                 5/5
             </td>
             <td>
-                182.20
+                10202.84
             </td>
             <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                sigmoid_8_cols_1_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                178.78
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                silu_1_cols_1_channels_2048_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                191.26
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                silu_2_cols_1_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                194.66
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                silu_4_cols_1_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                200.66
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                silu_8_cols_1_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                226.38
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                softmax_2_cols_2_channels_32768_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                197.48
-            </td>
-            <td>
-                0.70
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                softmax_2_cols_2_channels_32768_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                163.80
-            </td>
-            <td>
-                0.86
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                softmax_2_cols_2_channels_32768_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                176.80
-            </td>
-            <td>
-                0.77
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                swiglu_decode_1x2048x2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                n/a
-            </td>
-            <td>
-                n/a
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                swiglu_prefill_256x2048x2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                n/a
-            </td>
-            <td>
-                n/a
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                tanh_1_cols_1_channels_2048_tile_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                136.56
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                tanh_2_cols_1_channels_2048_tile_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                183.64
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                tanh_4_cols_1_channels_2048_tile_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                166.00
-            </td>
-            <td>
-                0.05
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                tanh_8_cols_1_channels_2048_tile_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                201.80
-            </td>
-            <td>
-                0.04
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                transpose_2048_M_64_N_1_cols_1_channels_64_m_64_n_8_s
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                188.34
-            </td>
-            <td>
-                2.90
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                transpose_2048_M_64_N_1_cols_2_channels_64_m_64_n_8_s
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                172.68
-            </td>
-            <td>
-                3.09
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                weighted_rms_norm_1_cols_2_channels_2048_weights_2048
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                192.22
-            </td>
-            <td>
-                0.07
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                weighted_rms_norm_2_cols_2_channels_2048_weights_1024
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                192.94
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                weighted_rms_norm_4_cols_2_channels_2048_weights_512
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                169.66
-            </td>
-            <td>
-                0.06
-            </td>
-            <td>
-                n/a
-            </td>
-        </tr>
-        <tr>
-            <td>
-                weighted_rms_norm_8_cols_2_channels_2048_weights_256
-            </td>
-            <td>
-                ✅
-                5/5
-            </td>
-            <td>
-                248.14
-            </td>
-            <td>
-                0.04
+                0.21
             </td>
             <td>
                 n/a
