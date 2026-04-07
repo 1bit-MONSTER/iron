@@ -102,6 +102,7 @@ from test_dataflow import (
     AIEDataflowL16L18,
     AIEDataflowL19L21_2col,
     AIEDataflowDetectScale,
+    AIEDataflowDetectScale4Col,
     pack_fused_weights_k3,
     _pack_k1_silu_weights,
 )
@@ -1200,7 +1201,11 @@ def run_detect_dataflow(
         ccv3_out_scale = act_scales.get(f"det.cls_{scale_name}.cv3", 1.0)
         ccv3_s1, ccv3_s2 = compute_fused_shifts(ws_ccv3, ccv3_in_scale, ccv3_out_scale)
 
-        op_d = AIEDataflowDetectScale(
+        # Use 4-column design for P3 (80×80) — 2x speedup
+        OpClass = (
+            AIEDataflowDetectScale4Col if scale_name == "p3" else AIEDataflowDetectScale
+        )
+        op_d = OpClass(
             height=h,
             width=w,
             in_channels=ic,
@@ -1301,16 +1306,83 @@ def run_detect_dataflow(
         b_ccv2_i32 = _prescale_bias(b_ccv2, ws_ccv2, ccv1_out_scale)
         b_ccv3_i32 = np.round(b_ccv3.numpy()).astype(np.int32)
 
-        packed_weights = np.concatenate(
-            [
-                _pack_oc(w_rcv1, b_rcv1_i32, rcv1_oc, rcv1_n, k3=True),
-                _pack_oc(w_rcv2, b_rcv2_i32, rcv2_oc, rcv2_n, k3=True),
-                _pack_oc(w_rcv3, b_rcv3_i32, rcv3_oc, rcv3_n, k3=False),
-                _pack_oc(w_ccv1, b_ccv1_i32, ccv1_oc, ccv1_n, k3=True),
-                _pack_oc(w_ccv2, b_ccv2_i32, ccv2_oc, ccv2_n, k3=True),
-                _pack_oc(w_ccv3, b_ccv3_i32, ccv3_oc, ccv3_n, k3=False),
-            ]
-        )
+        if scale_name == "p3":
+            # 4-col layout: lo/hi splits for cv1/cv2, full for cv3
+            reg_oc_per_col = reg_mid // 2  # 32
+            cls_oc_per_col = cls_mid // 2  # 40
+            packed_weights = np.concatenate(
+                [
+                    _pack_oc(
+                        w_rcv1[:reg_oc_per_col],
+                        b_rcv1_i32[:reg_oc_per_col],
+                        reg_oc_per_col,
+                        1,
+                        k3=True,
+                    ),
+                    _pack_oc(
+                        w_rcv1[reg_oc_per_col:],
+                        b_rcv1_i32[reg_oc_per_col:],
+                        reg_oc_per_col,
+                        1,
+                        k3=True,
+                    ),
+                    _pack_oc(
+                        w_rcv2[:reg_oc_per_col],
+                        b_rcv2_i32[:reg_oc_per_col],
+                        reg_oc_per_col,
+                        1,
+                        k3=True,
+                    ),
+                    _pack_oc(
+                        w_rcv2[reg_oc_per_col:],
+                        b_rcv2_i32[reg_oc_per_col:],
+                        reg_oc_per_col,
+                        1,
+                        k3=True,
+                    ),
+                    _pack_oc(w_rcv3, b_rcv3_i32, rcv3_oc, rcv3_n, k3=False),
+                    _pack_oc(
+                        w_ccv1[:cls_oc_per_col],
+                        b_ccv1_i32[:cls_oc_per_col],
+                        cls_oc_per_col,
+                        1,
+                        k3=True,
+                    ),
+                    _pack_oc(
+                        w_ccv1[cls_oc_per_col:],
+                        b_ccv1_i32[cls_oc_per_col:],
+                        cls_oc_per_col,
+                        1,
+                        k3=True,
+                    ),
+                    _pack_oc(
+                        w_ccv2[:cls_oc_per_col],
+                        b_ccv2_i32[:cls_oc_per_col],
+                        cls_oc_per_col,
+                        1,
+                        k3=True,
+                    ),
+                    _pack_oc(
+                        w_ccv2[cls_oc_per_col:],
+                        b_ccv2_i32[cls_oc_per_col:],
+                        cls_oc_per_col,
+                        1,
+                        k3=True,
+                    ),
+                    _pack_oc(w_ccv3, b_ccv3_i32, ccv3_oc, ccv3_n, k3=False),
+                ]
+            )
+        else:
+            packed_weights = np.concatenate(
+                [
+                    _pack_oc(w_rcv1, b_rcv1_i32, rcv1_oc, rcv1_n, k3=True),
+                    _pack_oc(w_rcv2, b_rcv2_i32, rcv2_oc, rcv2_n, k3=True),
+                    _pack_oc(w_rcv3, b_rcv3_i32, rcv3_oc, rcv3_n, k3=False),
+                    _pack_oc(w_ccv1, b_ccv1_i32, ccv1_oc, ccv1_n, k3=True),
+                    _pack_oc(w_ccv2, b_ccv2_i32, ccv2_oc, ccv2_n, k3=True),
+                    _pack_oc(w_ccv3, b_ccv3_i32, ccv3_oc, ccv3_n, k3=False),
+                ]
+            )
         packed_weights_all.append(packed_weights)
 
     t_weight_pack += time.perf_counter() - _t
