@@ -9,6 +9,93 @@
 | llama_3.2_1b_prompt_13_tokens_1 | pass | - | - | - |
 | llama_3.2_1b_prompt_13_tokens_40 | pass | - | - | - |
 
+## Small
+
+| Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix |
+|---|---|---|---|---|
+| M_128-K_128-num_aie_columns_1-tile_size_input_32-tile_size_output_128 | pass | 0.22 | - | - |
+| M_1792-K_896-N_1152-num_aie_columns_8-b_col_maj_False-c_col_maj_True-m_64-k_32-n_48-trace_size_0-partition_N_1 | pass | 2213.46 | - | - |
+| M_192-K_384-N_64-num_aie_columns_4-b_col_maj_False-c_col_maj_False-m_48-k_96-n_16-trace_size_0-partition_N_1 | pass | 252.28 | - | - |
+| M_192-K_384-N_64-num_aie_columns_4-b_col_maj_True-c_col_maj_True-m_48-k_96-n_16-trace_size_0-partition_N_1 | pass | 242.72 | - | - |
+| M_2048-K_2048-N_2048-num_aie_columns_1-b_col_maj_False-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1 | pass | 49207.44 | - | - |
+| M_2048-K_2048-N_2048-num_aie_columns_2-b_col_maj_True-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1 | pass | 28745.08 | - | - |
+| M_2048-K_2048-N_2048-num_aie_columns_8-b_col_maj_True-c_col_maj_True-m_64-k_64-n_64-trace_size_0-partition_N_1 | pass | 7659.88 | - | - |
+| M_2048-K_8192-num_aie_columns_1-tile_size_input_1-tile_size_output_2048 | pass | 12.61 | - | - |
+| M_2048-K_8192-num_aie_columns_2-tile_size_input_1-tile_size_output_1024 | pass | 24.54 | - | - |
+| M_2048-K_8192-num_aie_columns_4-tile_size_input_1-tile_size_output_512 | pass | 40.37 | - | - |
+| M_2048-K_8192-num_aie_columns_8-tile_size_input_1-tile_size_output_256 | pass | 44.19 | - | - |
+| M_2048-N_64-aie_columns_1-channels_1-m_64-n_64-s_8 | pass | 201.78 | - | - |
+| M_2048-N_64-aie_columns_1-channels_2-m_64-n_64-s_8 | pass | 176.92 | - | - |
+| M_384-K_1536-N_1792-num_aie_columns_4-b_col_maj_True-c_col_maj_False-m_32-k_48-n_64-trace_size_0-partition_N_1 | pass | 2248.58 | - | - |
+| M_64-K_512-N_256-num_aie_columns_4-b_col_maj_True-c_col_maj_False-m_16-k_64-n_64-trace_size_0-partition_N_4 | pass | 3229.16 | - | - |
+| M_8192-K_2048-num_aie_columns_1-tile_size_input_4-tile_size_output_1024 | pass | 13.00 | - | - |
+| M_8192-K_2048-num_aie_columns_2-tile_size_input_4-tile_size_output_1024 | pass | 24.50 | - | - |
+| M_8192-K_2048-num_aie_columns_4-tile_size_input_4-tile_size_output_1024 | pass | 40.20 | - | - |
+| M_8192-K_2048-num_aie_columns_8-tile_size_input_4-tile_size_output_1024 | pass | 43.19 | - | - |
+| M_896-K_1792-N_640-num_aie_columns_8-b_col_maj_False-c_col_maj_True-m_32-k_64-n_80-trace_size_0-partition_N_1 | pass | 1472.76 | - | - |
+| embedding_dim_1024-hidden_dim_3584 | pass | 3804.21 | - | - |
+| embedding_dim_2048-hidden_dim_2048 | pass | 4127.10 | - | - |
+| input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048 | pass | 165.14 | - | - |
+| input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-group_size_32 | pass | 154.72 | - | - |
+| input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-weighted_False | pass | 168.44 | - | - |
+| input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-weighted_True | pass | 186.26 | - | - |
+| input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024 | pass | 166.30 | - | - |
+| input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-group_size_32 | pass | 162.44 | - | - |
+| input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-weighted_False | pass | 153.28 | - | - |
+| input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-weighted_True | pass | 164.00 | - | - |
+| input_length_2048-num_aie_columns_1-tile_size_2048 | pass | 157.65 | - | - |
+| input_length_2048-num_aie_columns_1-tile_size_2048-scalar_factor_3.0 | pass | 181.44 | - | - |
+| input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024 | pass | 177.46 | - | - |
+| input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-group_size_32 | pass | 187.46 | - | - |
+| input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-weighted_False | pass | 183.86 | - | - |
+| input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-weighted_True | pass | 188.10 | - | - |
+| input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512 | pass | 180.86 | - | - |
+| input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-group_size_32 | pass | 170.32 | - | - |
+| input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-weighted_False | pass | 188.84 | - | - |
+| input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-weighted_True | pass | 203.38 | - | - |
+| input_length_2048-num_aie_columns_2-tile_size_1024 | pass | 148.79 | - | - |
+| input_length_2048-num_aie_columns_2-tile_size_1024-scalar_factor_3.0 | pass | 218.20 | - | - |
+| input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512 | pass | 177.71 | - | - |
+| input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-group_size_32 | pass | 153.26 | - | - |
+| input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-weighted_False | pass | 176.10 | - | - |
+| input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-weighted_True | pass | 198.32 | - | - |
+| input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256 | pass | 196.21 | - | - |
+| input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-group_size_32 | pass | 183.64 | - | - |
+| input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-weighted_False | pass | 192.72 | - | - |
+| input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-weighted_True | pass | 225.84 | - | - |
+| input_length_2048-num_aie_columns_4-tile_size_512 | pass | 164.60 | - | - |
+| input_length_2048-num_aie_columns_4-tile_size_512-scalar_factor_3.0 | pass | 223.86 | - | - |
+| input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256 | pass | 207.66 | - | - |
+| input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256-group_size_32 | pass | 169.90 | - | - |
+| input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256-weighted_False | pass | 210.80 | - | - |
+| input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256-weighted_True | pass | 210.98 | - | - |
+| input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128 | pass | 231.52 | - | - |
+| input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128-group_size_32 | pass | 229.22 | - | - |
+| input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128-weighted_False | pass | 224.94 | - | - |
+| input_length_2048-num_aie_columns_8-tile_size_256 | pass | 212.18 | - | - |
+| input_length_2048-num_aie_columns_8-tile_size_256-scalar_factor_3.0 | pass | 247.78 | - | - |
+| input_length_2048-num_cores_1-num_channels_1-bypass_False-tile_size_2048 | pass | 183.26 | - | - |
+| input_length_2048-num_cores_16-num_channels_2-bypass_False-tile_size_128 | pass | 228.56 | - | - |
+| input_length_2048-num_cores_2-num_channels_1-bypass_False-tile_size_1024 | pass | 158.42 | - | - |
+| input_length_2048-num_cores_2-num_channels_2-bypass_False-tile_size_1024 | pass | 184.74 | - | - |
+| input_length_2048-num_cores_4-num_channels_1-bypass_False-tile_size_512 | pass | 205.50 | - | - |
+| input_length_2048-num_cores_4-num_channels_2-bypass_False-tile_size_512 | pass | 195.54 | - | - |
+| input_length_2048-num_cores_8-num_channels_1-bypass_False-tile_size_256 | pass | 195.28 | - | - |
+| input_length_2048-num_cores_8-num_channels_2-bypass_False-tile_size_256 | pass | 198.00 | - | - |
+| input_length_32768-num_aie_columns_2-num_channels_2-tile_size_1024 | pass | 206.60 | - | - |
+| input_length_32768-num_aie_columns_2-num_channels_2-tile_size_2048 | pass | 195.20 | - | - |
+| input_length_32768-num_aie_columns_2-num_channels_2-tile_size_512 | pass | 194.84 | - | - |
+| rows_32-cols_512-angle_rows_32-aie_columns_1-method_type_0 | pass | 164.04 | - | - |
+| rows_32-cols_512-angle_rows_32-aie_columns_2-method_type_0 | pass | 189.20 | - | - |
+| rows_32-cols_512-angle_rows_32-aie_columns_4-method_type_0 | pass | 205.88 | - | - |
+| rows_32-cols_512-angle_rows_32-aie_columns_8-method_type_0 | pass | 193.08 | - | - |
+| rows_32-cols_512-angle_rows_8-aie_columns_1-method_type_0 | pass | 171.92 | - | - |
+| rows_32-cols_512-angle_rows_8-aie_columns_2-method_type_0 | pass | 172.14 | - | - |
+| rows_32-cols_512-angle_rows_8-aie_columns_4-method_type_0 | pass | 186.72 | - | - |
+| rows_32-cols_512-angle_rows_8-aie_columns_8-method_type_0 | pass | 180.92 | - | - |
+| seq_len_16384-dim_64-num_heads_1-num_pipelines_8-num_kv_heads_0 | pass | 40715.44 | - | - |
+| seq_len_256-embedding_dim_2048-hidden_dim_2048-prio_accuracy_False | pass | 11728.07 | - | - |
+
 ## Extensive
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
