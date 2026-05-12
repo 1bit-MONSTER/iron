@@ -3,14 +3,14 @@
 ## Examples
 
 <details>
-<summary>(unknown)</summary>
+<summary>iron/applications/llama_3.2_1b</summary>
 
 | Test | Krackan Status | Krackan | Phoenix Status | Phoenix |
 |---|---|---|---|---|
-| llama_3.2_1b_prompt_1024_tokens_1 | ✅ | - | - | - |
-| llama_3.2_1b_prompt_1024_tokens_40 | ✅ | - | - | - |
-| llama_3.2_1b_prompt_13_tokens_1 | ✅ | - | - | - |
-| llama_3.2_1b_prompt_13_tokens_40 | ✅ | - | - | - |
+| test_llama_3_2_1b[llama_3.2_1b_prompt_1024_tokens_1] | ✅ | - | - | - |
+| test_llama_3_2_1b[llama_3.2_1b_prompt_1024_tokens_40] | ✅ | - | - | - |
+| test_llama_3_2_1b[llama_3.2_1b_prompt_13_tokens_1] | ✅ | - | - | - |
+| test_llama_3_2_1b[llama_3.2_1b_prompt_13_tokens_40] | ✅ | - | - | - |
 
 </details>
 
