@@ -21,9 +21,9 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_axpy[input_length_2048-num_aie_columns_1-tile_size_2048-scalar_factor_3.0] | ✅ | 144.24 | ✅ | 394.04 |
-| test_axpy[input_length_2048-num_aie_columns_2-tile_size_1024-scalar_factor_3.0] | ✅ | 165.20 | ✅ | 358.30 |
-| test_axpy[input_length_2048-num_aie_columns_4-tile_size_512-scalar_factor_3.0] | ✅ | 173.58 | ✅ | 431.70 |
+| test_axpy[input_length_2048-num_aie_columns_1-tile_size_2048-scalar_factor_3.0] | ✅ | 144.24 | ✅ | 364.88 |
+| test_axpy[input_length_2048-num_aie_columns_2-tile_size_1024-scalar_factor_3.0] | ✅ | 165.20 | ✅ | 396.12 |
+| test_axpy[input_length_2048-num_aie_columns_4-tile_size_512-scalar_factor_3.0] | ✅ | 173.58 | ✅ | 433.18 |
 | test_axpy[input_length_2048-num_aie_columns_8-tile_size_256-scalar_factor_3.0] | ✅ | 223.06 | - | - |
 
 </details>
@@ -33,12 +33,12 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_dequant[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-group_size_32] | ✅ | 167.52 | ✅ | 370.26 |
-| test_dequant[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-group_size_32] | ✅ | 159.08 | ✅ | 401.06 |
-| test_dequant[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-group_size_32] | ✅ | 152.10 | ✅ | 380.92 |
-| test_dequant[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-group_size_32] | ✅ | 176.84 | ✅ | 488.34 |
-| test_dequant[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-group_size_32] | ✅ | 143.24 | ✅ | 343.44 |
-| test_dequant[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-group_size_32] | ✅ | 173.12 | ✅ | 443.82 |
+| test_dequant[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-group_size_32] | ✅ | 167.52 | ✅ | 317.50 |
+| test_dequant[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-group_size_32] | ✅ | 159.08 | ✅ | 329.98 |
+| test_dequant[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-group_size_32] | ✅ | 152.10 | ✅ | 423.02 |
+| test_dequant[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-group_size_32] | ✅ | 176.84 | ✅ | 777.02 |
+| test_dequant[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-group_size_32] | ✅ | 143.24 | ✅ | 333.44 |
+| test_dequant[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-group_size_32] | ✅ | 173.12 | ✅ | 389.90 |
 | test_dequant[input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256-group_size_32] | ✅ | 184.88 | - | - |
 | test_dequant[input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128-group_size_32] | ✅ | 209.18 | - | - |
 
@@ -49,9 +49,9 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_elementwise_add[input_length_2048-num_aie_columns_1-tile_size_2048] | ✅ | 163.70 | ✅ | 412.80 |
-| test_elementwise_add[input_length_2048-num_aie_columns_2-tile_size_1024] | ✅ | 147.40 | ✅ | 681.16 |
-| test_elementwise_add[input_length_2048-num_aie_columns_4-tile_size_512] | ✅ | 161.84 | ✅ | 887.68 |
+| test_elementwise_add[input_length_2048-num_aie_columns_1-tile_size_2048] | ✅ | 163.70 | ✅ | 526.56 |
+| test_elementwise_add[input_length_2048-num_aie_columns_2-tile_size_1024] | ✅ | 147.40 | ✅ | 790.96 |
+| test_elementwise_add[input_length_2048-num_aie_columns_4-tile_size_512] | ✅ | 161.84 | ✅ | 516.90 |
 | test_elementwise_add[input_length_2048-num_aie_columns_8-tile_size_256] | ✅ | 194.70 | - | - |
 
 </details>
@@ -61,9 +61,9 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_elementwise_mul[input_length_2048-num_aie_columns_1-tile_size_2048] | ✅ | 173.90 | ✅ | 354.28 |
-| test_elementwise_mul[input_length_2048-num_aie_columns_2-tile_size_1024] | ✅ | 173.24 | ✅ | 651.12 |
-| test_elementwise_mul[input_length_2048-num_aie_columns_4-tile_size_512] | ✅ | 181.26 | ✅ | 434.56 |
+| test_elementwise_mul[input_length_2048-num_aie_columns_1-tile_size_2048] | ✅ | 173.90 | ✅ | 391.10 |
+| test_elementwise_mul[input_length_2048-num_aie_columns_2-tile_size_1024] | ✅ | 173.24 | ✅ | 503.44 |
+| test_elementwise_mul[input_length_2048-num_aie_columns_4-tile_size_512] | ✅ | 181.26 | ✅ | 458.54 |
 | test_elementwise_mul[input_length_2048-num_aie_columns_8-tile_size_256] | ✅ | 228.98 | - | - |
 
 </details>
@@ -73,12 +73,12 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_gelu[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048] | ✅ | 179.32 | ✅ | 322.18 |
-| test_gelu[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024] | ✅ | 183.18 | ✅ | 252.44 |
-| test_gelu[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024] | ✅ | 178.30 | ✅ | 361.50 |
-| test_gelu[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512] | ✅ | 159.06 | ✅ | 497.86 |
-| test_gelu[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512] | ✅ | 171.48 | ✅ | 307.82 |
-| test_gelu[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256] | ✅ | 227.94 | ✅ | 407.50 |
+| test_gelu[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048] | ✅ | 179.32 | ✅ | 380.50 |
+| test_gelu[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024] | ✅ | 183.18 | ✅ | 452.10 |
+| test_gelu[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024] | ✅ | 178.30 | ✅ | 463.74 |
+| test_gelu[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512] | ✅ | 159.06 | ✅ | 355.14 |
+| test_gelu[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512] | ✅ | 171.48 | ✅ | 457.12 |
+| test_gelu[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256] | ✅ | 227.94 | ✅ | 460.34 |
 | test_gelu[input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256] | ✅ | 194.26 | - | - |
 | test_gelu[input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128] | ✅ | 211.38 | - | - |
 
@@ -90,13 +90,13 @@
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
 | test_gemm[M_1792-K_896-N_1152-num_aie_columns_8-b_col_maj_False-c_col_maj_True-m_64-k_32-n_48-trace_size_0-partition_N_1] | ✅ | 2232.02 | - | - |
-| test_gemm[M_192-K_384-N_64-num_aie_columns_4-b_col_maj_False-c_col_maj_False-m_48-k_96-n_16-trace_size_0-partition_N_1] | ✅ | 264.76 | ✅ | 628.94 |
-| test_gemm[M_192-K_384-N_64-num_aie_columns_4-b_col_maj_True-c_col_maj_True-m_48-k_96-n_16-trace_size_0-partition_N_1] | ✅ | 270.16 | ✅ | 766.82 |
-| test_gemm[M_2048-K_2048-N_2048-num_aie_columns_1-b_col_maj_False-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1] | ✅ | 48570.74 | ✅ | 82225.06 |
-| test_gemm[M_2048-K_2048-N_2048-num_aie_columns_2-b_col_maj_True-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1] | ✅ | 28586.36 | ✅ | 25420.24 |
+| test_gemm[M_192-K_384-N_64-num_aie_columns_4-b_col_maj_False-c_col_maj_False-m_48-k_96-n_16-trace_size_0-partition_N_1] | ✅ | 264.76 | ✅ | 504.30 |
+| test_gemm[M_192-K_384-N_64-num_aie_columns_4-b_col_maj_True-c_col_maj_True-m_48-k_96-n_16-trace_size_0-partition_N_1] | ✅ | 270.16 | ✅ | 619.70 |
+| test_gemm[M_2048-K_2048-N_2048-num_aie_columns_1-b_col_maj_False-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1] | ✅ | 48570.74 | ✅ | 82023.64 |
+| test_gemm[M_2048-K_2048-N_2048-num_aie_columns_2-b_col_maj_True-c_col_maj_False-m_64-k_64-n_64-trace_size_0-partition_N_1] | ✅ | 28586.36 | ✅ | 24670.26 |
 | test_gemm[M_2048-K_2048-N_2048-num_aie_columns_8-b_col_maj_True-c_col_maj_True-m_64-k_64-n_64-trace_size_0-partition_N_1] | ✅ | 7954.42 | - | - |
-| test_gemm[M_384-K_1536-N_1792-num_aie_columns_4-b_col_maj_True-c_col_maj_False-m_32-k_48-n_64-trace_size_0-partition_N_1] | ✅ | 2151.30 | ✅ | 3307.84 |
-| test_gemm[M_64-K_512-N_256-num_aie_columns_4-b_col_maj_True-c_col_maj_False-m_16-k_64-n_64-trace_size_0-partition_N_4] | ✅ | 3972.46 | ✅ | 6139.54 |
+| test_gemm[M_384-K_1536-N_1792-num_aie_columns_4-b_col_maj_True-c_col_maj_False-m_32-k_48-n_64-trace_size_0-partition_N_1] | ✅ | 2151.30 | ✅ | 4393.58 |
+| test_gemm[M_64-K_512-N_256-num_aie_columns_4-b_col_maj_True-c_col_maj_False-m_16-k_64-n_64-trace_size_0-partition_N_4] | ✅ | 3972.46 | ✅ | 5658.88 |
 | test_gemm[M_896-K_1792-N_640-num_aie_columns_8-b_col_maj_False-c_col_maj_True-m_32-k_64-n_80-trace_size_0-partition_N_1] | ✅ | 1523.60 | - | - |
 
 </details>
@@ -106,14 +106,14 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_gemv[M_128-K_128-num_aie_columns_1-tile_size_input_32-tile_size_output_128] | ✅ | 0.19 | ✅ | 0.07 |
-| test_gemv[M_2048-K_8192-num_aie_columns_1-tile_size_input_1-tile_size_output_2048] | ✅ | 13.23 | ✅ | 3.59 |
-| test_gemv[M_2048-K_8192-num_aie_columns_2-tile_size_input_1-tile_size_output_1024] | ✅ | 24.94 | ✅ | 7.13 |
-| test_gemv[M_2048-K_8192-num_aie_columns_4-tile_size_input_1-tile_size_output_512] | ✅ | 41.67 | ✅ | 10.45 |
+| test_gemv[M_128-K_128-num_aie_columns_1-tile_size_input_32-tile_size_output_128] | ✅ | 0.19 | ✅ | 0.09 |
+| test_gemv[M_2048-K_8192-num_aie_columns_1-tile_size_input_1-tile_size_output_2048] | ✅ | 13.23 | ✅ | 3.61 |
+| test_gemv[M_2048-K_8192-num_aie_columns_2-tile_size_input_1-tile_size_output_1024] | ✅ | 24.94 | ✅ | 6.34 |
+| test_gemv[M_2048-K_8192-num_aie_columns_4-tile_size_input_1-tile_size_output_512] | ✅ | 41.67 | ✅ | 8.44 |
 | test_gemv[M_2048-K_8192-num_aie_columns_8-tile_size_input_1-tile_size_output_256] | ✅ | 42.73 | - | - |
-| test_gemv[M_8192-K_2048-num_aie_columns_1-tile_size_input_4-tile_size_output_1024] | ✅ | 13.01 | ✅ | 3.52 |
-| test_gemv[M_8192-K_2048-num_aie_columns_2-tile_size_input_4-tile_size_output_1024] | ✅ | 24.37 | ✅ | 6.66 |
-| test_gemv[M_8192-K_2048-num_aie_columns_4-tile_size_input_4-tile_size_output_1024] | ✅ | 40.41 | ✅ | 10.73 |
+| test_gemv[M_8192-K_2048-num_aie_columns_1-tile_size_input_4-tile_size_output_1024] | ✅ | 13.01 | ✅ | 3.76 |
+| test_gemv[M_8192-K_2048-num_aie_columns_2-tile_size_input_4-tile_size_output_1024] | ✅ | 24.37 | ✅ | 6.25 |
+| test_gemv[M_8192-K_2048-num_aie_columns_4-tile_size_input_4-tile_size_output_1024] | ✅ | 40.41 | ✅ | 10.88 |
 | test_gemv[M_8192-K_2048-num_aie_columns_8-tile_size_input_4-tile_size_output_1024] | ✅ | 41.94 | - | - |
 
 </details>
@@ -123,12 +123,12 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_layer_norm[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048] | ✅ | 195.74 | ✅ | 374.78 |
-| test_layer_norm[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024] | ✅ | 143.14 | ✅ | 238.76 |
-| test_layer_norm[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024] | ✅ | 144.78 | ✅ | 332.94 |
-| test_layer_norm[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512] | ✅ | 158.18 | ✅ | 374.42 |
-| test_layer_norm[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512] | ✅ | 168.10 | ✅ | 372.46 |
-| test_layer_norm[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256] | ✅ | 186.42 | ✅ | 757.68 |
+| test_layer_norm[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048] | ✅ | 195.74 | ✅ | 266.92 |
+| test_layer_norm[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024] | ✅ | 143.14 | ✅ | 404.74 |
+| test_layer_norm[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024] | ✅ | 144.78 | ✅ | 449.90 |
+| test_layer_norm[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512] | ✅ | 158.18 | ✅ | 468.42 |
+| test_layer_norm[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512] | ✅ | 168.10 | ✅ | 402.18 |
+| test_layer_norm[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256] | ✅ | 186.42 | ✅ | 440.82 |
 | test_layer_norm[input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256] | ✅ | 168.30 | - | - |
 | test_layer_norm[input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128] | ✅ | 242.60 | - | - |
 
@@ -139,14 +139,14 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_mem_copy[input_length_2048-num_cores_1-num_channels_1-bypass_False-tile_size_2048] | ✅ | 162.30 | ✅ | 416.26 |
+| test_mem_copy[input_length_2048-num_cores_1-num_channels_1-bypass_False-tile_size_2048] | ✅ | 162.30 | ✅ | 478.24 |
 | test_mem_copy[input_length_2048-num_cores_16-num_channels_2-bypass_False-tile_size_128] | ✅ | 274.78 | - | - |
-| test_mem_copy[input_length_2048-num_cores_2-num_channels_1-bypass_False-tile_size_1024] | ✅ | 158.76 | ✅ | 423.44 |
-| test_mem_copy[input_length_2048-num_cores_2-num_channels_2-bypass_False-tile_size_1024] | ✅ | 149.70 | ✅ | 418.16 |
-| test_mem_copy[input_length_2048-num_cores_4-num_channels_1-bypass_False-tile_size_512] | ✅ | 161.66 | ✅ | 428.74 |
-| test_mem_copy[input_length_2048-num_cores_4-num_channels_2-bypass_False-tile_size_512] | ✅ | 173.32 | ✅ | 316.60 |
+| test_mem_copy[input_length_2048-num_cores_2-num_channels_1-bypass_False-tile_size_1024] | ✅ | 158.76 | ✅ | 425.62 |
+| test_mem_copy[input_length_2048-num_cores_2-num_channels_2-bypass_False-tile_size_1024] | ✅ | 149.70 | ✅ | 398.76 |
+| test_mem_copy[input_length_2048-num_cores_4-num_channels_1-bypass_False-tile_size_512] | ✅ | 161.66 | ✅ | 514.00 |
+| test_mem_copy[input_length_2048-num_cores_4-num_channels_2-bypass_False-tile_size_512] | ✅ | 173.32 | ✅ | 319.32 |
 | test_mem_copy[input_length_2048-num_cores_8-num_channels_1-bypass_False-tile_size_256] | ✅ | 197.10 | - | - |
-| test_mem_copy[input_length_2048-num_cores_8-num_channels_2-bypass_False-tile_size_256] | ✅ | 168.02 | ✅ | 484.62 |
+| test_mem_copy[input_length_2048-num_cores_8-num_channels_2-bypass_False-tile_size_256] | ✅ | 168.02 | ✅ | 622.66 |
 
 </details>
 
@@ -164,12 +164,12 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_relu[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048] | ✅ | 193.26 | ✅ | 320.66 |
-| test_relu[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024] | ✅ | 174.82 | ✅ | 319.60 |
-| test_relu[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024] | ✅ | 179.50 | ✅ | 417.16 |
-| test_relu[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512] | ✅ | 184.00 | ✅ | 344.50 |
-| test_relu[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512] | ✅ | 172.48 | ✅ | 415.18 |
-| test_relu[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256] | ✅ | 186.74 | ✅ | 390.88 |
+| test_relu[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048] | ✅ | 193.26 | ✅ | 588.30 |
+| test_relu[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024] | ✅ | 174.82 | ✅ | 386.06 |
+| test_relu[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024] | ✅ | 179.50 | ✅ | 470.52 |
+| test_relu[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512] | ✅ | 184.00 | ✅ | 377.36 |
+| test_relu[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512] | ✅ | 172.48 | ✅ | 595.98 |
+| test_relu[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256] | ✅ | 186.74 | ✅ | 444.70 |
 | test_relu[input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256] | ✅ | 189.40 | - | - |
 | test_relu[input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128] | ✅ | 249.32 | - | - |
 
@@ -180,17 +180,17 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_rms_norm[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-weighted_False] | ✅ | 174.88 | ✅ | 369.66 |
-| test_rms_norm[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-weighted_True] | ✅ | 150.70 | ✅ | 489.52 |
-| test_rms_norm[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-weighted_False] | ✅ | 142.14 | ✅ | 505.44 |
-| test_rms_norm[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-weighted_True] | ✅ | 195.00 | ✅ | 379.18 |
-| test_rms_norm[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-weighted_False] | ✅ | 159.68 | ✅ | 822.84 |
-| test_rms_norm[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-weighted_True] | ✅ | 190.66 | ✅ | 371.56 |
-| test_rms_norm[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-weighted_False] | ✅ | 163.86 | ✅ | 828.60 |
-| test_rms_norm[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-weighted_True] | ✅ | 162.56 | ✅ | 408.44 |
-| test_rms_norm[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-weighted_False] | ✅ | 156.58 | ✅ | 436.22 |
-| test_rms_norm[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-weighted_True] | ✅ | 167.38 | ✅ | 492.22 |
-| test_rms_norm[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-weighted_False] | ✅ | 185.08 | ✅ | 531.76 |
+| test_rms_norm[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-weighted_False] | ✅ | 174.88 | ✅ | 536.26 |
+| test_rms_norm[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048-weighted_True] | ✅ | 150.70 | ✅ | 441.06 |
+| test_rms_norm[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-weighted_False] | ✅ | 142.14 | ✅ | 499.60 |
+| test_rms_norm[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024-weighted_True] | ✅ | 195.00 | ✅ | 722.74 |
+| test_rms_norm[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-weighted_False] | ✅ | 159.68 | ✅ | 412.64 |
+| test_rms_norm[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024-weighted_True] | ✅ | 190.66 | ✅ | 411.20 |
+| test_rms_norm[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-weighted_False] | ✅ | 163.86 | ✅ | 377.46 |
+| test_rms_norm[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512-weighted_True] | ✅ | 162.56 | ✅ | 579.08 |
+| test_rms_norm[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-weighted_False] | ✅ | 156.58 | ✅ | 789.76 |
+| test_rms_norm[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512-weighted_True] | ✅ | 167.38 | ✅ | 293.12 |
+| test_rms_norm[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-weighted_False] | ✅ | 185.08 | ✅ | 491.86 |
 | test_rms_norm[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256-weighted_True] | ✅ | 224.02 | - | - |
 | test_rms_norm[input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256-weighted_False] | ✅ | 161.40 | - | - |
 | test_rms_norm[input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256-weighted_True] | ✅ | 183.86 | - | - |
@@ -203,13 +203,13 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_rope[rows_32-cols_512-angle_rows_32-aie_columns_1-method_type_0] | ✅ | 183.34 | ✅ | 437.96 |
-| test_rope[rows_32-cols_512-angle_rows_32-aie_columns_2-method_type_0] | ✅ | 185.40 | ✅ | 504.90 |
-| test_rope[rows_32-cols_512-angle_rows_32-aie_columns_4-method_type_0] | ✅ | 191.72 | ✅ | 502.68 |
+| test_rope[rows_32-cols_512-angle_rows_32-aie_columns_1-method_type_0] | ✅ | 183.34 | ✅ | 464.78 |
+| test_rope[rows_32-cols_512-angle_rows_32-aie_columns_2-method_type_0] | ✅ | 185.40 | ✅ | 780.52 |
+| test_rope[rows_32-cols_512-angle_rows_32-aie_columns_4-method_type_0] | ✅ | 191.72 | ✅ | 543.60 |
 | test_rope[rows_32-cols_512-angle_rows_32-aie_columns_8-method_type_0] | ✅ | 203.18 | - | - |
-| test_rope[rows_32-cols_512-angle_rows_8-aie_columns_1-method_type_0] | ✅ | 150.10 | ✅ | 745.78 |
-| test_rope[rows_32-cols_512-angle_rows_8-aie_columns_2-method_type_0] | ✅ | 159.60 | ✅ | 346.24 |
-| test_rope[rows_32-cols_512-angle_rows_8-aie_columns_4-method_type_0] | ✅ | 173.70 | ✅ | 425.06 |
+| test_rope[rows_32-cols_512-angle_rows_8-aie_columns_1-method_type_0] | ✅ | 150.10 | ✅ | 452.50 |
+| test_rope[rows_32-cols_512-angle_rows_8-aie_columns_2-method_type_0] | ✅ | 159.60 | ✅ | 763.12 |
+| test_rope[rows_32-cols_512-angle_rows_8-aie_columns_4-method_type_0] | ✅ | 173.70 | ✅ | 443.88 |
 | test_rope[rows_32-cols_512-angle_rows_8-aie_columns_8-method_type_0] | ✅ | 194.00 | - | - |
 
 </details>
@@ -219,12 +219,12 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_sigmoid[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048] | ✅ | 164.04 | ✅ | 271.08 |
-| test_sigmoid[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024] | ✅ | 179.14 | ✅ | 491.20 |
-| test_sigmoid[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024] | ✅ | 236.98 | ✅ | 334.90 |
-| test_sigmoid[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512] | ✅ | 192.56 | ✅ | 694.18 |
-| test_sigmoid[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512] | ✅ | 190.28 | ✅ | 903.94 |
-| test_sigmoid[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256] | ✅ | 205.36 | ✅ | 551.70 |
+| test_sigmoid[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048] | ✅ | 164.04 | ✅ | 417.14 |
+| test_sigmoid[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024] | ✅ | 179.14 | ✅ | 407.20 |
+| test_sigmoid[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024] | ✅ | 236.98 | ✅ | 492.86 |
+| test_sigmoid[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512] | ✅ | 192.56 | ✅ | 456.22 |
+| test_sigmoid[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512] | ✅ | 190.28 | ✅ | 608.86 |
+| test_sigmoid[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256] | ✅ | 205.36 | ✅ | 497.14 |
 | test_sigmoid[input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256] | ✅ | 207.54 | - | - |
 | test_sigmoid[input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128] | ✅ | 222.58 | - | - |
 
@@ -235,9 +235,9 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_silu[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048] | ✅ | 153.06 | ✅ | 331.54 |
-| test_silu[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024] | ✅ | 154.24 | ✅ | 442.48 |
-| test_silu[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512] | ✅ | 158.70 | ✅ | 540.60 |
+| test_silu[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048] | ✅ | 153.06 | ✅ | 422.10 |
+| test_silu[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024] | ✅ | 154.24 | ✅ | 380.72 |
+| test_silu[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512] | ✅ | 158.70 | ✅ | 443.14 |
 | test_silu[input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256] | ✅ | 163.94 | - | - |
 
 </details>
@@ -247,9 +247,9 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_softmax[input_length_32768-num_aie_columns_2-num_channels_2-tile_size_1024] | ✅ | 163.58 | ✅ | 480.06 |
-| test_softmax[input_length_32768-num_aie_columns_2-num_channels_2-tile_size_2048] | ✅ | 175.56 | ✅ | 441.52 |
-| test_softmax[input_length_32768-num_aie_columns_2-num_channels_2-tile_size_512] | ✅ | 163.42 | ✅ | 326.66 |
+| test_softmax[input_length_32768-num_aie_columns_2-num_channels_2-tile_size_1024] | ✅ | 163.58 | ✅ | 861.80 |
+| test_softmax[input_length_32768-num_aie_columns_2-num_channels_2-tile_size_2048] | ✅ | 175.56 | ✅ | 487.82 |
+| test_softmax[input_length_32768-num_aie_columns_2-num_channels_2-tile_size_512] | ✅ | 163.42 | ✅ | 515.14 |
 
 </details>
 
@@ -258,8 +258,8 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_swiglu_decode[embedding_dim_1024-hidden_dim_3584] | ✅ | 4431.69 | ✅ | 15364.62 |
-| test_swiglu_decode[embedding_dim_2048-hidden_dim_2048] | ✅ | 4150.54 | ✅ | 16117.52 |
+| test_swiglu_decode[embedding_dim_1024-hidden_dim_3584] | ✅ | 4431.69 | ✅ | 11725.34 |
+| test_swiglu_decode[embedding_dim_2048-hidden_dim_2048] | ✅ | 4150.54 | ✅ | 10218.74 |
 
 </details>
 
@@ -268,7 +268,7 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_swiglu_prefill[seq_len_256-embedding_dim_2048-hidden_dim_2048-prio_accuracy_False] | ✅ | 8841.86 | ✅ | 21805.69 |
+| test_swiglu_prefill[seq_len_256-embedding_dim_2048-hidden_dim_2048-prio_accuracy_False] | ✅ | 8841.86 | ✅ | 23890.15 |
 
 </details>
 
@@ -277,12 +277,12 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_tanh[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048] | ✅ | 140.78 | ✅ | 426.70 |
-| test_tanh[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024] | ✅ | 153.90 | ✅ | 441.14 |
-| test_tanh[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024] | ✅ | 143.28 | ✅ | 472.94 |
-| test_tanh[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512] | ✅ | 161.50 | ✅ | 362.14 |
-| test_tanh[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512] | ✅ | 166.44 | ✅ | 368.20 |
-| test_tanh[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256] | ✅ | 194.40 | ✅ | 467.24 |
+| test_tanh[input_length_2048-num_aie_columns_1-num_channels_1-tile_size_2048] | ✅ | 140.78 | ✅ | 318.78 |
+| test_tanh[input_length_2048-num_aie_columns_1-num_channels_2-tile_size_1024] | ✅ | 153.90 | ✅ | 410.56 |
+| test_tanh[input_length_2048-num_aie_columns_2-num_channels_1-tile_size_1024] | ✅ | 143.28 | ✅ | 372.36 |
+| test_tanh[input_length_2048-num_aie_columns_2-num_channels_2-tile_size_512] | ✅ | 161.50 | ✅ | 408.30 |
+| test_tanh[input_length_2048-num_aie_columns_4-num_channels_1-tile_size_512] | ✅ | 166.44 | ✅ | 521.28 |
+| test_tanh[input_length_2048-num_aie_columns_4-num_channels_2-tile_size_256] | ✅ | 194.40 | ✅ | 418.56 |
 | test_tanh[input_length_2048-num_aie_columns_8-num_channels_1-tile_size_256] | ✅ | 161.92 | - | - |
 | test_tanh[input_length_2048-num_aie_columns_8-num_channels_2-tile_size_128] | ✅ | 194.16 | - | - |
 
@@ -293,8 +293,8 @@
 
 | Test | Krackan Status | Krackan Latency (mean) | Phoenix Status | Phoenix Latency (mean) |
 |---|---|---|---|---|
-| test_transpose[M_2048-N_64-aie_columns_1-channels_1-m_64-n_64-s_8] | ✅ | 198.64 | ✅ | 984.96 |
-| test_transpose[M_2048-N_64-aie_columns_1-channels_2-m_64-n_64-s_8] | ✅ | 197.38 | ✅ | 505.64 |
+| test_transpose[M_2048-N_64-aie_columns_1-channels_1-m_64-n_64-s_8] | ✅ | 198.64 | ✅ | 512.04 |
+| test_transpose[M_2048-N_64-aie_columns_1-channels_2-m_64-n_64-s_8] | ✅ | 197.38 | ✅ | 529.80 |
 
 </details>
 
