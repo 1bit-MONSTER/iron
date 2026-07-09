@@ -4,10 +4,10 @@
 import hashlib
 import logging
 import time
+from pathlib import Path
 import numpy as np
 import ml_dtypes
 import pyxrt
-import ctypes
 import torch
 from . import compilation as comp
 from .base import AIEOperatorBase, MLIROperator
@@ -110,7 +110,7 @@ class FusedDispatch(SequenceDispatch):
         for op, *bufs in seq.runlist:
             comp_runlist.append((op_names[id(op)], *bufs))
 
-        return comp.SequenceMLIRSource(
+        return comp.SequenceMLIRArtifact(
             seq.name + "_fused.mlir",
             operator_mlir_map=operator_mlir_map,
             runlist=comp_runlist,
@@ -215,7 +215,7 @@ class ReferenceDispatch(SequenceDispatch):
     name = "reference"
 
     def set_up_artifacts(self, seq):
-        pass  # reference mode compiles nothing
+        pass
 
     def make_callable(self, seq):
         return SequenceReferenceCallable(seq)
@@ -306,7 +306,6 @@ class OperatorSequence(AIEOperatorBase):
             {}
         )  # full_buffer_name (with slice) -> (base_name, start, end, args_spec)
 
-        # Collect all buffer specs from operators
         for op, *bufs in self.runlist:
             args_specs = op.get_arg_spec()
             if len(args_specs) != len(bufs):
@@ -332,7 +331,6 @@ class OperatorSequence(AIEOperatorBase):
                             f"Sliced buffer '{buf_name}' requires explicit size for base buffer '{base_name}' in buffer_sizes parameter"
                         )
                 else:
-                    # Regular buffer (no slice)
                     if buf_name not in args:
                         args[buf_name] = args_spec
                     else:
@@ -345,14 +343,12 @@ class OperatorSequence(AIEOperatorBase):
         # Verify all input/output args are present (either as regular or sliced buffers)
         all_buffer_names = set(args.keys()) | set(sliced_buffers.keys())
         for arg in self.input_args:
-            # Check if it's a base buffer name in explicit_buffer_sizes
             if arg not in all_buffer_names and arg not in self.explicit_buffer_sizes:
                 raise ValueError(f"Input argument {arg} not found in runlist buffers")
         for arg in self.output_args:
             if arg not in all_buffer_names and arg not in self.explicit_buffer_sizes:
                 raise ValueError(f"Output argument {arg} not found in runlist buffers")
 
-        # Determine buffer types and create layout
         subbuffer_layout = {}
         slice_info = {}  # full_buffer_name -> (base_name, start, end)
 
@@ -365,7 +361,6 @@ class OperatorSequence(AIEOperatorBase):
                     subbuffer_layout[arg] = (buffer_type, offset, length)
                     offset += length
                 elif arg in args:
-                    # Regular buffer with inferred size
                     arg_spec = args[arg]
                     length = int(
                         np.prod(arg_spec.shape) * np.dtype(arg_spec.dtype).itemsize
@@ -443,21 +438,6 @@ class OperatorSequence(AIEOperatorBase):
 # ##########################################################################
 
 
-def load_elf(op):
-    assert isinstance(op.artifacts[0], comp.FullElfArtifact)
-    with open(op.artifacts[0].filename, "rb") as f:
-        return np.frombuffer(f.read(), dtype=np.uint32)
-
-
-def patch_elf(elf_data, patches):
-    for i, patch in patches.items():
-        val, mask = patch
-        val = np.uint64(val)
-        mask = np.uint64(mask)  # uint32 arithmetic would overflow
-        elf_data[i] = np.uint32((elf_data[i] & ~mask) | (val & mask))
-    return elf_data
-
-
 BF16 = np.dtype(ml_dtypes.bfloat16)
 
 
@@ -527,27 +507,50 @@ class SequenceFullELFCallable(SequenceCallable):
     sub-view into whichever consolidated buffer holds the named argument.
     """
 
-    def __init__(self, op, elf_data=None, device_name="main", sequence_name="sequence"):
+    def __init__(self, op, device_name="main", sequence_name="sequence"):
         self.device_name = device_name
         self.sequence_name = sequence_name
-        self.reload_elf(elf_data if elf_data is not None else load_elf(op))
-        super().__init__(op)
 
-    def reload_elf(self, elf_data):
-        # pyxrt.elf takes a PyCapsule wrapping the raw pointer.
-        elf_data_u8 = elf_data.view(dtype=np.uint8)
-        ctypes.pythonapi.PyCapsule_New.restype = ctypes.py_object
-        ctypes.pythonapi.PyCapsule_New.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_char_p,
-            ctypes.c_void_p,
-        ]
-        capsule = ctypes.pythonapi.PyCapsule_New(elf_data_u8.ctypes.data, None, None)
-        xrt_elf = pyxrt.elf(capsule, elf_data.nbytes)
+        assert isinstance(op.artifacts[0], comp.FullElfArtifact)
+        xrt_elf = pyxrt.elf(str(op.artifacts[0].filename))
         xrt_context = pyxrt.hw_context(aie_utils.DefaultNPURuntime._device, xrt_elf)
         self.xrt_kernel = pyxrt.ext.kernel(
             xrt_context, f"{self.device_name}:{self.sequence_name}"
         )
+
+        super().__init__(op)
+
+        # Persistent run handle: reused across dispatches so that the
+        # ctrl-scratchpad backing buffer (and any ParameterScratchpad state
+        # built on top of it) stays valid across calls.
+        self.run_handle = pyxrt.run(self.xrt_kernel)
+        self.run_handle.set_arg(0, self.input_buffer.buffer_object())
+        self.run_handle.set_arg(1, self.output_buffer.buffer_object())
+        self.run_handle.set_arg(2, self.scratch_buffer.buffer_object())
+
+        self._params = None
+
+    @property
+    def params(self):
+        """Lazy ParameterScratchpad bound to this ELF's ctrl scratchpad BO.
+
+        The ``params.txt`` describing the runtime parameters is written by
+        ``aie-lower-parameters`` into the ``<mlir>.prj`` project directory next
+        to the fused MLIR source. Returns ``None`` if the sequence declared no
+        runtime parameters (in which case the file is not written).
+        """
+        if self._params is not None:
+            return self._params
+        mlir_filename = self.op.artifacts[0].mlir_input.filename
+        params_path = Path(mlir_filename + ".prj") / "params.txt"
+        if not params_path.exists():
+            return None
+        from aie.utils.hostruntime.xrtruntime.parameter_scratchpad import (
+            ParameterScratchpad,
+        )
+
+        self._params = ParameterScratchpad(self.run_handle, str(params_path))
+        return self._params
 
     def _allocate_buffers(self):
         in_sz, out_sz, scratch_sz = self.op.buffer_sizes
@@ -586,12 +589,8 @@ class SequenceFullELFCallable(SequenceCallable):
         self.output_buffer.to("cpu")
 
     def _run(self):
-        run = pyxrt.run(self.xrt_kernel)
-        run.set_arg(0, self.input_buffer.buffer_object())
-        run.set_arg(1, self.output_buffer.buffer_object())
-        run.set_arg(2, self.scratch_buffer.buffer_object())
-        run.start()
-        ret_code = run.wait()
+        self.run_handle.start()
+        ret_code = self.run_handle.wait()
         if ret_code != pyxrt.ert_cmd_state.ERT_CMD_STATE_COMPLETED:
             raise RuntimeError(f"Kernel execution failed with return code {ret_code}")
 
