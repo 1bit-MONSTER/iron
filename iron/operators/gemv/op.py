@@ -99,3 +99,9 @@ class GEMV(MLIROperator):
             AIERuntimeArgSpec("in", batch_dim + (self.K,)),  # vector
             AIERuntimeArgSpec("out", batch_dim + (self.M,)),  # output
         ]
+
+    def reference(self, A, B):
+        """CPU reference: (optionally batched) matrix-vector product."""
+        from iron.operators.gemv.reference import reference
+
+        return reference(A, B)

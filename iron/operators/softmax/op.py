@@ -98,3 +98,14 @@ class Softmax(MLIROperator):
             AIERuntimeArgSpec("in", (self.size,)),
             AIERuntimeArgSpec("out", (self.size,)),
         ]
+
+    def reference(self, x):
+        """CPU reference: row-wise softmax over ``cols``.
+
+        Note: ignores the runtime ``vector_size_parameter`` (if any); the
+        reference always softmaxes over the full ``cols``. For decode-style
+        usage with a masked tail, the trailing positions will not match the
+        NPU output."""
+        from iron.operators.softmax.reference import reference
+
+        return reference(x.reshape(self.rows, self.cols))

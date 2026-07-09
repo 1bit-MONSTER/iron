@@ -109,3 +109,9 @@ class Transpose(MLIROperator):
             AIERuntimeArgSpec("in", batch_dim + (self.M * self.N,)),
             AIERuntimeArgSpec("out", batch_dim + (self.N * self.M,)),
         ]
+
+    def reference(self, x):
+        """CPU reference: 2D transpose of an (M, N) matrix stored row-major."""
+        from iron.operators.transpose.reference import reference
+
+        return reference(x.reshape(self.M, self.N))
