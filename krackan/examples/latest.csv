@@ -1,5 +1,5 @@
 Commit,Date,Test Path,Test,Checks,TTFT (mean),TTFT (median),TTFT (min),TTFT (max),TTFT (stddev),TPS (mean),TPS (median),TPS (min),TPS (max),TPS (stddev)
-2fadedaae4558cd201075ac68580c42c30dd6e77,2026-07-24 02:56:27,iron/applications/llama_3.2_1b/test.py::test_llama_3_2_1b,llama_3.2_1b_prompt_1024_tokens_1,5/5,2.0926,2.089,2.083,2.104,0.008619744775803989,,,,,
-2fadedaae4558cd201075ac68580c42c30dd6e77,2026-07-24 02:56:27,iron/applications/llama_3.2_1b/test.py::test_llama_3_2_1b,llama_3.2_1b_prompt_1024_tokens_40,5/5,2.1306,2.111,2.086,2.245,0.06525565109628444,7.752,7.757,7.725,7.764,0.01596871942267146
-2fadedaae4558cd201075ac68580c42c30dd6e77,2026-07-24 02:56:27,iron/applications/llama_3.2_1b/test.py::test_llama_3_2_1b,llama_3.2_1b_prompt_13_tokens_1,5/5,2.051,2.057,2.026,2.074,0.021482551058940848,,,,,
-2fadedaae4558cd201075ac68580c42c30dd6e77,2026-07-24 02:56:27,iron/applications/llama_3.2_1b/test.py::test_llama_3_2_1b,llama_3.2_1b_prompt_13_tokens_40,5/5,2.0604,2.065,2.018,2.088,0.029466930617219094,7.5554,7.539,7.508,7.608,0.04336819110823052
+2bc7f53e92f1253c63bf9de7bf5a7a7a9dc2cecd,2026-07-24 15:10:50,iron/applications/llama_3.2_1b/test.py::test_llama_3_2_1b,llama_3.2_1b_prompt_1024_tokens_1,5/5,2.0908,2.093,2.07,2.108,0.01617714437099459,,,,,
+2bc7f53e92f1253c63bf9de7bf5a7a7a9dc2cecd,2026-07-24 15:10:50,iron/applications/llama_3.2_1b/test.py::test_llama_3_2_1b,llama_3.2_1b_prompt_1024_tokens_40,5/5,2.1306,2.11,2.089,2.231,0.05811454206995003,7.7854,7.801,7.736,7.816,0.031690692639953576
+2bc7f53e92f1253c63bf9de7bf5a7a7a9dc2cecd,2026-07-24 15:10:50,iron/applications/llama_3.2_1b/test.py::test_llama_3_2_1b,llama_3.2_1b_prompt_13_tokens_1,5/5,2.0572,2.046,2.034,2.09,0.02443767583056951,,,,,
+2bc7f53e92f1253c63bf9de7bf5a7a7a9dc2cecd,2026-07-24 15:10:50,iron/applications/llama_3.2_1b/test.py::test_llama_3_2_1b,llama_3.2_1b_prompt_13_tokens_40,5/5,2.0544,2.051,2.037,2.082,0.01930802941783544,7.5168,7.519,7.494,7.53,0.014237275020171688
