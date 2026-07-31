@@ -85,6 +85,7 @@ class FusedDispatch(SequenceDispatch):
             f"{seq.name}.elf",
             mlir_input=mlir_artifact,
             dependencies=[mlir_artifact] + kernel_objects,
+            extra_flags=seq.extra_flags,
         )
         seq.add_artifacts([full_elf_artifact])
 
@@ -97,18 +98,19 @@ class FusedDispatch(SequenceDispatch):
         """
         operator_mlir_map = {}
         comp_runlist = []
-        op_names = {}  # id(op) -> op_name
+        designs, design_of = seq.unique_designs()
+        design_names = []
 
-        for idx, op in enumerate(seq.unique_operators()):
+        for idx, op in enumerate(designs):
             mlir_artifact = op.get_mlir_artifact()
             if len(op.get_kernel_artifacts()) > 0:
                 mlir_artifact.generator.kwargs["func_prefix"] = f"op{idx}_"
             op_name = f"op{idx}_{op.__class__.__name__}"
-            op_names[id(op)] = op_name
+            design_names.append(op_name)
             operator_mlir_map[op_name] = mlir_artifact
 
         for op, *bufs in seq.runlist:
-            comp_runlist.append((op_names[id(op)], *bufs))
+            comp_runlist.append((design_names[design_of[id(op)]], *bufs))
 
         return comp.SequenceMLIRArtifact(
             seq.name + "_fused.mlir",
@@ -122,7 +124,7 @@ class FusedDispatch(SequenceDispatch):
     def _collect_kernel_artifacts(self, seq):
         """Kernel artifacts from all child operators, prefixed per operator index."""
         kernel_artifacts = []
-        for idx, op in enumerate(seq.unique_operators()):
+        for idx, op in enumerate(seq.unique_designs()[0]):
             objs = op.get_kernel_artifacts()
             for obj in objs:
                 obj.filename = f"op{idx}_{obj.filename}"
@@ -262,6 +264,8 @@ class OperatorSequence(AIEOperatorBase):
         output_args,
         buffer_sizes=None,
         dispatch="auto",
+        extra_flags=None,
+        share_designs=False,
         *args,
         **kwargs,
     ):
@@ -276,12 +280,19 @@ class OperatorSequence(AIEOperatorBase):
             )
         super().__init__(*args, **kwargs)
         self.runlist = runlist
-        self.name = name
+        # Sharing changes which designs are built, so it belongs in the name that
+        # keys the build artifacts.
+        self.name = name + "_shared" if share_designs else name
         self.input_args = input_args
         self.output_args = output_args
         self.explicit_buffer_sizes = (
             buffer_sizes or {}
         )  # Optional dict: buffer_name -> size_in_bytes
+        # Extra aiecc flags forwarded to the full-ELF build (e.g. --dynamic-objFifos
+        # for placed/routed whole-array designs that would otherwise overflow AIE2p
+        # program memory). Empty by default, so other sequences are unaffected.
+        self.extra_flags = extra_flags or []
+        self.share_designs = share_designs
         self._dispatch = dispatch
 
     @staticmethod
@@ -299,6 +310,32 @@ class OperatorSequence(AIEOperatorBase):
         for op, *_ in self.runlist:
             seen.setdefault(id(op), op)
         return list(seen.values())
+
+    def unique_designs(self):
+        """The designs to build, and which design each operator uses.
+
+        With ``share_designs`` set, operators reporting the same ``design_key``
+        collapse onto one design, so it is built, prefixed and configured once.
+        """
+        designs = []
+        design_of = {}
+        first_with_key = {}
+        for op in self.unique_operators():
+            key = op.design_key() if self.share_designs else None
+            if key is not None and key in first_with_key:
+                shared = designs[first_with_key[key]]
+                if op.get_arg_spec() != shared.get_arg_spec():
+                    raise ValueError(
+                        f"{op.name} and {shared.name} report the same design_key but "
+                        "different runtime arguments, so the design cannot be shared"
+                    )
+                design_of[id(op)] = first_with_key[key]
+                continue
+            if key is not None:
+                first_with_key[key] = len(designs)
+            design_of[id(op)] = len(designs)
+            designs.append(op)
+        return designs, design_of
 
     def calculate_buffer_layout(self):
         args = {}  # base_buffer_name -> args_spec
