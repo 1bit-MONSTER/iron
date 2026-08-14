@@ -11,7 +11,6 @@ import pyxrt
 import torch
 from . import compilation as comp
 from .base import AIEOperatorBase, MLIROperator
-from .utils import XRTSubBuffer
 import aie.utils as aie_utils
 from aie.iron.device import NPU2
 from aie.utils.hostruntime.xrtruntime.tensor import XRTTensor
@@ -605,28 +604,21 @@ class SequenceFullELFCallable(SequenceCallable):
             "output": self.output_buffer,
             "scratch": self.scratch_buffer,
         }[buf_type]
-        sub = XRTSubBuffer(
-            parent_bo=parent.buffer_object(),
-            offset_bytes=offset,
-            size_bytes=length,
-            shape=(length // BF16.itemsize,),
-            dtype=ml_dtypes.bfloat16,
-            parent=parent,
-        )
+        sub = parent.subview(offset, (length // BF16.itemsize,), ml_dtypes.bfloat16)
         self._buffer_cache[buffer_name] = sub
         return sub
 
     def _sync_inputs(self):
-        # Sub-views handed out by get_buffer() mark this parent host-dirty on .data
-        # access (XRTSubBuffer.data), so `to("npu")` here actually fires the host->device
-        # sync for the freshly written inputs.
+        # Sub-views handed out by get_buffer() share the parent's coherence map, so
+        # a write through one (e.g. torch_view()) marks its byte range host-dirty
+        # there too, and `to("npu")` here syncs every dirty range in one pass.
         self.input_buffer.to("npu")
 
     def _sync_outputs(self):
         # _run just rewrote the output arena on the device, so the device holds the
         # authoritative copy. Force the device->host sync: assert device residency first
-        # so `to("cpu")` fires even if a prior read of get_buffer(...).data marked the
-        # buffer "cpu" (otherwise a looped dispatch would read stale output).
+        # so `to("cpu")` fires even if a prior read of get_buffer(...) marked some
+        # range "cpu" (otherwise a looped dispatch would read stale output).
         self.output_buffer.device = "npu"
         self.output_buffer.to("cpu")
 
@@ -697,13 +689,8 @@ class SequenceXclbinCallable(_PerBufferCallable):
         return XRTTensor((n_elements,), dtype=ml_dtypes.bfloat16)
 
     def _make_subbuffer(self, parent, offset_bytes, size_bytes):
-        return XRTSubBuffer(
-            parent_bo=parent.buffer_object(),
-            offset_bytes=offset_bytes,
-            size_bytes=size_bytes,
-            shape=(size_bytes // BF16.itemsize,),
-            dtype=ml_dtypes.bfloat16,
-            parent=parent,
+        return parent.subview(
+            offset_bytes, (size_bytes // BF16.itemsize,), ml_dtypes.bfloat16
         )
 
     def _allocate_buffers(self):
