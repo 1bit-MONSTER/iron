@@ -288,9 +288,8 @@ class OperatorSequence(AIEOperatorBase):
         self.explicit_buffer_sizes = (
             buffer_sizes or {}
         )  # Optional dict: buffer_name -> size_in_bytes
-        # Extra aiecc flags forwarded to the full-ELF build (e.g. --dynamic-objFifos
-        # for placed/routed whole-array designs that would otherwise overflow AIE2p
-        # program memory). Empty by default, so other sequences are unaffected.
+        # Extra aiecc flags forwarded to the full-ELF build. Empty by default, so
+        # other sequences are unaffected.
         self.extra_flags = extra_flags or []
         self.share_designs = share_designs
         self._dispatch = dispatch

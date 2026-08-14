@@ -49,7 +49,7 @@ class XRTSubBuffer(XRTTensor):
     The parent XRTTensor must remain alive as long as this sub-buffer is in use.
     """
 
-    def __init__(self, parent_bo, offset_bytes, size_bytes, shape, dtype, parent=None):
+    def __init__(self, parent_bo, offset_bytes, size_bytes, shape, dtype, parent):
         """
         Args:
             parent_bo: The parent pyxrt.bo object.
@@ -57,18 +57,23 @@ class XRTSubBuffer(XRTTensor):
             size_bytes: Size of this sub-region in bytes.
             shape: Tuple giving the logical shape of this sub-buffer.
             dtype: numpy dtype for interpreting the buffer contents.
-            parent: The parent XRTTensor this sub-buffer views into. When given,
+            parent: The parent XRTTensor this sub-buffer views into. Its
+                storage/coherence tracking is shared rather than duplicated, so
                 moving this sub-buffer between devices propagates the resulting
                 device state to the parent (they share the same memory), so a
                 later whole-parent sync stays consistent with the sub-views.
         """
         # Skip XRTTensor.__init__ (which would allocate a new bo); set base attrs directly.
-        self.device = "npu"
         self.dtype = np.dtype(dtype)
         self._parent = parent
+        self._shape = tuple(shape)
+        # Share the parent's storage/coherence tracking (mirrors upstream
+        # NpuTensor._subview) instead of building our own: this is a sub-region
+        # of memory the parent already owns and syncs, not a fresh allocation.
+        self._storage = parent._storage
+        self._offset_bytes = parent.storage_offset + offset_bytes
         # TODO: replace with XRTTensor.__getitem__ slice support when available upstream
         self._bo = _pyxrt.bo(parent_bo, size_bytes, offset_bytes)
-        self._shape = tuple(shape)
         ptr = self._bo.map()
         self._data = np.frombuffer(ptr, dtype=self.dtype).reshape(self._shape)
 
@@ -87,8 +92,7 @@ class XRTSubBuffer(XRTTensor):
         # so the op computes on stale init-zeros. A redundant re-read sync is cheap;
         # a silently-skipped write sync is a correctness bug.
         self.device = "cpu"
-        if self._parent is not None:
-            self._parent.device = "cpu"
+        self._parent.device = "cpu"
         return self._data
 
     def buffer_object(self):
@@ -115,15 +119,13 @@ class XRTSubBuffer(XRTTensor):
         keep a now-stale ``device`` flag. Revisit once XRT's sub-buffer sync
         semantics are pinned down (or track per-region dirtiness).
         """
-        if self._parent is not None:
-            # Reflect this sub-view's current residency onto the parent (e.g.
-            # "cpu" after a torch_view() write) so the parent's own sync fires
-            # instead of no-opping, then sync the whole parent buffer.
-            self._parent.device = self.device
-            result = self._parent.to(target_device)
-            self.device = self._parent.device
-            return result
-        return super().to(target_device)
+        # Reflect this sub-view's current residency onto the parent (e.g.
+        # "cpu" after a torch_view() write) so the parent's own sync fires
+        # instead of no-opping, then sync the whole parent buffer.
+        self._parent.device = self.device
+        result = self._parent.to(target_device)
+        self.device = self._parent.device
+        return result
 
     @classmethod
     def from_parent(cls, parent, shape, offset_elements, length_elements, dtype):

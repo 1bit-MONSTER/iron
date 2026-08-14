@@ -526,8 +526,6 @@ class AieccFullElfCompilationRule(AieccCompilationRule):
                 ]
             else:
                 compile_cmd += [
-                    "--no-xchesscc",
-                    "--no-xbridge",
                     "--peano",
                     str(self.peano_dir),
                 ]
@@ -580,14 +578,9 @@ class AieccXclbinInstsCompilationRule(AieccCompilationRule):
                 ]
             else:
                 compile_cmd += [
-                    "--no-xchesscc",
-                    "--no-xbridge",
                     "--peano",
                     str(self.peano_dir),
                 ]
-            compile_cmd += [
-                "--dynamic-objFifos",
-            ]
             do_compile_xclbin = mlir_source in mlir_sources_to_xclbins
             do_compile_insts_bin = mlir_source in mlir_sources_to_insts
             if do_compile_xclbin:
