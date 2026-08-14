@@ -49,6 +49,7 @@ from typing import Any, Callable
 import sys
 
 from iron.common.device_utils import get_kernel_dir
+from aie.utils.compile.utils import compile_cxx_core_function
 
 # Global Functions
 # ##########################################################################
@@ -704,7 +705,6 @@ class KernelCompilationRule(CompilationRule):
         return any(artifacts.get_worklist(KernelObjectArtifact))
 
     def compile(self, artifacts):
-        include_path = Path(self.mlir_aie_dir) / "include"
         worklist = artifacts.get_worklist(KernelObjectArtifact)
         commands = []
 
@@ -724,41 +724,28 @@ class KernelCompilationRule(CompilationRule):
                     "Expected KernelObject dependency to be a C source file"
                 )
 
-            if self.use_chess:
-                wrapper_path = Path(self.mlir_aie_dir) / "bin" / "xchesscc_wrapper"
-                cmd = (
-                    [
-                        str(wrapper_path),
-                        kernel_dir,  # e.g. "aie2" or "aie2p"
-                        f"-I{str(include_path)}",
-                        f"-I{str(runtime_lib_include_path)}",
-                    ]
-                    + artifact.extra_flags
-                    + ["-c", source_file.filename, "-o", artifact.filename]
-                )
-            else:
-                clang_path = Path(self.peano_dir) / "bin" / "clang++"
-                target = f"{kernel_dir}-none-unknown-elf"
-                cmd = (
-                    [
-                        str(clang_path),
-                        "-O2",
-                        "-std=c++20",
-                        f"--target={target}",
-                        "-D__AIE_API_AIE_ADF_HPP__",
-                        "-Wno-parentheses",
-                        "-Wno-attributes",
-                        "-Wno-macro-redefined",
-                        "-Wno-empty-body",
-                        "-Wno-missing-template-arg-list-after-template-kw",
-                        f"-I{str(include_path)}",
-                        f"-I{str(runtime_lib_include_path)}",
-                    ]
-                    + artifact.extra_flags
-                    + ["-c", source_file.filename, "-o", artifact.filename]
-                )
+            # -Wno-missing-template-arg-list-after-template-kw only applies to
+            # the Peano (clang) path: xchesscc's own front end doesn't
+            # recognize it, and upstream's chess branch never carried it.
+            compile_args = list(artifact.extra_flags)
+            if not self.use_chess:
+                compile_args = [
+                    "-Wno-missing-template-arg-list-after-template-kw"
+                ] + compile_args
 
-            commands.append(ShellCompilationCommand(cmd))
+            commands.append(
+                PythonCallbackCompilationCommand(
+                    partial(
+                        compile_cxx_core_function,
+                        source_path=source_file.filename,
+                        target_arch=kernel_dir,
+                        output_path=artifact.filename,
+                        include_dirs=[str(runtime_lib_include_path)],
+                        compile_args=compile_args,
+                        use_chess=self.use_chess,
+                    )
+                )
+            )
             if artifact.rename_symbols:
                 commands.extend(self._rename_symbols(artifact))
             if artifact.prefix_symbols:
