@@ -23,7 +23,7 @@ def float_to_name(v: float) -> str:
     """Convert a float to a filesystem-safe string for use in operator names.
 
     Uses repr() for the shortest exact round-trip representation, then sanitizes
-    characters that are problematic in filenames or shell scripts:
+    characters that are problematic in filenames or shell scripts, for instance:
       '.' -> 'p'  (decimal point)
       '-' -> 'n'  (negative sign / negative exponent)
       '+' -> ''   (positive exponent, redundant)
