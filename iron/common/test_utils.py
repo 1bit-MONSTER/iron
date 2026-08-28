@@ -99,7 +99,9 @@ def verify_buffer(
         + np.abs(expected_np[:compare_len].astype(float)),
         np.finfo(np.float32).max,
     )
-    mask = diff >= np.maximum(abs_tol, rel_tol * norm)
+    # Use `>`, not `>=`, here, so that a user can pass rel_tol=abs_tol=0
+    # check exact equality.
+    mask = diff > np.maximum(abs_tol, rel_tol * norm)
     error_indices = np.where(mask)[0].tolist()
     for i in error_indices[:10]:
         print(
