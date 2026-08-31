@@ -170,8 +170,15 @@ matmul_vectorized_2x2_mmul(const T_in *__restrict pA, const T_in *__restrict pB,
                         B1 = aie::transpose(aie::load_v<MMUL::size_B>(pB2), t, s);
                         pB2 += MMUL::size_B;
                     }
+                    // The k-loop runs colA-1 iterations (compile-time). The
+                    // pipelining hint must not overstate that trip count: a
+                    // chess_loop_range min above the real count mis-schedules
+                    // small K tiles (e.g. DIM_K=32 with s=8 -> 3 trips < 4).
+                    constexpr unsigned k_loop_trips = colA - 1;
+                    constexpr unsigned k_loop_hint =
+                        k_loop_trips >= 4 ? 4 : (k_loop_trips > 0 ? k_loop_trips : 1);
                     for (unsigned i = 1; i < colA; ++i)
-                        chess_prepare_for_pipelining chess_loop_range(4, )
+                        chess_prepare_for_pipelining chess_loop_range(k_loop_hint, )
                         {
                             aie::vector<T_in, MMUL::size_A> A0n =
                                 aie::load_v<MMUL::size_A>(pA1);
