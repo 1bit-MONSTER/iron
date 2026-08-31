@@ -114,6 +114,7 @@ class AIELlamaOperators:
                 K=config.emb_dim,
                 N=config.hidden_dim,
                 num_aie_columns=8,
+                emulate_bf16_mmul_with_bfp16=False,
                 tile_m=64,
                 tile_k=64,
                 tile_n=64,
@@ -130,6 +131,7 @@ class AIELlamaOperators:
                 K=config.hidden_dim,
                 N=config.emb_dim,
                 num_aie_columns=8,
+                emulate_bf16_mmul_with_bfp16=False,
                 tile_m=64,
                 tile_k=64,
                 tile_n=64,
@@ -161,6 +163,48 @@ class AIELlamaOperators:
             .compile()
             .get_callable()
         )
+
+        # Fused FFN path (LLAMA_FUSED_FFN=1): one ELF for
+        # gate/up GEMM -> SiLU -> mul -> down GEMM -> residual.
+        self.prefill.ffn_fused = None
+        if __import__("os").environ.get("LLAMA_FUSED_FFN"):
+            elf_ctx = AIEContext(build_dir="build_elf_prefill_ffn")
+            ffg = GEMM(M=prompt_len, K=config.emb_dim, N=config.hidden_dim,
+                       tile_m=64, tile_k=64, tile_n=64, num_aie_columns=8,
+                       b_col_maj=False, emulate_bf16_mmul_with_bfp16=False,
+                       context=elf_ctx)
+            ffu = GEMM(M=prompt_len, K=config.emb_dim, N=config.hidden_dim,
+                       tile_m=64, tile_k=64, tile_n=64, num_aie_columns=8,
+                       b_col_maj=False, emulate_bf16_mmul_with_bfp16=False,
+                       context=elf_ctx)
+            ffd = GEMM(M=prompt_len, K=config.hidden_dim, N=config.emb_dim,
+                       tile_m=64, tile_k=64, tile_n=64, num_aie_columns=8,
+                       b_col_maj=False, emulate_bf16_mmul_with_bfp16=False,
+                       context=elf_ctx)
+            ffs = SiLU(size=prompt_len * config.hidden_dim,
+                       tile_size=config.hidden_dim, num_aie_columns=8,
+                       context=elf_ctx)
+            ffm = ElementwiseMul(size=prompt_len * config.hidden_dim,
+                                 tile_size=config.hidden_dim, num_aie_columns=8,
+                                 context=elf_ctx)
+            ffa = ElementwiseAdd(size=prompt_len * config.emb_dim,
+                                 tile_size=config.emb_dim, num_aie_columns=8,
+                                 context=elf_ctx)
+            runlist = [
+                (ffg, "x_norm", "W_ffn_gate", "ffn_gate"),
+                (ffu, "x_norm", "W_ffn_up", "ffn_up"),
+                (ffs, "ffn_gate", "ffn_gate"),
+                (ffm, "ffn_gate", "ffn_up", "ffn_hidden"),
+                (ffd, "ffn_hidden", "W_ffn_down", "ffn_output"),
+                (ffa, "x", "ffn_output", "x"),
+            ]
+            _seq = OperatorSequence(
+                "prefill_ffn", runlist,
+                input_args=["x_norm", "W_ffn_gate", "W_ffn_up", "W_ffn_down", "x"],
+                output_args=["x"], context=elf_ctx,
+            ).compile()
+            self.prefill.ffn_fused = _seq.get_callable()
+            print("[fused-ffn] built fused prefill FFN ELF", flush=True)
 
         # Attention score scaling operators
         # FIXME: Using elementwise mul is very wasteful (of bandwidth) here since it's the same scalar factor for all values; need a kernel that allows scalar multiplication of a vector; maybe use AXPY
@@ -209,6 +253,7 @@ class AIELlamaOperators:
                 K=config.emb_dim,
                 N=config.n_heads * config.head_dim,
                 num_aie_columns=8,
+                emulate_bf16_mmul_with_bfp16=False,
                 tile_m=64,
                 tile_k=64,
                 tile_n=64,
@@ -226,6 +271,7 @@ class AIELlamaOperators:
                 K=config.emb_dim,
                 N=config.n_kv_groups * config.head_dim,
                 num_aie_columns=8,
+                emulate_bf16_mmul_with_bfp16=False,
                 tile_m=64,
                 tile_k=64,
                 tile_n=64,
@@ -243,6 +289,7 @@ class AIELlamaOperators:
                 K=config.emb_dim,
                 N=config.n_kv_groups * config.head_dim,
                 num_aie_columns=8,
+                emulate_bf16_mmul_with_bfp16=False,
                 tile_m=64,
                 tile_k=64,
                 tile_n=64,
@@ -261,6 +308,7 @@ class AIELlamaOperators:
                 K=config.head_dim,
                 N=prompt_len,
                 num_aie_columns=8,
+                emulate_bf16_mmul_with_bfp16=False,
                 tile_m=64,
                 tile_k=64,
                 tile_n=64,
@@ -991,6 +1039,40 @@ def grouped_query_attention_forward_prefill(
 
 
 def swiglu_ffn_forward_prefill(layer_idx):
+    if aie_ops.prefill.ffn_fused is not None:
+        c = aie_ops.prefill.ffn_fused
+        # Per-layer weights (host round-trip into the shared fused buffers).
+        c.get_buffer("W_ffn_gate").torch_view()[:] = (
+            aie_buffers.W_ffn_gate_prefill[layer_idx].to_torch().flatten())
+        c.get_buffer("W_ffn_up").torch_view()[:] = (
+            aie_buffers.W_ffn_up_prefill[layer_idx].to_torch().flatten())
+        c.get_buffer("W_ffn_down").torch_view()[:] = (
+            aie_buffers.W_ffn_down_prefill[layer_idx].to_torch().flatten())
+        # x_norm and x (residual stream) into the fused buffers.
+        c.get_buffer("x_norm").torch_view()[:] = (
+            aie_buffers.prefill.x_norm.to_torch().flatten())
+        c.get_buffer("x").torch_view()[:] = (
+            aie_buffers.prefill.x.to_torch().flatten())
+        c()
+        # Debug: dump fused intermediates for comparison against the
+        # verified separate-path dumps (LLAMA_FUSED_DUMP=/path/prefix).
+        _dfd = __import__("os").environ.get("LLAMA_FUSED_DUMP")
+        if _dfd and layer_idx < 2:
+            c.scratch_buffer.to("cpu")
+            for _bn in ("ffn_gate", "ffn_up", "ffn_hidden", "ffn_output"):
+                np.save(f"{_dfd}_{_bn}{layer_idx:02d}.npy",
+                        c.get_buffer(_bn).to_torch().float().numpy())
+            np.save(f"{_dfd}_x_out{layer_idx:02d}.npy",
+                    c.get_buffer("x").to_torch().float().numpy())
+        # Read the fused residual back into the app's x buffer.
+        # get_buffer("x") is a flat 1-D subview of the output BO; the app's
+        # buffer is (max_seq_len, emb_dim), so reshape (not flatten) to match.
+        aie_buffers.prefill.x.torch_view()[:] = c.get_buffer("x").to_torch().reshape(
+            aie_buffers.prefill.x.shape
+        )
+        aie_buffers.prefill.x.to("npu")
+        return
+
     # Step 1: Gate projection
     aie_ops.prefill.ffn_up_gate(
         aie_buffers.prefill.x_norm,
@@ -998,12 +1080,21 @@ def swiglu_ffn_forward_prefill(layer_idx):
         aie_buffers.prefill.ffn_gate,
     )
 
+    _df = __import__("os").environ.get("LLAMA_FFN_DUMP")
+    if _df and layer_idx < 2:
+        np.save(f"{_df}_gate{layer_idx:02d}.npy",
+                aie_buffers.prefill.ffn_gate.to_torch().float().numpy())
+
     # Step 2: Up projection
     aie_ops.prefill.ffn_up_gate(
         aie_buffers.prefill.x_norm,
         aie_buffers.W_ffn_up_prefill[layer_idx],
         aie_buffers.prefill.ffn_up,
     )
+
+    if _df and layer_idx < 2:
+        np.save(f"{_df}_up{layer_idx:02d}.npy",
+                aie_buffers.prefill.ffn_up.to_torch().float().numpy())
 
     # Step 3: Apply SiLU activation
     aie_ops.prefill.ffn_silu(aie_buffers.prefill.ffn_gate, aie_buffers.prefill.ffn_gate)
@@ -1015,12 +1106,20 @@ def swiglu_ffn_forward_prefill(layer_idx):
         aie_buffers.prefill.ffn_hidden,
     )
 
+    if _df and layer_idx < 2:
+        np.save(f"{_df}_hidden{layer_idx:02d}.npy",
+                aie_buffers.prefill.ffn_hidden.to_torch().float().numpy())
+
     # Step 5: Down projection
     aie_ops.prefill.ffn_down(
         aie_buffers.prefill.ffn_hidden,
         aie_buffers.W_ffn_down_prefill[layer_idx],
         aie_buffers.prefill.ffn_output,
     )
+
+    if _df and layer_idx < 2:
+        np.save(f"{_df}_output{layer_idx:02d}.npy",
+                aie_buffers.prefill.ffn_output.to_torch().float().numpy())
 
 
 def transformer_block_forward_prefill(
@@ -1057,6 +1156,10 @@ def transformer_block_forward_prefill(
     aie_ops.prefill.residual_add(
         aie_buffers.prefill.x, aie_buffers.prefill.attn_output, aie_buffers.prefill.x
     )
+    _dxin = __import__("os").environ.get("LLAMA_XIN_DUMP")
+    if _dxin and layer_idx in (0, 1, 5, 10, 20, 31):
+        np.save(f"{_dxin}_layer{layer_idx:02d}.npy",
+                aie_buffers.prefill.x.to_torch().float().numpy())
     x = aie_buffers.prefill.x.to_torch().unsqueeze(0)[:, :seq_len, :]
 
     # Step 4: Post-norm
@@ -1067,15 +1170,25 @@ def transformer_block_forward_prefill(
         aie_buffers.W_norm2[layer_idx],
         aie_buffers.prefill.x_norm,
     )
+    _dx = __import__("os").environ.get("LLAMA_XNORM_DUMP")
+    if _dx and layer_idx < 2:
+        np.save(f"{_dx}_layer{layer_idx:02d}.npy",
+                aie_buffers.prefill.x_norm.to_torch().float().numpy())
     x_norm = aie_buffers.prefill.x_norm.to_torch().unsqueeze(0)[:, :seq_len, :]
 
     # Step 5: Feed-forward network
     swiglu_ffn_forward_prefill(layer_idx)
 
     # Step 6: Residual
-    aie_ops.prefill.residual_add(
-        aie_buffers.prefill.x, aie_buffers.prefill.ffn_output, aie_buffers.prefill.x
-    )
+    if aie_ops.prefill.ffn_fused is None:
+        aie_ops.prefill.residual_add(
+            aie_buffers.prefill.x, aie_buffers.prefill.ffn_output, aie_buffers.prefill.x
+        )
+
+    _dxp = __import__("os").environ.get("LLAMA_XPOST_DUMP")
+    if _dxp and layer_idx in (0, 1, 5, 10, 12, 14, 15):
+        np.save(f"{_dxp}_layer{layer_idx:02d}.npy",
+                aie_buffers.prefill.x.to_torch().float().numpy())
 
     return attn_keys, attn_values
 
@@ -1143,6 +1256,11 @@ def llama_forward_pass_prefill(config, state):
         )
         aie_buffers.keys_cache[layer_idx].to("npu")
         aie_buffers.values_cache[layer_idx].to("npu")
+
+    # DEBUG: dump first-token logits (determinism/correctness check).
+    _dump = __import__("os").environ.get("LLAMA_LOGITS_DUMP")
+    if _dump:
+        np.save(_dump, logits[0, -1, :].float().numpy())
 
     return logits, state
 

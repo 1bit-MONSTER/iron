@@ -11,6 +11,7 @@ build/*
 **/_build/**
 **/build/**
 **/build_elf/**
+**/build_elf_*/
 *.exe
 *.csv
 secret_github_token
