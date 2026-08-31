@@ -27,9 +27,8 @@ from iron.operators._trace import maybe_enable_trace
 microkernel_mac_dim_map = {
     "npu1": {
         "bf16": (4, 8, 4),
-    },
-    "npu1": {
-        "bf16": (4, 8, 4),
+        "i8": (8, 8, 8),
+        "i16": (4, 4, 8),
     },
     "npu2": {
         "bf16": {
@@ -37,6 +36,8 @@ microkernel_mac_dim_map = {
             True: (8, 8, 8),
             False: (4, 8, 8),
         },
+        "i8": (8, 8, 8),
+        "i16": (4, 4, 8),
     },
 }
 

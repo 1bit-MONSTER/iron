@@ -34,8 +34,8 @@ class GEMM(MLIROperator):
     emulate_bf16_mmul_with_bfp16: bool = field(default=True, repr=False)
     prio_accuracy: bool = field(default=False, repr=False)
     round_conv_even: bool = field(default=True, repr=False)
-    dtype_in: str = field(default="bf16", repr=False)
-    dtype_out: str = field(default="bf16", repr=False)
+    dtype_in: str = field(default="bf16")
+    dtype_out: str = field(default="bf16")
     use_scalar: bool = field(default=False, repr=False)
     separate_c_tiles: bool = field(default=False, repr=False)
     context: object = field(default=None, repr=False)
@@ -61,23 +61,67 @@ class GEMM(MLIROperator):
         if self.N % min_N != 0:
             raise ValueError(f"N ({self.N}) must be a multiple of {min_N}")
 
-        if self.emulate_bf16_mmul_with_bfp16:
-            min_tile_m, min_tile_k, min_tile_n = 8, 8, 8
+        # r/s/t MAC shapes per dtype (see microkernel_mac_dim_map in design.py).
+        # The vectorized kernels static_assert m % (2*r) == 0, k % s == 0,
+        # n % (2*t) == 0, so the tile must be a multiple of (2r, s, 2t).
+        if self.dtype_in == "i8":
+            r, s, t = 8, 8, 8
+        elif self.dtype_in == "i16":
+            r, s, t = 4, 4, 8
+        elif self.emulate_bf16_mmul_with_bfp16:
+            r, s, t = 8, 8, 8
         else:
-            min_tile_m, min_tile_k, min_tile_n = 4, 8, 8
-        if self.tile_m < min_tile_m:
-            raise ValueError(f"tile_m ({self.tile_m}) must be >= {min_tile_m}")
-        if self.tile_k < min_tile_k:
-            raise ValueError(f"tile_k ({self.tile_k}) must be >= {min_tile_k}")
-        if self.tile_n < min_tile_n:
-            raise ValueError(f"tile_n ({self.tile_n}) must be >= {min_tile_n}")
+            r, s, t = 4, 8, 8
+        min_tile_m, min_tile_k, min_tile_n = 2 * r, s, 2 * t
+        if (self.tile_m % min_tile_m) != 0 or (self.tile_k % min_tile_k) != 0 or (self.tile_n % min_tile_n) != 0:
+            raise ValueError(
+                f"tile sizes ({self.tile_m},{self.tile_k},{self.tile_n}) must be multiples of "
+                f"({min_tile_m},{min_tile_k},{min_tile_n}) for dtype {self.dtype_in}"
+            )
+
+        # Integer microkernels accumulate in 32 bits (accauto resolves int8xint8
+        # and int16xint16 to a 32-bit accumulator). Narrowing that accumulator
+        # into a smaller output (i8->i8, i8->i16, i16->i16) silently truncates,
+        # so only the exact 32-bit integer output is supported.
+        if self.dtype_in in ("i8", "i16") and self.dtype_out != "i32":
+            raise ValueError(
+                f"dtype_out ({self.dtype_out}) for dtype_in={self.dtype_in} must be 'i32': "
+                f"integer microkernels accumulate in 32 bits; narrower outputs truncate"
+            )
 
         MLIROperator.__init__(self, context=self.context)
 
     @property
     def _kernel_flags_suffix(self):
         """Suffix encoding compile-time flags that affect the kernel binary."""
-        return f"_{int(self.prio_accuracy)}_{int(self.emulate_bf16_mmul_with_bfp16)}_{int(self.round_conv_even)}"
+        return f"_{self.dtype_in}_{self.dtype_out}_{int(self.prio_accuracy)}_{int(self.emulate_bf16_mmul_with_bfp16)}_{int(self.round_conv_even)}"
+
+    @property
+    def _kernel_dtype_flag(self) -> str:
+        """Compile-time -D flag selecting the dtype combo in aie_kernels/**/mm.cc.
+
+        The microkernel library instantiates extern-C entry points from a
+        ``combos(X)`` list; exactly one ``*_ONLY`` define narrows it to a
+        single (input, output) dtype pair so the object file exports only the
+        symbols this operator references.
+
+        With ``prio_accuracy`` the design accumulates in an internal f32 buffer
+        and resolves the kernels as ``matmul_{dtype_in}_f32`` / ``zero_f32``
+        (see design.py), so the kernel object must be built with the f32-output
+        combo even though the user-visible output dtype stays bf16.
+        """
+        if self.prio_accuracy:
+            if self.dtype_in != "bf16":
+                raise ValueError(
+                    f"prio_accuracy is only supported for dtype_in='bf16', got {self.dtype_in!r}"
+                )
+            return "bf16_f32_ONLY"
+        return {
+            ("bf16", "bf16"): "bf16_bf16_ONLY",
+            ("bf16", "f32"): "bf16_f32_ONLY",
+            ("i8", "i32"): "i8_i32_ONLY",
+            ("i16", "i32"): "i16_i32_ONLY",
+        }[(self.dtype_in, self.dtype_out)]
 
     def get_mlir_artifact(self):
         return PythonGeneratedMLIRArtifact(
@@ -117,14 +161,11 @@ class GEMM(MLIROperator):
             f"-DDIM_K={self.tile_k}",
             f"-DDIM_N={self.tile_n}",
         ]
-        if self.prio_accuracy:
-            kernel_flags.append("-Dbf16_f32_ONLY")
-        else:
-            kernel_flags.append("-Dbf16_bf16_ONLY")
+        kernel_flags.append(f"-D{self._kernel_dtype_flag}")
+        if self.dtype_in == "bf16" and self.emulate_bf16_mmul_with_bfp16:
+            kernel_flags.append("-DAIE_API_EMULATE_BFLOAT16_MMUL_WITH_BFP16")
         if self.round_conv_even:
             kernel_flags.append("-DROUND_CONV_EVEN")
-        if self.emulate_bf16_mmul_with_bfp16:
-            kernel_flags.append("-DAIE_API_EMULATE_BFLOAT16_MMUL_WITH_BFP16")
         if self.b_col_maj:
             kernel_flags.append("-DB_COL_MAJ")
         if self.c_col_maj:
