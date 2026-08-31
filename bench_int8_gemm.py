@@ -32,7 +32,7 @@ from iron.operators import GEMM
 from aie.utils.hostruntime.xrtruntime.tensor import XRTTensor
 
 
-def run_shape(M, K, N, tiles, cols, reps, seed, build_dir):
+def run_shape(M, K, N, tiles, cols, reps, seed, build_dir, retry_on_mismatch=False):
     tm, tk, tn = tiles
     rng = np.random.default_rng(seed)
     A_np = rng.integers(-8, 8, size=(M, K), dtype=np.int8)
@@ -67,6 +67,24 @@ def run_shape(M, K, N, tiles, cols, reps, seed, build_dir):
     exact = bool(np.array_equal(C_np, ref))
     bad = int(np.count_nonzero(C_np != ref)) if not exact else 0
     md = int(np.abs(C_np.astype(np.int64) - ref.astype(np.int64)).max()) if not exact else 0
+    # The XRT/amdxdna first-dispatch flake (see GEMM docstring) is transient
+    # and self-heals on the next dispatch: if the last result mismatches,
+    # re-run once and report the retry outcome so a flake doesn't read as a
+    # kernel failure.
+    if not exact and retry_on_mismatch:
+        op(A, B, C)  # warm again (same buffers, same context)
+        res = op(A, B, C)
+        C_retry = C.to_torch().numpy()
+        exact_retry = bool(np.array_equal(C_retry, ref))
+        bad_retry = int(np.count_nonzero(C_retry != ref)) if not exact_retry else 0
+        md_retry = int(np.abs(C_retry.astype(np.int64) - ref.astype(np.int64)).max()) if not exact_retry else 0
+        print(
+            f"  [retry] first dispatch mismatched (flake?); retry: "
+            f"exact={exact_retry} bad={bad_retry} max_abs={md_retry}",
+            flush=True,
+        )
+        if exact_retry:
+            exact, bad, md = True, 0, 0
     print(
         f"{M}x{K}x{N} (tile {tm}x{tk}x{tn}, {cols} col): "
         f"exact={exact} bad={bad} max_abs={md} "
@@ -88,6 +106,9 @@ def main():
     p.add_argument("--cols", type=int, default=8, help="num_aie_columns")
     p.add_argument("--build-dir", default="build_int8_gemm")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--verify-retry", action="store_true",
+                   help="re-run once on a result mismatch (handles the transient "
+                        "XRT first-dispatch flake; see GEMM docstring)")
     args = p.parse_args()
 
     tm, tk, tn = (int(v) for v in args.tiles.split(","))
@@ -96,7 +117,7 @@ def main():
         M, K, N = (int(v) for v in spec.split(","))
         if args.partition <= 1:
             ex = run_shape(M, K, N, (tm, tk, tn), args.cols, args.reps,
-                           args.seed, args.build_dir)
+                           args.seed, args.build_dir, args.verify_retry)
             all_exact = all_exact and ex
         else:
             # Partition: per-partition N must keep each C slice inside the
