@@ -220,11 +220,12 @@ def build_npu_layers(weights, build_dir):
             "down": (f"model.layers.{i}.mlp.down_proj.weight", CONFIG["hidden_dim"], CONFIG["emb_dim"]),
         }.items():
             ops_mix = __import__("os").environ.get("W4A8_OPS_MIX", "")
+            attn_i8 = set(__import__("os").environ.get("W4A8_ATTN_I8", "").split(","))
             is_attn = name in ("q", "k", "v", "o")
             if ops_mix == "attn_i8":   # attention weights i8, FFN i4
                 dt = "i8" if is_attn else "i4"
             elif ops_mix == "ffn_i8":  # FFN weights i8, attention i4
-                dt = "i8" if not is_attn else "i4"
+                dt = "i8" if not is_attn or name in attn_i8 else "i4"
             else:
                 dt = "i8" if i < mix else "i4"
             B_ref, s_w = quantize_weight(weights[Wkey], dt)

@@ -22,7 +22,7 @@ Config knobs (env):
 - `W4A8_TRACE_ZERO=1` — trace all-zero activation rows.
 
 Recommended: `W4A8_OPS_MIX=ffn_i8 W4A8_GROUPS=8` — FFN i8 + attention i4 G8:
-corr 0.989 (attn G4), top1 exact, top5 5/5, decode 559 ms/token.
+corr 0.992-0.993, top1 exact, decode 554 ms/token.
 
 ## Results (llama-3.2-1B, vs bf16 CPU reference)
 
