@@ -17,9 +17,12 @@ Config knobs (env):
 - `W4A8_GROUPS=N` — i4 weight K-groups (Q4_K-style per-group scales). 16 = best quality.
 - `W4A8_MIX_LEN=N` — first N layers keep i8 weights (near-exact). 8 recommended.
 - `W4A8_GROUP_ACTS=1` — per-group activation scales (marginal).
+- `W4A8_OPS_MIX=ffn_i8|attn_i8` — FFN or attention weights stay i8 (**ffn_i8 is the quality win**).
+- `W4A8_ZP=1` — asymmetric zero-point i4 (measured no gain on llama; disabled).
 - `W4A8_TRACE_ZERO=1` — trace all-zero activation rows.
 
-Recommended: `W4A8_MIX_LEN=8 W4A8_GROUPS=16`.
+Recommended: `W4A8_OPS_MIX=ffn_i8 W4A8_GROUPS=8` — FFN i8 + attention i4 G8:
+corr 0.989 (attn G4), top1 exact, top5 5/5, decode 559 ms/token.
 
 ## Results (llama-3.2-1B, vs bf16 CPU reference)
 
@@ -31,7 +34,8 @@ Recommended: `W4A8_MIX_LEN=8 W4A8_GROUPS=16`.
 | i4 G=8 | 0.966 |
 | i4 G=16 | 0.973 |
 | i4 G=16 + group acts | 0.974 |
-| mix 8 + G=16 | **0.977–0.979** |
+| mix 8 + G=16 | 0.977–0.979 |
+| **FFN i8 + attn i4 G8** | **0.983–0.990** | recommended |
 | all i8 weights | 0.9965 (bound) |
 
 Top-1 is exact on both test prompts for every config >= G=8.
