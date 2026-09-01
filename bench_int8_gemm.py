@@ -32,7 +32,7 @@ from iron.operators import GEMM
 from aie.utils.hostruntime.xrtruntime.tensor import XRTTensor
 
 
-def run_shape(M, K, N, tiles, cols, reps, seed, build_dir, retry_on_mismatch=False):
+def run_shape(M, K, N, tiles, cols, reps, seed, build_dir, retry_on_mismatch=False, b_i4=False):
     tm, tk, tn = tiles
     rng = np.random.default_rng(seed)
     A_np = rng.integers(-8, 8, size=(M, K), dtype=np.int8)
@@ -41,19 +41,24 @@ def run_shape(M, K, N, tiles, cols, reps, seed, build_dir, retry_on_mismatch=Fal
 
     ctx = AIEContext(build_dir=build_dir)
     ctx.build_dir.mkdir(parents=True, exist_ok=True)
+    kw = dict(M=M, K=K, N=N, tile_m=tm, tile_k=tk, tile_n=tn,
+              num_aie_columns=cols, dtype_in="i8", dtype_out="i32", context=ctx)
+    if b_i4:
+        # Asymmetric 4-bit weights: B arrives packed (K, N//2) int8 (two
+        # nibbles per byte, low nibble first) and the kernel uses the AIE2P
+        # 4x16x16 mmul (2x int8xint8 MAC density). N must be even.
+        assert N % 2 == 0, "N must be even for packed i4 weights"
+        kw["dtype_b"] = "i4"
     op = (
-        GEMM(
-            M=M, K=K, N=N, tile_m=tm, tile_k=tk, tile_n=tn,
-            num_aie_columns=cols, dtype_in="i8", dtype_out="i32", context=ctx,
-        )
+        GEMM(**kw)
         .compile()
         .get_callable()
     )
     A = XRTTensor((M, K), dtype=np.int8)
-    B = XRTTensor((K, N), dtype=np.int8)
+    B = XRTTensor((K, N // 2) if b_i4 else (K, N), dtype=np.int8)
     C = XRTTensor((M, N), dtype=np.int32)
     A.numpy()[:] = A_np
-    B.numpy()[:] = B_np
+    B.numpy()[:] = GEMM.pack_i4(B_np) if b_i4 else B_np
 
     op(A, B, C)  # warm-up: also settles the first-dispatch context race
     times = []
@@ -109,6 +114,9 @@ def main():
     p.add_argument("--verify-retry", action="store_true",
                    help="re-run once on a result mismatch (handles the transient "
                         "XRT first-dispatch flake; see GEMM docstring)")
+    p.add_argument("--b-i4", action="store_true",
+                   help="asymmetric INT4 weights: B values in [-8,7] packed "
+                        "(K, N//2) int8, kernel uses the 4x16x16 mmul")
     args = p.parse_args()
 
     tm, tk, tn = (int(v) for v in args.tiles.split(","))
@@ -117,7 +125,8 @@ def main():
         M, K, N = (int(v) for v in spec.split(","))
         if args.partition <= 1:
             ex = run_shape(M, K, N, (tm, tk, tn), args.cols, args.reps,
-                           args.seed, args.build_dir, args.verify_retry)
+                           args.seed, args.build_dir, args.verify_retry,
+                           args.b_i4)
             all_exact = all_exact and ex
         else:
             # Partition: per-partition N must keep each C slice inside the

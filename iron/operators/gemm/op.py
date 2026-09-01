@@ -51,6 +51,7 @@ class GEMM(MLIROperator):
     round_conv_even: bool = field(default=True, repr=False)
     dtype_in: str = field(default="bf16")
     dtype_out: str = field(default="bf16")
+    dtype_b: str = field(default="")
     use_scalar: bool = field(default=False, repr=False)
     separate_c_tiles: bool = field(default=False, repr=False)
     context: object = field(default=None, repr=False)
@@ -79,7 +80,12 @@ class GEMM(MLIROperator):
         # r/s/t MAC shapes per dtype (see microkernel_mac_dim_map in design.py).
         # The vectorized kernels static_assert m % (2*r) == 0, k % s == 0,
         # n % (2*t) == 0, so the tile must be a multiple of (2r, s, 2t).
-        if self.dtype_in == "i8":
+        # Asymmetric INT4 weights (dtype_b="i4") use the AIE2P 4x16x16 shape:
+        # K and N per MAC are 16 (2x int8xint8's density), so tile_k and
+        # tile_n must be multiples of 16 and 32 respectively.
+        if self.dtype_in == "i8" and self.dtype_b == "i4":
+            r, s, t = 4, 16, 16
+        elif self.dtype_in == "i8":
             r, s, t = 8, 8, 8
         elif self.dtype_in == "i16":
             r, s, t = 4, 4, 8
@@ -109,7 +115,7 @@ class GEMM(MLIROperator):
     @property
     def _kernel_flags_suffix(self):
         """Suffix encoding compile-time flags that affect the kernel binary."""
-        return f"_{self.dtype_in}_{self.dtype_out}_{int(self.prio_accuracy)}_{int(self.emulate_bf16_mmul_with_bfp16)}_{int(self.round_conv_even)}"
+        return f"_{self.dtype_in}_{self.dtype_b or ''}_{self.dtype_out}_{int(self.prio_accuracy)}_{int(self.emulate_bf16_mmul_with_bfp16)}_{int(self.round_conv_even)}"
 
     @property
     def _kernel_dtype_flag(self) -> str:
@@ -131,6 +137,8 @@ class GEMM(MLIROperator):
                     f"prio_accuracy is only supported for dtype_in='bf16', got {self.dtype_in!r}"
                 )
             return "bf16_f32_ONLY"
+        if self.dtype_in == "i8" and self.dtype_b == "i4":
+            return "i8_i4_ONLY"
         return {
             ("bf16", "bf16"): "bf16_bf16_ONLY",
             ("bf16", "f32"): "bf16_f32_ONLY",
@@ -156,6 +164,7 @@ class GEMM(MLIROperator):
                     "n_aie_cols": self.num_aie_columns,
                     "dtype_in_str": self.dtype_in,
                     "dtype_out_str": self.dtype_out,
+                    "dtype_b_str": self.dtype_b,
                     "b_col_maj": int(self.b_col_maj),
                     "c_col_maj": int(self.c_col_maj),
                     "use_scalar": self.use_scalar,
@@ -206,10 +215,13 @@ class GEMM(MLIROperator):
         ]
 
     def get_arg_spec(self):
+        # B (weights) is passed packed for asymmetric INT4: (K, N//2) int8
+        # storage, two nibbles per byte.
+        b_n = self.N // 2 if self.dtype_b == "i4" else self.N
         return [
             AIERuntimeArgSpec("in", (self.M, self.K)),  # input A
             AIERuntimeArgSpec(
-                "in", (self.K, self.N) if not self.b_col_maj else (self.N, self.K)
+                "in", (self.K, b_n) if not self.b_col_maj else (b_n, self.K)
             ),  # input B (weights)
             AIERuntimeArgSpec(
                 "out", (self.M, self.N) if not self.c_col_maj else (self.N, self.M)
@@ -259,6 +271,37 @@ class GEMM(MLIROperator):
             B_padded[:K, :N] = B_np
         return B_padded
 
+    @staticmethod
+    def pack_i4(B_np):
+        """Pack an int8-valued (K, N) matrix into (K, N//2) int8 nibbles.
+
+        For ``dtype_b="i4"`` the caller stores 4-bit weights in an int8
+        array with values in [-8, 7]; this packs two nibbles per byte
+        (low nibble first: byte = (b_lo & 0xf) | (b_hi << 4)) matching the
+        kernel's int4 reinterpret. N must be even.
+
+        NOTE: the asymmetric INT4 GEMM (A=i8, B=i4, 4x16x16 mmul on AIE2P)
+        is bit-exact against a 32-bit reference for random and identity
+        inputs. The one subtlety lives in the microkernel, not here: the AIE
+        API's ``int4_t`` is an empty struct (``sizeof(int4) == 1``) although
+        each element is really 4 bits, so manual pointer arithmetic on
+        ``int4*`` (the j-block offset and the k-loop B advance) must halve
+        the element counts to land on the true packed byte offsets. ``mm.cc``
+        encodes this as ``B_ADV = size_B / 2`` for int4. With the corrected
+        strides the L2->L1 B stream is plain k-block-major (16 blocks of
+        16x16 int4) and the A stream is plain row-major, so no host-side
+        permutation is needed; pack plain, low-nibble-first.
+        """
+        B_np = np.asarray(B_np, dtype=np.int8)
+        K, N = B_np.shape
+        if N % 2 != 0:
+            raise ValueError(f"B N ({N}) must be even for INT4 packing")
+        packed = np.zeros((K, N // 2), dtype=np.int8)
+        packed[:, :] = (B_np[:, 0::2].astype(np.uint8) & 0x0F) | (
+            (B_np[:, 1::2].astype(np.uint8) & 0x0F) << 4
+        )
+        return packed
+
     def partition_B(self, B, partition_N):
         B_parts = [None] * partition_N
         if B is None:
@@ -271,4 +314,6 @@ class GEMM(MLIROperator):
                 B_parts[i] = self.pad_B(B[col_start:col_end, :])
             else:
                 B_parts[i] = self.pad_B(B[:, col_start:col_end])
+            if self.dtype_b == "i4":
+                B_parts[i] = self.pack_i4(B_parts[i])
         return B_parts
