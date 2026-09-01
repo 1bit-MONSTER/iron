@@ -154,6 +154,7 @@ def forward_w4a8_npu(layers, weights, token_ids, rope_angles, build_dir):
         mask[:, seq:] = True
         mask[seq:, :] = True
 
+    kv_caches = [None] * CONFIG["n_layers"]
     for i in range(CONFIG["n_layers"]):
         L = layers[i]
         x_norm = llama_cpu.rms_norm_forward(
@@ -162,6 +163,10 @@ def forward_w4a8_npu(layers, weights, token_ids, rope_angles, build_dir):
         q = L["q"](x_norm, seq).view(batch, M_PAD, CONFIG["n_heads"], CONFIG["head_dim"])
         k = L["k"](x_norm, seq).view(batch, M_PAD, CONFIG["n_kv_groups"], CONFIG["head_dim"])
         v = L["v"](x_norm, seq).view(batch, M_PAD, CONFIG["n_kv_groups"], CONFIG["head_dim"])
+        kv_caches[i] = {
+            "k": k[0, :seq].transpose(0, 1),  # [G, seq, hd]
+            "v": v[0, :seq].transpose(0, 1),
+        }
         q = llama_cpu.rope_forward(q, rope_angles[:M_PAD])
         k = llama_cpu.rope_forward(k, rope_angles[:M_PAD])
         q = q.transpose(1, 2)  # [b, H, M, hd]
@@ -192,7 +197,41 @@ def forward_w4a8_npu(layers, weights, token_ids, rope_angles, build_dir):
 
     x = llama_cpu.rms_norm_forward(x, weights["model.norm.weight"])
     logits = torch.nn.functional.linear(x, emb)  # host, tied lm_head
-    return logits
+    return logits, kv_caches
+
+
+
+
+def decode_w4a8_npu(layers, weights, token, kv_caches, pos, rope_angles):
+    """One decode step: token (int) at position pos. Returns (next_token, kvs)."""
+    emb = weights["model.embed_tokens.weight"]
+    x = torch.nn.functional.embedding(torch.tensor([[token]]), emb)  # [1, 1, emb]
+    x = torch.nn.functional.pad(x, (0, 0, 0, M_PAD - 1))  # [1, M_PAD, emb]
+    for i, L in enumerate(layers):
+        xn = llama_cpu.rms_norm_forward(x, weights[f"model.layers.{i}.input_layernorm.weight"])
+        q = L["q"](xn, 1)[:1].view(1, 1, CONFIG["n_heads"], CONFIG["head_dim"])
+        k = L["k"](xn, 1)[:1].view(1, 1, CONFIG["n_kv_groups"], CONFIG["head_dim"])
+        v = L["v"](xn, 1)[:1].view(1, 1, CONFIG["n_kv_groups"], CONFIG["head_dim"])
+        q = llama_cpu.rope_forward(q, rope_angles[pos:pos + 1]).squeeze(0).squeeze(0)  # [H, hd]
+        k = llama_cpu.rope_forward(k, rope_angles[pos:pos + 1]).squeeze(0).squeeze(0)  # [G, hd]
+        kv_caches[i]["k"] = torch.cat([kv_caches[i]["k"], k.unsqueeze(1)], dim=1)  # [G, S, hd]
+        kv_caches[i]["v"] = torch.cat([kv_caches[i]["v"], v.squeeze(0).squeeze(0).unsqueeze(1)], dim=1)
+        gsz = CONFIG["n_heads"] // CONFIG["n_kv_groups"]
+        K = kv_caches[i]["k"].repeat_interleave(gsz, dim=0)  # [H, S, hd]
+        V = kv_caches[i]["v"].repeat_interleave(gsz, dim=0)
+        scores = torch.matmul(q.unsqueeze(1), K.transpose(-2, -1)).squeeze(1) / math.sqrt(CONFIG["head_dim"])  # [H, S]
+        aw = torch.nn.functional.softmax(scores, dim=-1)
+        ctx = torch.matmul(aw.unsqueeze(1), V).squeeze(1).reshape(1, 1, -1)  # [1, 1, H*hd]
+        ctx = torch.nn.functional.pad(ctx, (0, 0, 0, M_PAD - 1))
+        x = x + L["o"](ctx, 1)
+        xn = llama_cpu.rms_norm_forward(x, weights[f"model.layers.{i}.post_attention_layernorm.weight"])
+        gate = L["gate"](xn, 1)
+        up = L["up"](xn, 1)
+        hidden = torch.nn.functional.silu(gate) * up
+        x = x + L["down"](hidden, 1)
+    xn = llama_cpu.rms_norm_forward(x, weights["model.norm.weight"])
+    logits = torch.nn.functional.linear(xn[:1], emb).squeeze(0).squeeze(0)
+    return int(logits.argmax()), kv_caches
 
 
 def main():
@@ -218,7 +257,7 @@ def main():
     # W4A8 NPU
     layers = build_npu_layers(weights, build_dir)
     t0 = time.time()
-    logits = forward_w4a8_npu(layers, weights, token_ids, rope_angles, build_dir)
+    logits, kv_caches = forward_w4a8_npu(layers, weights, token_ids, rope_angles, build_dir)
     t_npu = time.time() - t0
 
     # compare at the last REAL token
@@ -237,19 +276,19 @@ def main():
     print(f"top5 npu: {nk}")
     print(f"overlap  : {len(set(rk) & set(nk))}/5")
 
-    # greedy continuation (host-side, W4A8 logits)
-    print("\ngreedy (npu logits):")
-    gen = token_ids.clone()
-    ids = []
-    for _ in range(8):
-        lg = forward_w4a8_npu(layers, weights, gen, rope_angles, build_dir)
-        nxt = lg[0, gen.shape[1] - 1].argmax().item()
-        ids.append(nxt)
-        gen = torch.cat([gen, torch.tensor([[nxt]])], dim=1)
+    # W4A8 decode (KV-cached, NPU i4 GEMMs, real_m=1)
+    print("\nW4A8 decode (KV-cached):")
+    pos = seq
+    nxt = int(logits[0, seq - 1].argmax())
+    out_ids = []
+    for _ in range(24):
         if nxt == 2:
             break
-    print(f"W4A8 greedy token ids: {ids} (2=EOS)")
-
+        out_ids.append(nxt)
+        nxt, kv_caches = decode_w4a8_npu(layers, weights, nxt, kv_caches, pos, rope_angles)
+        pos += 1
+    print(f"token ids: {out_ids}")
+    print(f"text: {config.tokenizer.decode(out_ids)}")
 
 if __name__ == "__main__":
     main()
