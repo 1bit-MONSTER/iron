@@ -156,7 +156,12 @@ class _BoundGroup:
         out = np.zeros((M_PAD, self.gemm.N), dtype=np.float32)
         for g, (B, s_wg, A, C) in enumerate(self.parts):
             xg = xf[:real_m, g * Kg:(g + 1) * Kg]
-            sxg = np.max(np.abs(xg), axis=1, keepdims=True) / 127.0
+            # Per-group activation scale (per-token x per-K-group): finer than
+            # one scale over the full row. W4A8_GROUP_ACTS=1 enables it.
+            if os.environ.get("W4A8_GROUP_ACTS"):
+                sxg = np.max(np.abs(xg), axis=1, keepdims=True) / 127.0
+            else:
+                sxg = np.max(np.abs(xf[:real_m]), axis=1, keepdims=True) / 127.0
             sxg = np.maximum(sxg, 1e-12)
             q8 = np.zeros((M_PAD, Kg), dtype=np.int8)
             q8[:real_m] = np.rint(xg / sxg).clip(-127, 127).astype(np.int8)
