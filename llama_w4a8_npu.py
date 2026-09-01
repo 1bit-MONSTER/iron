@@ -51,29 +51,38 @@ class NPU_W4A8_GEMM:
     buffers are per-weight — the B-binding overwrite bug made every op in a
     shape group use the last-bound weights)."""
 
-    def __init__(self, K, N, build_dir="/tmp/w4a8-prefill"):
-        self.K, self.N = K, N
-        assert N % 2 == 0 and N % 512 == 0 and K % 16 == 0
+    def __init__(self, K, N, build_dir="/tmp/w4a8-prefill", dtype_b="i4", groups=1):
+        self.K, self.N, self.dtype_b = K, N, dtype_b
+        self.groups = groups
+        self.Kg = K // groups if (dtype_b == "i4" and groups > 1) else K
+        assert N % 2 == 0 and N % 512 == 0 and self.Kg % 16 == 0
         ctx = AIEContext(build_dir=build_dir)
         self.op = (
-            GEMM(M=M_PAD, K=K, N=N, tile_m=64, tile_k=64, tile_n=64,
+            GEMM(M=M_PAD, K=self.Kg, N=N, tile_m=64, tile_k=64, tile_n=64,
                  num_aie_columns=8, dtype_in="i8", dtype_out="i32",
-                 dtype_b="i4", context=ctx)
+                 dtype_b=dtype_b, context=ctx)
             .compile()
             .get_callable()
         )
 
     def bind(self, B_ref, s_w):
         """Return a callable bound to this weight's own buffers."""
+        if self.dtype_b == "i4" and self.groups > 1:
+            return _BoundGroup(self, B_ref)
         return _Bound(self, B_ref, s_w)
 
 
 class _Bound:
     def __init__(self, gemm, B_ref, s_w):
         self.gemm = gemm
-        q4 = np.rint(B_ref / s_w).clip(-8, 7).astype(np.int8)
-        self.B = XRTTensor((gemm.K, gemm.N // 2), dtype=np.int8)
-        self.B.numpy()[:] = GEMM.pack_i4(q4)
+        if gemm.dtype_b == "i4":
+            q = np.rint(B_ref / s_w).clip(-8, 7).astype(np.int8)
+            self.B = XRTTensor((gemm.K, gemm.N // 2), dtype=np.int8)
+            self.B.numpy()[:] = GEMM.pack_i4(q)
+        else:  # i8
+            q = np.rint(B_ref / s_w).clip(-127, 127).astype(np.int8)
+            self.B = XRTTensor((gemm.K, gemm.N), dtype=np.int8)
+            self.B.numpy()[:] = q
         self.A = XRTTensor((M_PAD, gemm.K), dtype=np.int8)
         self.C = XRTTensor((M_PAD, gemm.N), dtype=np.int32)
         self.s_w = s_w.astype(np.float64)
@@ -103,10 +112,57 @@ class _Bound:
         return torch.from_numpy(out.astype(np.float32)).to(torch.bfloat16)
 
 
-def quantize_weight(W):
+
+
+class _BoundGroup:
+    """Group-wise i4 weights (Q4_K-style): K split into `groups` chunks, each
+    chunk gets its own per-column scales, run as per-group GEMMs, dequantized
+    per group and summed. Finer weight quantization without touching the
+    exact int8xint4 path."""
+
+    def __init__(self, gemm, B_ref):
+        self.gemm = gemm
+        G, Kg = gemm.groups, gemm.Kg
+        self.parts = []
+        for g in range(G):
+            Bg = B_ref[g * Kg:(g + 1) * Kg]
+            s_wg = np.max(np.abs(Bg), axis=0) / 8.0
+            s_wg = np.maximum(s_wg, 1e-8).astype(np.float64)
+            q4g = np.rint(Bg / s_wg).clip(-8, 7).astype(np.int8)
+            B = XRTTensor((Kg, gemm.N // 2), dtype=np.int8)
+            B.numpy()[:] = GEMM.pack_i4(q4g)
+            # One A/C pair PER GROUP: the shared-buffer version read stale C
+            # when the same op was called back-to-back with different B.
+            A = XRTTensor((M_PAD, Kg), dtype=np.int8)
+            C = XRTTensor((M_PAD, gemm.N), dtype=np.int32)
+            self.parts.append((B, s_wg, A, C))
+        self._warmed = False
+
+    def __call__(self, x, real_m):
+        xf = x.float().numpy().reshape(M_PAD, -1)
+        sx = np.max(np.abs(xf[:real_m]), axis=1, keepdims=True) / 127.0
+        q8 = np.zeros_like(xf, dtype=np.int8)
+        q8[:real_m] = np.rint(xf[:real_m] / sx).clip(-127, 127).astype(np.int8)
+        sx_full = np.zeros((M_PAD, 1), dtype=np.float64)
+        sx_full[:real_m, 0] = sx[:, 0]
+        out = np.zeros((M_PAD, self.gemm.N), dtype=np.float64)
+        Kg = self.gemm.Kg
+        for g, (B, s_wg, A, C) in enumerate(self.parts):
+            A.numpy()[:] = q8[:, g * Kg:(g + 1) * Kg]
+            res = self.gemm.op(A, B, C)
+            _ = res.npu_time
+            c = C.to_torch().numpy().astype(np.float64)
+            out += c * sx_full * s_wg[None, :]
+        if not self._warmed:
+            self._warmed = True
+            return self(x, real_m)
+        return torch.from_numpy(out.astype(np.float32)).to(torch.bfloat16)
+
+def quantize_weight(W, dtype="i4"):
     """W: torch [out, in] bf16 -> (B_ref [in, out] f32, s_w [out] f32)."""
     B_ref = W.float().t().numpy()
-    s_w = np.max(np.abs(B_ref), axis=0) / 8.0
+    peak = 8.0 if dtype == "i4" else 127.0
+    s_w = np.max(np.abs(B_ref), axis=0) / peak
     s_w = np.maximum(s_w, 1e-8).astype(np.float32)
     return B_ref, s_w
 
@@ -114,11 +170,13 @@ def quantize_weight(W):
 def build_npu_layers(weights, build_dir):
     """Return per-layer dict of NPU W4A8 GEMMs (cache by K,N)."""
     pool = {}
+    mix = int(__import__("os").environ.get("W4A8_MIX_LEN", "0"))  # first N layers i8 weights
+    groups = int(__import__("os").environ.get("W4A8_GROUPS", "1"))  # i4 K-groups
 
-    def get(K, N):
-        key = (K, N)
+    def get(K, N, dtype):
+        key = (K, N, dtype, groups if dtype == "i4" else 1)
         if key not in pool:
-            pool[key] = NPU_W4A8_GEMM(K, N, build_dir)
+            pool[key] = NPU_W4A8_GEMM(K, N, build_dir, dtype_b=dtype, groups=groups)
         return pool[key]
 
     layers = []
@@ -133,8 +191,9 @@ def build_npu_layers(weights, build_dir):
             "up": (f"model.layers.{i}.mlp.up_proj.weight", CONFIG["emb_dim"], CONFIG["hidden_dim"]),
             "down": (f"model.layers.{i}.mlp.down_proj.weight", CONFIG["hidden_dim"], CONFIG["emb_dim"]),
         }.items():
-            B_ref, s_w = quantize_weight(weights[Wkey])
-            L[name] = get(K, N).bind(B_ref, s_w)  # per-weight buffers
+            dt = "i8" if i < mix else "i4"
+            B_ref, s_w = quantize_weight(weights[Wkey], dt)
+            L[name] = get(K, N, dt).bind(B_ref, s_w)  # per-weight buffers
         layers.append(L)
     print(f"[w4a8] built {len(pool)} compiled NPU GEMM shapes ({len(layers)} layers)", flush=True)
     return layers
