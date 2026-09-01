@@ -136,14 +136,22 @@ class _BoundGroup:
             Bg = B_ref[g * Kg:(g + 1) * Kg]
             s_wg = np.max(np.abs(Bg), axis=0) / 8.0
             s_wg = np.maximum(s_wg, 1e-8).astype(np.float64)
-            q4g = np.rint(Bg / s_wg).clip(-8, 7).astype(np.int8)
+            # Asymmetric (zero-point) i4 when W4A8_ZP=1: recenter each group
+            # at its midpoint so biased weights quantize tighter. The GEMM is
+            # unchanged (signed int4); the zero-point correction is a host
+            # post-term: out += (s_w*z) * rowsum(x over the group).
+            zpg = None
+            if os.environ.get("W4A8_ZP"):
+                half = (np.max(Bg, axis=0) + np.min(Bg, axis=0)) / 2.0
+                zpg = half / 8.0  # q = round((B - s_w*z)/s_w) ~ round(B/s_w) - z
+            q4g = np.rint(Bg / s_wg - (zpg if zpg is not None else 0.0)).clip(-8, 7).astype(np.int8)
             B = XRTTensor((Kg, gemm.N // 2), dtype=np.int8)
             B.numpy()[:] = GEMM.pack_i4(q4g)
             # One A/C pair PER GROUP: the shared-buffer version read stale C
             # when the same op was called back-to-back with different B.
             A = XRTTensor((M_PAD, Kg), dtype=np.int8)
             C = XRTTensor((M_PAD, gemm.N), dtype=np.int32)
-            self.parts.append((B, s_wg, A, C))
+            self.parts.append((B, s_wg, zpg, A, C))
         self._warmed = False
 
     def __call__(self, x, real_m):
@@ -154,7 +162,7 @@ class _BoundGroup:
         xf = x.float().numpy().reshape(M_PAD, -1)
         Kg = self.gemm.Kg
         out = np.zeros((M_PAD, self.gemm.N), dtype=np.float32)
-        for g, (B, s_wg, A, C) in enumerate(self.parts):
+        for g, (B, s_wg, zpg, A, C) in enumerate(self.parts):
             xg = xf[:real_m, g * Kg:(g + 1) * Kg]
             # Per-group activation scale (per-token x per-K-group): finer than
             # one scale over the full row. W4A8_GROUP_ACTS=1 enables it.
@@ -170,7 +178,12 @@ class _BoundGroup:
             res = self.gemm.op(A, B, C)
             _ = res.npu_time
             c = C.to_torch().numpy().astype(np.float32)[:real_m]
-            out[:real_m] += c * sxg.astype(np.float32) * s_wg.astype(np.float32)[None, :]
+            sw = s_wg.astype(np.float32)[None, :]
+            contrib = c * sxg.astype(np.float32) * sw
+            if zpg is not None:
+                # asymmetric correction: B ~ s_w*(q+z) -> out += s_w*z*rowsum(x)
+                contrib += xg.astype(np.float32).sum(1, keepdims=True) * (sw * zpg[None, :].astype(np.float32))
+            out[:real_m] += contrib
         return out
 
 def quantize_weight(W, dtype="i4"):
@@ -206,7 +219,14 @@ def build_npu_layers(weights, build_dir):
             "up": (f"model.layers.{i}.mlp.up_proj.weight", CONFIG["emb_dim"], CONFIG["hidden_dim"]),
             "down": (f"model.layers.{i}.mlp.down_proj.weight", CONFIG["hidden_dim"], CONFIG["emb_dim"]),
         }.items():
-            dt = "i8" if i < mix else "i4"
+            ops_mix = __import__("os").environ.get("W4A8_OPS_MIX", "")
+            is_attn = name in ("q", "k", "v", "o")
+            if ops_mix == "attn_i8":   # attention weights i8, FFN i4
+                dt = "i8" if is_attn else "i4"
+            elif ops_mix == "ffn_i8":  # FFN weights i8, attention i4
+                dt = "i8" if not is_attn else "i4"
+            else:
+                dt = "i8" if i < mix else "i4"
             B_ref, s_w = quantize_weight(weights[Wkey], dt)
             L[name] = get(K, N, dt).bind(B_ref, s_w)  # per-weight buffers
         layers.append(L)
