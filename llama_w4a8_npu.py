@@ -89,31 +89,13 @@ class _Bound:
         self._warmed = False
 
     def __call__(self, x, real_m):
-        xf = x.float().numpy().reshape(M_PAD, -1)  # drop batch dim if present
-        # Per-token (per-row) activation scale: each input row quantized with
-        # its own s_x (Q8_0-style). Naive per-tensor scales lose too much over
-        # 16 layers (corr ~0.55-0.75); per-row holds up much better.
-        sx = np.max(np.abs(xf[:real_m]), axis=1, keepdims=True) / 127.0
-        if (sx[:, 0] == 0).any() and os.environ.get("W4A8_TRACE_ZERO"):
-            print("[zero-row]", self.gemm.K, "x", self.gemm.N, self.gemm.dtype_b,
-                  "real_m", real_m, "rows", np.where(sx[:, 0] == 0)[0].tolist(), flush=True)
-        sx = np.maximum(sx, 1e-12)  # all-zero rows would give 0/0 = NaN
-        q8 = np.zeros_like(xf, dtype=np.int8)
-        q8[:real_m] = np.rint(xf[:real_m] / sx).clip(-127, 127).astype(np.int8)
-        q8[:real_m][sx[:real_m, 0] <= 1e-12] = 0  # zero rows stay zero
-        self.A.numpy()[:] = q8
-        res = self.gemm.op(self.A, self.B, self.C)
-        _ = res.npu_time  # force the dispatch to complete before reading C
-        c = self.C.to_torch().numpy().astype(np.float64)
-        sx_full = np.zeros((M_PAD, 1), dtype=np.float64)
-        sx_full[:real_m, 0] = sx[:, 0]
-        out = c * sx_full * self.s_w[None, :]
-        # XRT readback flake (iron 5582ca1 + strixhalo 2026-09-01): whenever
-        # the A-buffer content changes since the previous call, the first
-        # kernel run returns a STALE C (measured: all-rows corr 0.01, next
-        # call 0.994). Always re-run and keep the second result.
-        out2 = self._compute(x, real_m)
-        return torch.from_numpy(out2.astype(np.float32)).to(torch.bfloat16)
+        # overwrite() marks the write in the runtime coherence map. A raw
+        # .numpy() write is unmediated, so run()'s to('npu') skips the upload
+        # and the kernel computes on the STALE previous A — the root cause of
+        # the stale C bug (ab47c82's double-call was a workaround; this is
+        # the real fix, so a single call is correct).
+        out = self._compute(x, real_m)
+        return torch.from_numpy(out.astype(np.float32)).to(torch.bfloat16)
 
     def _compute(self, x, real_m):
         xf = x.float().numpy().reshape(M_PAD, -1)  # drop batch dim if present
@@ -124,7 +106,8 @@ class _Bound:
         sx = np.maximum(sx, 1e-12)
         q8 = np.zeros_like(xf, dtype=np.int8)
         q8[:real_m] = np.rint(xf[:real_m] / sx).clip(-127, 127).astype(np.int8)
-        self.A.numpy()[:] = q8
+        with self.A.overwrite() as buf:
+            buf[:] = q8
         res = self.gemm.op(self.A, self.B, self.C)
         _ = res.npu_time  # force the dispatch to complete before reading C
         c = self.C.to_torch().numpy().astype(np.float64)
@@ -160,27 +143,8 @@ class _BoundGroup:
         self._warmed = False
 
     def __call__(self, x, real_m):
-        xf = x.float().numpy().reshape(M_PAD, -1)
-        sx = np.max(np.abs(xf[:real_m]), axis=1, keepdims=True) / 127.0
-        if (sx[:, 0] == 0).any() and os.environ.get("W4A8_TRACE_ZERO"):
-            print("[zero-row]", self.gemm.K, "x", self.gemm.N, self.gemm.dtype_b,
-                  "real_m", real_m, "rows", np.where(sx[:, 0] == 0)[0].tolist(), flush=True)
-        sx = np.maximum(sx, 1e-12)  # all-zero rows would give 0/0 = NaN
-        q8 = np.zeros_like(xf, dtype=np.int8)
-        q8[:real_m] = np.rint(xf[:real_m] / sx).clip(-127, 127).astype(np.int8)
-        q8[:real_m][sx[:real_m, 0] <= 1e-12] = 0  # zero rows stay zero
-        sx_full = np.zeros((M_PAD, 1), dtype=np.float64)
-        sx_full[:real_m, 0] = sx[:, 0]
-        out = np.zeros((M_PAD, self.gemm.N), dtype=np.float64)
-        Kg = self.gemm.Kg
-        for g, (B, s_wg, A, C) in enumerate(self.parts):
-            A.numpy()[:] = q8[:, g * Kg:(g + 1) * Kg]
-            res = self.gemm.op(A, B, C)
-            _ = res.npu_time
-            c = C.to_torch().numpy().astype(np.float64)
-            out += c * sx_full * s_wg[None, :]
-        out2 = self._compute(x, real_m)
-        return torch.from_numpy(out2.astype(np.float32)).to(torch.bfloat16)
+        out = self._compute(x, real_m)
+        return torch.from_numpy(out.astype(np.float32)).to(torch.bfloat16)
 
     def _compute(self, x, real_m):
         xf = x.float().numpy().reshape(M_PAD, -1)
@@ -193,7 +157,8 @@ class _BoundGroup:
         out = np.zeros((M_PAD, self.gemm.N), dtype=np.float64)
         Kg = self.gemm.Kg
         for g, (B, s_wg, A, C) in enumerate(self.parts):
-            A.numpy()[:] = q8[:, g * Kg:(g + 1) * Kg]
+            with A.overwrite() as buf:
+                buf[:] = q8[:, g * Kg:(g + 1) * Kg]
             res = self.gemm.op(A, B, C)
             _ = res.npu_time
             c = C.to_torch().numpy().astype(np.float64)
