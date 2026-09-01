@@ -110,10 +110,14 @@ class _Bound:
             buf[:] = q8
         res = self.gemm.op(self.A, self.B, self.C)
         _ = res.npu_time  # force the dispatch to complete before reading C
-        c = self.C.to_torch().numpy().astype(np.float64)
-        sx_full = np.zeros((M_PAD, 1), dtype=np.float64)
-        sx_full[:real_m, 0] = sx[:, 0]
-        return c * sx_full * self.s_w[None, :]
+        c = self.C.to_torch().numpy().astype(np.float32)
+        # float32 + real rows only: the full [M_PAD, N] float64 multiply was
+        # ~10 ms/call (and xG for the group path); decode has real_m=1 so the
+        # dequant is now a 256x cut. Return the full [M_PAD, N] buffer (rows
+        # beyond real_m stay zero).
+        out = np.zeros((M_PAD, self.gemm.N), dtype=np.float32)
+        out[:real_m] = c[:real_m] * (sx.astype(np.float32) * self.s_w.astype(np.float32))[None, :]
+        return out
 
 
 
@@ -148,21 +152,20 @@ class _BoundGroup:
 
     def _compute(self, x, real_m):
         xf = x.float().numpy().reshape(M_PAD, -1)
-        sx = np.max(np.abs(xf[:real_m]), axis=1, keepdims=True) / 127.0
-        sx = np.maximum(sx, 1e-12)
-        q8 = np.zeros_like(xf, dtype=np.int8)
-        q8[:real_m] = np.rint(xf[:real_m] / sx).clip(-127, 127).astype(np.int8)
-        sx_full = np.zeros((M_PAD, 1), dtype=np.float64)
-        sx_full[:real_m, 0] = sx[:, 0]
-        out = np.zeros((M_PAD, self.gemm.N), dtype=np.float64)
         Kg = self.gemm.Kg
+        out = np.zeros((M_PAD, self.gemm.N), dtype=np.float32)
         for g, (B, s_wg, A, C) in enumerate(self.parts):
+            xg = xf[:real_m, g * Kg:(g + 1) * Kg]
+            sxg = np.max(np.abs(xg), axis=1, keepdims=True) / 127.0
+            sxg = np.maximum(sxg, 1e-12)
+            q8 = np.zeros((M_PAD, Kg), dtype=np.int8)
+            q8[:real_m] = np.rint(xg / sxg).clip(-127, 127).astype(np.int8)
             with A.overwrite() as buf:
-                buf[:] = q8[:, g * Kg:(g + 1) * Kg]
+                buf[:] = q8
             res = self.gemm.op(A, B, C)
             _ = res.npu_time
-            c = C.to_torch().numpy().astype(np.float64)
-            out += c * sx_full * s_wg[None, :]
+            c = C.to_torch().numpy().astype(np.float32)[:real_m]
+            out[:real_m] += c * sxg.astype(np.float32) * s_wg.astype(np.float32)[None, :]
         return out
 
 def quantize_weight(W, dtype="i4"):
